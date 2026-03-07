@@ -1,0 +1,13 @@
+{
+  "project": "grotap-erp-agent",
+  "hooks": {
+    "onSessionStart": "./.claude-session-init.sh",
+    "onSessionEnd": "./scripts/cleanup-session.sh"
+  },
+  "systemPreamble": "BOOTSTRAP.md",
+  "contextRules": {
+    "maxGlobalLines": 200,
+    "requireBootstrap": true,
+    "allowedLoadOrder": ["GLOBAL", "MODULE", "ROLE", "TASK"]
+  }
+}

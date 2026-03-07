@@ -1,0 +1,15 @@
+# Session artifacts — never commit to main
+.current-session.json
+*.log
+
+# Secrets
+hcloud.json
+resp05.json
+state/.gh_token
+
+# Agent-generated state — lives on agent-state branch only
+state/handoffs/
+
+# OS
+.DS_Store
+Thumbs.db

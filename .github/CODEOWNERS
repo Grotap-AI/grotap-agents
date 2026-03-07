@@ -1,0 +1,38 @@
+# .github/CODEOWNERS
+# Auto-enforces ownership tiers on PRs.
+# Replace placeholder handles with real GitHub usernames.
+
+# Tier 1 — Tech Lead must approve all changes
+agents/GLOBAL.md                    @tech-lead @architect
+agents/registry.md                  @tech-lead @architect
+agents/OWNERS.md                    @tech-lead @architect
+BOOTSTRAP.md                        @tech-lead @architect
+.claude-session-init.sh             @tech-lead @infra-lead
+claude.json                         @tech-lead @infra-lead
+
+# Tier 2 — Infra Lead owns server manifests
+agents/servers/                     @infra-lead @tech-lead
+
+# Tier 2 — Domain Lead owns module files
+agents/roles/intake/MODULE.md       @domain-lead @tech-lead
+agents/roles/security/MODULE.md     @domain-lead @tech-lead
+agents/roles/pipeline/MODULE.md     @domain-lead @tech-lead
+agents/roles/approvals/MODULE.md    @domain-lead @tech-lead
+agents/roles/planning/MODULE.md     @domain-lead @tech-lead
+agents/roles/review/MODULE.md       @domain-lead @tech-lead
+agents/roles/execution/MODULE.md    @domain-lead @tech-lead
+agents/roles/enforcement/MODULE.md  @domain-lead @tech-lead
+
+# Tier 3 — Role owners (auto-approval if only their subtree changed)
+agents/roles/intake/                @role-owner @domain-lead
+agents/roles/security/              @role-owner @domain-lead
+agents/roles/pipeline/              @role-owner @domain-lead
+agents/roles/approvals/             @role-owner @domain-lead
+agents/roles/planning/              @role-owner @domain-lead
+agents/roles/review/                @role-owner @domain-lead
+agents/roles/execution/             @role-owner @domain-lead
+agents/roles/enforcement/           @role-owner @domain-lead
+agents/roles/shared/                @domain-lead @tech-lead
+
+# Pre-commit hooks — infra owns
+.pre-commit-hooks/                  @infra-lead @tech-lead
