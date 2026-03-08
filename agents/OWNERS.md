@@ -6,48 +6,48 @@
 # Tier 4: Agent auto-generated (no review, auto-committed to agent-state branch)
 #
 # Format: file_path | owner | tier | backup_owner
-# ⚠️  Owner handles below are PLACEHOLDERS — fill in real GitHub handles.
+# Owner: @Grotap1 (sole operator — expand as team grows)
 
 ## Tier 1 — Protected
-agents/GLOBAL.md                                        | @tech-lead      | 1 | @architect
-agents/registry.md                                      | @tech-lead      | 1 | @architect
-agents/OWNERS.md                                        | @tech-lead      | 1 | @architect
-BOOTSTRAP.md                                            | @tech-lead      | 1 | @architect
-.claude-session-init.sh                                 | @infra-lead     | 1 | @tech-lead
+agents/GLOBAL.md                                        | @Grotap1      | 1 | @Grotap1
+agents/registry.md                                      | @Grotap1      | 1 | @Grotap1
+agents/OWNERS.md                                        | @Grotap1      | 1 | @Grotap1
+BOOTSTRAP.md                                            | @Grotap1      | 1 | @Grotap1
+.claude-session-init.sh                                 | @Grotap1     | 1 | @Grotap1
 
 ## Tier 2 — Server Manifests
-agents/servers/agent-02.md                              | @infra-lead     | 2 | @tech-lead
-agents/servers/agent-03.md                              | @infra-lead     | 2 | @tech-lead
-agents/servers/agent-04.md                              | @infra-lead     | 2 | @tech-lead
-agents/servers/agent-05.md                              | @infra-lead     | 2 | @tech-lead
+agents/servers/agent-02.md                              | @Grotap1     | 2 | @Grotap1
+agents/servers/agent-03.md                              | @Grotap1     | 2 | @Grotap1
+agents/servers/agent-04.md                              | @Grotap1     | 2 | @Grotap1
+agents/servers/agent-05.md                              | @Grotap1     | 2 | @Grotap1
 
 ## Tier 2 — Module Files
-agents/roles/intake/MODULE.md                           | @domain-lead    | 2 | @tech-lead
-agents/roles/security/MODULE.md                         | @domain-lead    | 2 | @tech-lead
-agents/roles/pipeline/MODULE.md                         | @domain-lead    | 2 | @tech-lead
-agents/roles/approvals/MODULE.md                        | @domain-lead    | 2 | @tech-lead
-agents/roles/planning/MODULE.md                         | @domain-lead    | 2 | @tech-lead
-agents/roles/review/MODULE.md                           | @domain-lead    | 2 | @tech-lead
-agents/roles/execution/MODULE.md                        | @domain-lead    | 2 | @tech-lead
-agents/roles/enforcement/MODULE.md                      | @domain-lead    | 2 | @tech-lead
+agents/roles/intake/MODULE.md                           | @Grotap1    | 2 | @Grotap1
+agents/roles/security/MODULE.md                         | @Grotap1    | 2 | @Grotap1
+agents/roles/pipeline/MODULE.md                         | @Grotap1    | 2 | @Grotap1
+agents/roles/approvals/MODULE.md                        | @Grotap1    | 2 | @Grotap1
+agents/roles/planning/MODULE.md                         | @Grotap1    | 2 | @Grotap1
+agents/roles/review/MODULE.md                           | @Grotap1    | 2 | @Grotap1
+agents/roles/execution/MODULE.md                        | @Grotap1    | 2 | @Grotap1
+agents/roles/enforcement/MODULE.md                      | @Grotap1    | 2 | @Grotap1
 
 ## Tier 3 — Role Files
-agents/roles/intake/intake/ROLE.md                      | @role-owner     | 3 | @domain-lead
-agents/roles/intake/triage/ROLE.md                      | @role-owner     | 3 | @domain-lead
-agents/roles/security/security-reviewer/ROLE.md         | @role-owner     | 3 | @domain-lead
-agents/roles/pipeline/pipeline-detail/ROLE.md           | @role-owner     | 3 | @domain-lead
-agents/roles/pipeline/audit-filters/ROLE.md             | @role-owner     | 3 | @domain-lead
-agents/roles/approvals/mobile-approvals/ROLE.md         | @role-owner     | 3 | @domain-lead
-agents/roles/planning/planner/ROLE.md                   | @role-owner     | 3 | @domain-lead
-agents/roles/review/fix-reviewer/ROLE.md                | @role-owner     | 3 | @domain-lead
-agents/roles/review/policy-reviewer/ROLE.md             | @role-owner     | 3 | @domain-lead
-agents/roles/review/logic-reviewer/ROLE.md              | @role-owner     | 3 | @domain-lead
-agents/roles/review/perf-reviewer/ROLE.md               | @role-owner     | 3 | @domain-lead
-agents/roles/execution/execute/ROLE.md                  | @role-owner     | 3 | @domain-lead
-agents/roles/enforcement/change-reviewer/ROLE.md        | @role-owner     | 3 | @domain-lead
-agents/roles/enforcement/rule-enforcer/ROLE.md          | @role-owner     | 3 | @domain-lead
-agents/roles/enforcement/build-validator/ROLE.md        | @role-owner     | 3 | @domain-lead
-agents/roles/shared/conventions.md                      | @domain-lead    | 3 | @tech-lead
+agents/roles/intake/intake/ROLE.md                      | @Grotap1     | 3 | @Grotap1
+agents/roles/intake/triage/ROLE.md                      | @Grotap1     | 3 | @Grotap1
+agents/roles/security/security-reviewer/ROLE.md         | @Grotap1     | 3 | @Grotap1
+agents/roles/pipeline/pipeline-detail/ROLE.md           | @Grotap1     | 3 | @Grotap1
+agents/roles/pipeline/audit-filters/ROLE.md             | @Grotap1     | 3 | @Grotap1
+agents/roles/approvals/mobile-approvals/ROLE.md         | @Grotap1     | 3 | @Grotap1
+agents/roles/planning/planner/ROLE.md                   | @Grotap1     | 3 | @Grotap1
+agents/roles/review/fix-reviewer/ROLE.md                | @Grotap1     | 3 | @Grotap1
+agents/roles/review/policy-reviewer/ROLE.md             | @Grotap1     | 3 | @Grotap1
+agents/roles/review/logic-reviewer/ROLE.md              | @Grotap1     | 3 | @Grotap1
+agents/roles/review/perf-reviewer/ROLE.md               | @Grotap1     | 3 | @Grotap1
+agents/roles/execution/execute/ROLE.md                  | @Grotap1     | 3 | @Grotap1
+agents/roles/enforcement/change-reviewer/ROLE.md        | @Grotap1     | 3 | @Grotap1
+agents/roles/enforcement/rule-enforcer/ROLE.md          | @Grotap1     | 3 | @Grotap1
+agents/roles/enforcement/build-validator/ROLE.md        | @Grotap1     | 3 | @Grotap1
+agents/roles/shared/conventions.md                      | @Grotap1    | 3 | @Grotap1
 
 ## Tier 4 — Agent-Generated (no review required)
 state/handoffs/handoff-*.md                             | agent-auto      | 4 | none
