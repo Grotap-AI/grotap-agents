@@ -11,14 +11,14 @@ echo "================================================"
 
 # ── 1. GIT SYNC ───────────────────────────────────
 echo "[1/5] Syncing with origin..."
-git fetch origin main --quiet
+git fetch origin master --quiet
 LOCAL=$(git rev-parse HEAD)
-REMOTE=$(git rev-parse origin/main)
+REMOTE=$(git rev-parse origin/master)
 
 if [ "$LOCAL" != "$REMOTE" ]; then
   echo "  WARNING: Local branch is behind origin."
   echo "  Running git pull..."
-  git pull origin main --quiet
+  git pull origin master --quiet
 fi
 
 SESSION_COMMIT=$(git rev-parse HEAD)
