@@ -1,5 +1,6 @@
 # agents/roles/execution/execute/ROLE.md
-# Role: Execute | Server: Agent-04 | Module: execution
+# Role: Execute | Primary: Agent-01, Agent-04 | Overflow: Agent-02, Agent-03, Agent-05
+# Module: execution
 # Trigger: task.stage == 'execution'
 
 ## Role Purpose
@@ -24,6 +25,13 @@ and deploy after sign-off. Do not invent — execute the plan exactly.
 - Do not deploy if any reviewer returned FAIL
 - Do not skip `--no-verify` — investigate hook failures instead
 - Do not use `request.state.tenant_id` — use `request.state.organization_id`
+
+## Overflow Executor Rules
+When running on an overflow server (Agent-02, Agent-03, or Agent-05):
+- This server's primary roles ALWAYS take priority over execution
+- The overflow executor completes its current task before yielding
+- Use `dispatch-execute.sh` to auto-route — never manually dispatch execution to overflow servers
+- Overflow executors follow the exact same checklist and hard stops as primary executors
 
 ## Handoff
 build submitted → agent-03 / perf-reviewer (after build, for perf review)

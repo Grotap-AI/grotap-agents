@@ -7,10 +7,10 @@
 | Server | IP | Type | Roles |
 |---|---|---|---|
 | agent-01 | 5.161.189.143 | cpx21 | Execute |
-| agent-02 | 5.161.74.39 | cpx21 | Intake, Triage, Security Reviewer |
-| agent-03 | 5.161.81.193 | cpx21 | Planner, Fix Reviewer, Policy Reviewer, Logic Reviewer, Perf Reviewer |
+| agent-02 | 5.161.74.39 | cpx21 | Intake, Triage, Security Reviewer, Execute (overflow) |
+| agent-03 | 5.161.81.193 | cpx21 | Planner, Fix Reviewer, Policy Reviewer, Logic Reviewer, Perf Reviewer, Execute (overflow) |
 | agent-04 | 178.156.222.220 | cpx21 | Execute, Change Reviewer, Rule Enforcer, Build Validator |
-| agent-05 | 5.161.73.195 | cpx21 | Pipeline Detail, Audit Filters, Mobile Approvals |
+| agent-05 | 5.161.73.195 | cpx21 | Pipeline Detail, Audit Filters, Mobile Approvals, Execute (overflow) |
 | agent-06 | 5.78.178.81 | cpx31 | Deploy Verifier, Deploy Executor, Env Validator, Health Monitor, DNS Watchdog, Post-Deploy QA |
 
 ## Tier 1 — Protected Files
@@ -57,6 +57,9 @@
 | agents/roles/review/perf-reviewer/ROLE.md | Agent-03 | Perf Reviewer |
 | agents/roles/execution/execute/ROLE.md | Agent-01 | Execute |
 | agents/roles/execution/execute/ROLE.md | Agent-04 | Execute |
+| agents/roles/execution/execute/ROLE.md | Agent-02 | Execute (overflow) |
+| agents/roles/execution/execute/ROLE.md | Agent-03 | Execute (overflow) |
+| agents/roles/execution/execute/ROLE.md | Agent-05 | Execute (overflow) |
 | agents/roles/enforcement/change-reviewer/ROLE.md | Agent-04 | Change Reviewer |
 | agents/roles/enforcement/rule-enforcer/ROLE.md | Agent-04 | Rule Enforcer |
 | agents/roles/enforcement/build-validator/ROLE.md | Agent-04 | Build Validator |
