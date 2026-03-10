@@ -16,10 +16,12 @@ BOOTSTRAP.md                                            | @Grotap1      | 1 | @G
 .claude-session-init.sh                                 | @Grotap1     | 1 | @Grotap1
 
 ## Tier 2 — Server Manifests
+agents/servers/agent-01.md                              | @Grotap1     | 2 | @Grotap1
 agents/servers/agent-02.md                              | @Grotap1     | 2 | @Grotap1
 agents/servers/agent-03.md                              | @Grotap1     | 2 | @Grotap1
 agents/servers/agent-04.md                              | @Grotap1     | 2 | @Grotap1
 agents/servers/agent-05.md                              | @Grotap1     | 2 | @Grotap1
+agents/servers/agent-06.md                              | @Grotap1     | 2 | @Grotap1
 
 ## Tier 2 — Module Files
 agents/roles/intake/MODULE.md                           | @Grotap1    | 2 | @Grotap1
@@ -30,6 +32,7 @@ agents/roles/planning/MODULE.md                         | @Grotap1    | 2 | @Gro
 agents/roles/review/MODULE.md                           | @Grotap1    | 2 | @Grotap1
 agents/roles/execution/MODULE.md                        | @Grotap1    | 2 | @Grotap1
 agents/roles/enforcement/MODULE.md                      | @Grotap1    | 2 | @Grotap1
+agents/roles/deployment-ops/MODULE.md                   | @Grotap1    | 2 | @Grotap1
 
 ## Tier 3 — Role Files
 agents/roles/intake/intake/ROLE.md                      | @Grotap1     | 3 | @Grotap1
@@ -47,6 +50,12 @@ agents/roles/execution/execute/ROLE.md                  | @Grotap1     | 3 | @Gr
 agents/roles/enforcement/change-reviewer/ROLE.md        | @Grotap1     | 3 | @Grotap1
 agents/roles/enforcement/rule-enforcer/ROLE.md          | @Grotap1     | 3 | @Grotap1
 agents/roles/enforcement/build-validator/ROLE.md        | @Grotap1     | 3 | @Grotap1
+agents/roles/deployment-ops/deploy-verifier/ROLE.md      | @Grotap1     | 3 | @Grotap1
+agents/roles/deployment-ops/deploy-executor/ROLE.md     | @Grotap1     | 3 | @Grotap1
+agents/roles/deployment-ops/env-validator/ROLE.md       | @Grotap1     | 3 | @Grotap1
+agents/roles/deployment-ops/health-monitor/ROLE.md      | @Grotap1     | 3 | @Grotap1
+agents/roles/deployment-ops/dns-watchdog/ROLE.md        | @Grotap1     | 3 | @Grotap1
+agents/roles/deployment-ops/post-deploy-qa/ROLE.md      | @Grotap1     | 3 | @Grotap1
 agents/roles/shared/conventions.md                      | @Grotap1    | 3 | @Grotap1
 
 ## Tier 4 — Agent-Generated (no review required)

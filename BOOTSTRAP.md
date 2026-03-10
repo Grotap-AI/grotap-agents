@@ -39,6 +39,7 @@ Your server is determined by the IP you are running on:
 | 5.161.81.193 | Agent-03 | agents/servers/agent-03.md | Overflow executor when idle |
 | 178.156.222.220 | Agent-04 | agents/servers/agent-04.md | Primary executor |
 | 5.161.73.195 | Agent-05 | agents/servers/agent-05.md | Overflow executor when idle |
+| 5.78.178.81 | Agent-06 | agents/servers/agent-06.md | Deploy ops only — never executes |
 
 If you are executing a task via overflow (dispatched by `dispatch-execute.sh`),
 load `roles/execution/MODULE.md` + `roles/execution/execute/ROLE.md` as your role context.

@@ -52,6 +52,7 @@ Code: `platform/` | Docs: `docs/` | Tasks: `agents/tasks/`
 | Agent-03 | `5.161.81.193` | Planner, Fix/Logic/Policy/Perf Reviewer | Execute |
 | Agent-04 | `178.156.222.220` | Execute, Change Reviewer, Rule Enforcer, Build Validator | — |
 | Agent-05 | `5.161.73.195` | Pipeline Detail, Audit Filters, Mobile Approvals | Execute |
+| Agent-06 | `5.78.178.81` | Deploy Verifier, Deploy Executor, Env Validator, Health Monitor, DNS Watchdog, Post-Deploy QA | — |
 
 Overflow = Execute tasks dispatched only when server has free slots. Primary roles always take priority.
 Each server supports up to 3 concurrent tasks via git worktrees (isolated working directories).
