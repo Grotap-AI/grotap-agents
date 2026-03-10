@@ -10,6 +10,16 @@ Execute.
 Nothing is built without a plan. Nothing is deployed without passing the
 4-reviewer pipeline first.
 
+## Executor Pool
+| Tier | Servers | Behavior |
+|------|---------|----------|
+| Primary | Agent-01, Agent-04 | Always execute. First choice for all execution tasks. |
+| Overflow | Agent-02, Agent-03, Agent-05 | Execute when idle. Primary roles always take priority. |
+
+Overflow executors follow the exact same checklist, hard stops, and review
+requirements as primary executors. Use `dispatch-execute.sh` to auto-route
+to the best available server — it checks primaries first, then overflow.
+
 ## Execution Sequence (always in this order)
 1. Read the approved plan from the task handoff
 2. Implement code changes (files to create/modify per plan)

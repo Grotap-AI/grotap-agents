@@ -32,12 +32,17 @@ Load files in this exact order:
 5. `state/handoffs/handoff-{ticketId}-{timestamp}.md`     ← task context (if exists)
 
 Your server is determined by the IP you are running on:
-| IP | Server | File |
-|---|---|---|
-| 5.161.74.39 | Agent-02 | agents/servers/agent-02.md |
-| 5.161.81.193 | Agent-03 | agents/servers/agent-03.md |
-| 178.156.222.220 | Agent-04 | agents/servers/agent-04.md |
-| 5.161.73.195 | Agent-05 | agents/servers/agent-05.md |
+| IP | Server | File | Notes |
+|---|---|---|---|
+| 5.161.189.143 | Agent-01 | agents/servers/agent-01.md | Primary executor |
+| 5.161.74.39 | Agent-02 | agents/servers/agent-02.md | Overflow executor when idle |
+| 5.161.81.193 | Agent-03 | agents/servers/agent-03.md | Overflow executor when idle |
+| 178.156.222.220 | Agent-04 | agents/servers/agent-04.md | Primary executor |
+| 5.161.73.195 | Agent-05 | agents/servers/agent-05.md | Overflow executor when idle |
+
+If you are executing a task via overflow (dispatched by `dispatch-execute.sh`),
+load `roles/execution/MODULE.md` + `roles/execution/execute/ROLE.md` as your role context.
+Your primary roles still take priority — if a primary-role task arrives, it preempts overflow.
 
 ---
 

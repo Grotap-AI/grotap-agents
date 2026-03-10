@@ -45,16 +45,24 @@ Code: `platform/` | Docs: `docs/` | Tasks: `agents/tasks/`
 - Railway project: `f9bf333c-f929-413e-a95c-7923e10b5777`
 
 ## Agent Servers
-| Server | IP | Primary Roles |
-|---|---|---|
-| Agent-02 | `5.161.74.39` | Intake, Triage, Security Reviewer |
-| Agent-03 | `5.161.81.193` | Planner, Fix/Logic/Policy/Perf Reviewer |
-| Agent-04 | `178.156.222.220` | Execute, Change Reviewer, Rule Enforcer, Build Validator |
-| Agent-05 | `5.161.73.195` | Pipeline Detail, Audit Filters, Mobile Approvals |
+| Server | IP | Primary Roles | Overflow |
+|---|---|---|---|
+| Agent-01 | `5.161.189.143` | Execute | — |
+| Agent-02 | `5.161.74.39` | Intake, Triage, Security Reviewer | Execute |
+| Agent-03 | `5.161.81.193` | Planner, Fix/Logic/Policy/Perf Reviewer | Execute |
+| Agent-04 | `178.156.222.220` | Execute, Change Reviewer, Rule Enforcer, Build Validator | — |
+| Agent-05 | `5.161.73.195` | Pipeline Detail, Audit Filters, Mobile Approvals | Execute |
+
+Overflow = Execute tasks dispatched only when server is idle. Primary roles always take priority.
 
 ## Dispatch
 ```bash
+# Manual (specify server IP)
 bash agents/dispatch.sh <task.md> <server-ip> <session-name>
+# Auto-route execution (picks best available server — primary first, then overflow)
+bash agents/dispatch-execute.sh <task.md> <session-name>
+# Check server availability
+bash agents/server-status.sh
 ```
 
 ## Code Review Pipeline
