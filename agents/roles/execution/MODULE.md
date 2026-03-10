@@ -14,11 +14,17 @@ Nothing is built without a plan. Nothing is deployed without passing the
 | Tier | Servers | Behavior |
 |------|---------|----------|
 | Primary | Agent-01, Agent-04 | Always execute. First choice for all execution tasks. |
-| Overflow | Agent-02, Agent-03, Agent-05 | Execute when idle. Primary roles always take priority. |
+| Overflow | Agent-02, Agent-03, Agent-05 | Execute when slots available. Primary roles always take priority. |
+
+Each server supports **3 concurrent tasks** via git worktrees. Each task gets an
+isolated working directory at `/home/agent/worktrees/<session>/` with its own branch.
+No conflicts between concurrent tasks on the same server.
 
 Overflow executors follow the exact same checklist, hard stops, and review
 requirements as primary executors. Use `dispatch-execute.sh` to auto-route
-to the best available server — it checks primaries first, then overflow.
+to the server with the most free slots — primaries first, then overflow.
+
+**Total capacity: 15 concurrent execution tasks** (5 servers x 3 slots each).
 
 ## Execution Sequence (always in this order)
 1. Read the approved plan from the task handoff

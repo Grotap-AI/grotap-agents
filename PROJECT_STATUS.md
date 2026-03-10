@@ -55,12 +55,13 @@ All secrets populated including STRIPE_WEBHOOK_SECRET, COBROWSE_API_KEY, EXPO_TO
 - Co-plan gate, trust scores, knowledge curation, SOP ingestion, automation levels, agent registry, eval pipeline
 
 ### Agent Infrastructure
-- 6 Hetzner servers (agent-01 through agent-06)
+- 6 Hetzner servers (agent-01 through agent-06), 3 concurrent task slots per server via git worktrees
 - **Primary executors**: Agent-01, Agent-04 — always first choice for execution tasks
-- **Overflow executors**: Agent-02, Agent-03, Agent-05 — execute when idle, primary roles take priority
-- `dispatch-execute.sh` auto-routes execution tasks to best available server (primary first, then overflow)
-- `server-status.sh` checks idle/busy status across all servers
-- dispatch.sh sends tasks, agents run Claude Code with --dangerously-skip-permissions
+- **Overflow executors**: Agent-02, Agent-03, Agent-05 — execute when slots available, primary roles take priority
+- **Total capacity**: 15 concurrent tasks (5 task servers x 3 slots) + Agent-06 (deploy ops)
+- `dispatch.sh` — worktree-isolated task dispatch (each task gets `/home/agent/worktrees/<session>/`)
+- `dispatch-execute.sh` — auto-routes to server with most free slots (primary first, then overflow)
+- `server-status.sh` — shows slots used/available, CPU, memory, load across all servers
 - Task lifecycle folders (pending/active/done/archive) are gitignored
 - ~280 tasks dispatched across sessions (669-933, 968-980)
 

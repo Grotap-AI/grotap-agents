@@ -53,15 +53,16 @@ Code: `platform/` | Docs: `docs/` | Tasks: `agents/tasks/`
 | Agent-04 | `178.156.222.220` | Execute, Change Reviewer, Rule Enforcer, Build Validator | — |
 | Agent-05 | `5.161.73.195` | Pipeline Detail, Audit Filters, Mobile Approvals | Execute |
 
-Overflow = Execute tasks dispatched only when server is idle. Primary roles always take priority.
+Overflow = Execute tasks dispatched only when server has free slots. Primary roles always take priority.
+Each server supports up to 3 concurrent tasks via git worktrees (isolated working directories).
 
 ## Dispatch
 ```bash
-# Manual (specify server IP)
+# Manual (specify server IP) — each task gets its own worktree
 bash agents/dispatch.sh <task.md> <server-ip> <session-name>
-# Auto-route execution (picks best available server — primary first, then overflow)
+# Auto-route execution (picks server with most free slots — primary first, then overflow)
 bash agents/dispatch-execute.sh <task.md> <session-name>
-# Check server availability
+# Check server slots, CPU, memory, load
 bash agents/server-status.sh
 ```
 
