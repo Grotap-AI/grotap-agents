@@ -331,7 +331,7 @@
 <body>
 
 <h1>Grotap Agent Cluster Dashboard</h1>
-<p class="subtitle">Hetzner Cloud &mdash; Multi-DC Fleet &mdash; Ubuntu 24.04 &mdash; Ashburn DC + Hillsboro DC</p>
+<p class="subtitle">Hetzner Cloud &mdash; Multi-DC Fleet &mdash; Ashburn + Hillsboro + Helsinki &mdash; 8 Servers Live</p>
 
 <!-- Summary Bar -->
 <div class="summary-bar">
@@ -340,11 +340,11 @@
     <div class="summary-label">Total Servers</div>
   </div>
   <div class="summary-item">
-    <div class="summary-value running">6</div>
+    <div class="summary-value running">8</div>
     <div class="summary-label">Running</div>
   </div>
   <div class="summary-item">
-    <div class="summary-value pending">2</div>
+    <div class="summary-value pending">0</div>
     <div class="summary-label">Pending</div>
   </div>
   <div class="summary-item">
@@ -547,43 +547,45 @@
     </div>
   </div>
 
-  <!-- Agent-07 -->
-  <div class="server-card pending" data-agent="agent-07">
+  <!-- Agent-07 (Hetzner Project 2 — Debian 13 — Dedicated Executor) -->
+  <div class="server-card running" data-agent="agent-07">
     <div class="card-header">
       <div class="server-name">Agent-07</div>
-      <div class="status-badge pending"><span class="status-dot pending"></span> Limit Reached</div>
+      <div class="status-badge running"><span class="status-dot running"></span> Running</div>
     </div>
-    <div class="server-ip">(pending)</div>
-    <div class="server-spec">cpx21 &bull; 3 vCPU &bull; 4 GB RAM &bull; Ubuntu 24.04</div>
+    <div class="server-ip">89.167.66.105</div>
+    <div class="server-spec">Debian 13 &bull; 3 worktree slots &bull; Hetzner (Token 2)</div>
     <div class="task-status idle" id="task-agent-07">
       <div class="task-name"><span class="task-indicator idle"></span>Idle</div>
       <span class="task-duration">&mdash;</span>
     </div>
     <div class="modules-section">
       <div class="module-group">
+        <div class="module-name">execution</div>
         <div class="roles">
-          <span class="role-badge unassigned">Unassigned &mdash; pending limit increase</span>
+          <span class="role-badge">Execute (primary)</span>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Agent-08 -->
-  <div class="server-card pending" data-agent="agent-08">
+  <!-- Agent-08 (Hetzner Project 2 — Helsinki — Debian 13 — Dedicated Executor) -->
+  <div class="server-card running" data-agent="agent-08">
     <div class="card-header">
       <div class="server-name">Agent-08</div>
-      <div class="status-badge pending"><span class="status-dot pending"></span> Limit Reached</div>
+      <div class="status-badge running"><span class="status-dot running"></span> Running</div>
     </div>
-    <div class="server-ip">(pending)</div>
-    <div class="server-spec">cpx21 &bull; 3 vCPU &bull; 4 GB RAM &bull; Ubuntu 24.04</div>
+    <div class="server-ip">77.42.42.213</div>
+    <div class="server-spec">Debian 13 &bull; 3 worktree slots &bull; Helsinki (Token 2)</div>
     <div class="task-status idle" id="task-agent-08">
       <div class="task-name"><span class="task-indicator idle"></span>Idle</div>
       <span class="task-duration">&mdash;</span>
     </div>
     <div class="modules-section">
       <div class="module-group">
+        <div class="module-name">execution</div>
         <div class="roles">
-          <span class="role-badge unassigned">Unassigned &mdash; pending limit increase</span>
+          <span class="role-badge">Execute (primary)</span>
         </div>
       </div>
     </div>
@@ -592,7 +594,7 @@
 </div>
 
 <div class="footer">
-  Hetzner Project 1 (Ashburn): <span>5 servers</span> &mdash; Project 2 (Hillsboro): <span>1 server</span> &mdash; 2 pending limit increase
+  Hetzner Project 1 (Ashburn): <span>5 servers</span> &mdash; Project 2 (Hillsboro + Helsinki): <span>3 servers</span> &mdash; All servers live
   <div class="footer-refresh">
     Last refreshed: <span id="last-refreshed">&mdash;</span> &mdash; Next refresh in <span class="refresh-countdown" id="refresh-countdown">60</span>s
   </div>
@@ -600,74 +602,13 @@
 
 <script>
 // ============================================================
-// TASK STATUS DATA — Update this object to reflect live status
+// LIVE DASHBOARD — polls status-server.js every 2 seconds
+// Start server: node platform/agents/status-server.js
 // ============================================================
-const TASK_STATUS = {
-  "agent-01": { task: "Idle \u2014 #949 + #951 complete", status: "idle", started: null },
-  "agent-02": { task: "Idle", status: "idle", started: null },
-  "agent-03": { task: "Idle \u2014 #950 complete", status: "idle", started: null },
-  "agent-04": { task: "Idle \u2014 #947 + #948 complete", status: "idle", started: null },
-  "agent-05": { task: "Idle", status: "idle", started: null },
-  "agent-06": { task: "Deploy Ops \u2014 Monitoring Active", status: "working", started: "2026-03-10T04:38:00Z" },
-  "agent-07": { task: "Pending", status: "pending", started: null },
-  "agent-08": { task: "Pending", status: "pending", started: null },
-};
-
-const REFRESH_INTERVAL = 60; // seconds
-let countdown = REFRESH_INTERVAL;
-
-function formatDuration(startedISO) {
-  if (!startedISO) return "\u2014";
-  const now = new Date();
-  const started = new Date(startedISO);
-  let diffMs = now - started;
-  if (diffMs < 0) diffMs = 0;
-  const totalMin = Math.floor(diffMs / 60000);
-  const hours = Math.floor(totalMin / 60);
-  const mins = totalMin % 60;
-  if (hours > 0) return hours + "h " + mins + "m";
-  if (mins > 0) return mins + "m";
-  return "<1m";
-}
-
-function isStalled(startedISO) {
-  if (!startedISO) return false;
-  const diffMs = new Date() - new Date(startedISO);
-  return diffMs > 2 * 60 * 60 * 1000; // 2 hours
-}
-
-function resolveStatusClass(entry) {
-  if (entry.status === "working") {
-    return isStalled(entry.started) ? "stalled" : "working";
-  }
-  if (entry.status === "pending") return "pending-task";
-  return "idle";
-}
-
-function renderTaskStatus() {
-  let activeCount = 0;
-
-  for (const [agentId, entry] of Object.entries(TASK_STATUS)) {
-    const el = document.getElementById("task-" + agentId);
-    if (!el) continue;
-
-    const statusClass = resolveStatusClass(entry);
-    el.className = "task-status " + statusClass;
-
-    const duration = formatDuration(entry.started);
-    const statusLabel = statusClass === "stalled" ? " (STALLED)" : "";
-
-    el.innerHTML =
-      '<div class="task-name"><span class="task-indicator ' + statusClass + '"></span>' +
-      escapeHtml(entry.task) + statusLabel + '</div>' +
-      '<span class="task-duration">' + duration + '</span>';
-
-    if (entry.status === "working") activeCount++;
-  }
-
-  document.getElementById("active-tasks-count").textContent = activeCount;
-  document.getElementById("last-refreshed").textContent = new Date().toLocaleTimeString();
-}
+const STATUS_URL = "http://localhost:7654";
+const POLL_INTERVAL = 2000; // ms
+let lastData = null;
+let connected = false;
 
 function escapeHtml(str) {
   const div = document.createElement("div");
@@ -675,20 +616,57 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
-function tickCountdown() {
-  countdown--;
-  if (countdown <= 0) {
-    countdown = REFRESH_INTERVAL;
-    renderTaskStatus();
+function renderAgent(agent) {
+  const el = document.getElementById("task-" + agent.name);
+  if (!el) return;
+
+  if (agent.state === "unreachable") {
+    el.className = "task-status stalled";
+    el.innerHTML = '<div class="task-name"><span class="task-indicator stalled"></span>Unreachable</div><span class="task-duration">SSH timeout</span>';
+    return;
   }
-  document.getElementById("refresh-countdown").textContent = countdown;
+
+  if (!agent.tasks || agent.tasks.length === 0) {
+    el.className = "task-status idle";
+    el.innerHTML = '<div class="task-name"><span class="task-indicator idle"></span>Idle — ' + agent.slots_used + '/' + agent.slots_max + ' slots</div><span class="task-duration">&mdash;</span>';
+    return;
+  }
+
+  el.className = "task-status working";
+  const taskList = agent.tasks.map(t => '#' + t.task_id).join(', ');
+  el.innerHTML =
+    '<div class="task-name"><span class="task-indicator working"></span>' +
+    escapeHtml(agent.slots_used + '/' + agent.slots_max + ' slots — ' + taskList) + '</div>' +
+    '<span class="task-duration">' + agent.slots_used + ' running</span>';
 }
 
-// Initial render
-renderTaskStatus();
+async function poll() {
+  try {
+    const res = await fetch(STATUS_URL);
+    const data = await res.json();
+    lastData = data;
+    connected = true;
 
-// Update countdown every second, full refresh every REFRESH_INTERVAL seconds
-setInterval(tickCountdown, 1000);
+    let totalActive = 0;
+    for (const agent of data.agents) {
+      renderAgent(agent);
+      totalActive += (agent.slots_used || 0);
+    }
+
+    document.getElementById("active-tasks-count").textContent = totalActive;
+    document.getElementById("last-refreshed").textContent = new Date().toLocaleTimeString();
+    document.getElementById("refresh-countdown").textContent = (POLL_INTERVAL / 1000).toFixed(0);
+  } catch (err) {
+    if (connected) {
+      connected = false;
+    }
+    document.getElementById("last-refreshed").textContent = "Disconnected — start: node platform/agents/status-server.js";
+  }
+}
+
+// Poll immediately, then every 2 seconds
+poll();
+setInterval(poll, POLL_INTERVAL);
 </script>
 
 </body>
