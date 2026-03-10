@@ -65,10 +65,13 @@ bash agents/dispatch.sh <task.md> <server-ip> <session-name>
 ANY reviewer returning FAIL = branch blocked. No exceptions.
 
 ## Deployment
-Both auto-deploy on push to `master`:
-- **Frontend (Vercel)**: deploys ~1 min after push
-- **Backend (Railway)**: deploys ~2 min after push
-No manual deploy commands needed. Just push to master.
+- **Backend (Railway)**: auto-deploys on push to `master` (~2 min)
+- **Frontend (Vercel)**: requires manual CLI deploy after push:
+```bash
+VTOKEN=$(doppler secrets get VERCEL_TOKEN --project grotap --config prd --plain)
+cd platform/frontend && npx vercel --token "$VTOKEN" --prod --yes
+```
+Agents on Hetzner servers: push your branch, then request Vercel deploy from coordinator.
 
 ## Backend Auth — Critical
 FastAPI middleware sets `request.state.organization_id` — NOT `tenant_id`.
