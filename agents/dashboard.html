@@ -358,7 +358,7 @@
     </div>
   </div>
 
-  <!-- Agent-06 (Hetzner Project 2 — Hillsboro, OR) -->
+  <!-- Agent-06 (Hetzner Project 2 / HETZNER_API_TOKEN_2 — Hillsboro, OR — Ops/Monitoring) -->
   <div class="server-card running">
     <div class="card-header">
       <div class="server-name">Agent-06</div>
@@ -368,8 +368,19 @@
     <div class="server-spec">cpx31 &bull; 4 vCPU &bull; 8 GB RAM &bull; Ubuntu 24.04 &bull; Hillsboro, OR (Token 2)</div>
     <div class="modules-section">
       <div class="module-group">
+        <div class="module-name">deploy</div>
         <div class="roles">
-          <span class="role-badge unassigned">Unassigned &mdash; new</span>
+          <span class="role-badge">Deploy Verifier</span>
+          <span class="role-badge">Deploy Executor</span>
+        </div>
+      </div>
+      <div class="module-group">
+        <div class="module-name">ops / monitoring</div>
+        <div class="roles">
+          <span class="role-badge">Env Validator</span>
+          <span class="role-badge">Health Monitor</span>
+          <span class="role-badge">DNS Watchdog</span>
+          <span class="role-badge">Post-Deploy QA</span>
         </div>
       </div>
     </div>
