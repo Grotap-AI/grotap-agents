@@ -54,9 +54,11 @@ Code: `platform/` | Docs: `docs/` | Tasks: `agents/tasks/`
 | Agent-05 | `5.161.73.195` | Pipeline Detail, Audit Filters, Mobile Approvals | Execute |
 | Agent-06 | `5.78.178.81` | Deploy Verifier, Deploy Executor, Env Validator, Health Monitor, DNS Watchdog, Post-Deploy QA | — |
 | Agent-07 | `89.167.66.105` | Execute | — |
-| Agent-08 | `77.42.42.213` | Execute | — |
+| Agent-08 | `77.42.42.213` | **Dispatch Coordinator** | Execute (2 slots) |
 
-**Priority #1 role: DISPATCH COORDINATOR** — keeping all servers at max capacity overrides all other work.
+**Agent-08 is the DISPATCH COORDINATOR** — its #1 job is keeping all servers at max capacity 24/7.
+Runs two systemd services: `grotap-dispatch` (picks up tasks) + `grotap-watchdog` (recovers failures).
+Both survive reboots. Never stop. Failed tasks auto-recover back to pending/ for re-dispatch.
 Overflow = Execute tasks dispatched only when server has free slots. Primary roles always take priority.
 Each server supports up to 3 concurrent tasks via git worktrees (isolated working directories).
 For auto-dispatch: `bash agents/continuous-dispatch.sh` (runs forever, checks every 60s).
