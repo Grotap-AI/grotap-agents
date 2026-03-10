@@ -212,6 +212,113 @@
   }
 
   .footer span { color: #6e7681; }
+
+  .summary-value.active { color: #58a6ff; }
+
+  /* Task Status Section */
+  .task-status {
+    margin-top: 20px;
+    padding: 18px 20px;
+    border-radius: 12px;
+    background: rgba(0,0,0,0.25);
+    border: 1px solid rgba(255,255,255,0.06);
+  }
+
+  .task-status.idle {
+    border-left: 4px solid #484f58;
+  }
+
+  .task-status.working {
+    border-left: 4px solid #58a6ff;
+    background: rgba(88, 166, 255, 0.06);
+  }
+
+  .task-status.stalled {
+    border-left: 4px solid #f85149;
+    background: rgba(248, 81, 73, 0.06);
+  }
+
+  .task-status.pending-task {
+    border-left: 4px solid #d29922;
+    background: rgba(210, 153, 34, 0.06);
+  }
+
+  .task-name {
+    font-size: 1.4rem;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+
+  .task-status.idle .task-name { color: #6e7681; }
+  .task-status.working .task-name { color: #58a6ff; }
+  .task-status.stalled .task-name { color: #f85149; }
+  .task-status.pending-task .task-name { color: #d29922; }
+
+  .task-duration {
+    display: inline-block;
+    font-size: 1.05rem;
+    font-weight: 600;
+    padding: 4px 14px;
+    border-radius: 999px;
+  }
+
+  .task-status.idle .task-duration {
+    background: rgba(139, 148, 158, 0.12);
+    color: #6e7681;
+  }
+
+  .task-status.working .task-duration {
+    background: rgba(88, 166, 255, 0.15);
+    color: #58a6ff;
+    animation: pulse-blue 2s infinite;
+  }
+
+  .task-status.stalled .task-duration {
+    background: rgba(248, 81, 73, 0.15);
+    color: #f85149;
+    animation: pulse-red 1.5s infinite;
+  }
+
+  .task-status.pending-task .task-duration {
+    background: rgba(210, 153, 34, 0.12);
+    color: #d29922;
+  }
+
+  @keyframes pulse-blue {
+    0%, 100% { box-shadow: 0 0 4px rgba(88, 166, 255, 0.3); }
+    50% { box-shadow: 0 0 14px rgba(88, 166, 255, 0.5); }
+  }
+
+  @keyframes pulse-red {
+    0%, 100% { box-shadow: 0 0 4px rgba(248, 81, 73, 0.3); }
+    50% { box-shadow: 0 0 14px rgba(248, 81, 73, 0.6); }
+  }
+
+  .task-indicator {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 8px;
+    vertical-align: middle;
+  }
+
+  .task-indicator.idle { background: #484f58; }
+  .task-indicator.working { background: #58a6ff; box-shadow: 0 0 8px #58a6ff; animation: pulse-blue 2s infinite; }
+  .task-indicator.stalled { background: #f85149; box-shadow: 0 0 8px #f85149; animation: pulse-red 1.5s infinite; }
+  .task-indicator.pending-task { background: #d29922; }
+
+  /* Footer refresh info */
+  .footer-refresh {
+    margin-top: 8px;
+    font-size: 1rem;
+    color: #484f58;
+  }
+
+  .refresh-countdown {
+    color: #58a6ff;
+    font-weight: 600;
+  }
 </style>
 </head>
 <body>
@@ -233,19 +340,27 @@
     <div class="summary-value pending">2</div>
     <div class="summary-label">Pending</div>
   </div>
+  <div class="summary-item">
+    <div class="summary-value active" id="active-tasks-count">0</div>
+    <div class="summary-label">Active Tasks</div>
+  </div>
 </div>
 
 <!-- Server Grid -->
 <div class="server-grid">
 
   <!-- Agent-01 -->
-  <div class="server-card running">
+  <div class="server-card running" data-agent="agent-01">
     <div class="card-header">
       <div class="server-name">Agent-01</div>
       <div class="status-badge running"><span class="status-dot running"></span> Running</div>
     </div>
     <div class="server-ip">5.161.189.143</div>
     <div class="server-spec">cpx21 &bull; 3 vCPU &bull; 4 GB RAM &bull; Ubuntu 24.04</div>
+    <div class="task-status idle" id="task-agent-01">
+      <div class="task-name"><span class="task-indicator idle"></span>Idle</div>
+      <span class="task-duration">&mdash;</span>
+    </div>
     <div class="modules-section">
       <div class="module-group">
         <div class="roles">
@@ -256,13 +371,17 @@
   </div>
 
   <!-- Agent-02 -->
-  <div class="server-card running">
+  <div class="server-card running" data-agent="agent-02">
     <div class="card-header">
       <div class="server-name">Agent-02</div>
       <div class="status-badge running"><span class="status-dot running"></span> Running</div>
     </div>
     <div class="server-ip">5.161.74.39</div>
     <div class="server-spec">cpx21 &bull; 3 vCPU &bull; 4 GB RAM &bull; Ubuntu 24.04</div>
+    <div class="task-status idle" id="task-agent-02">
+      <div class="task-name"><span class="task-indicator idle"></span>Idle</div>
+      <span class="task-duration">&mdash;</span>
+    </div>
     <div class="modules-section">
       <div class="module-group">
         <div class="module-name">intake</div>
@@ -281,13 +400,17 @@
   </div>
 
   <!-- Agent-03 -->
-  <div class="server-card running">
+  <div class="server-card running" data-agent="agent-03">
     <div class="card-header">
       <div class="server-name">Agent-03</div>
       <div class="status-badge running"><span class="status-dot running"></span> Running</div>
     </div>
     <div class="server-ip">5.161.81.193</div>
     <div class="server-spec">cpx21 &bull; 3 vCPU &bull; 4 GB RAM &bull; Ubuntu 24.04</div>
+    <div class="task-status idle" id="task-agent-03">
+      <div class="task-name"><span class="task-indicator idle"></span>Idle</div>
+      <span class="task-duration">&mdash;</span>
+    </div>
     <div class="modules-section">
       <div class="module-group">
         <div class="module-name">planning</div>
@@ -308,13 +431,17 @@
   </div>
 
   <!-- Agent-04 -->
-  <div class="server-card running">
+  <div class="server-card running" data-agent="agent-04">
     <div class="card-header">
       <div class="server-name">Agent-04</div>
       <div class="status-badge running"><span class="status-dot running"></span> Running</div>
     </div>
     <div class="server-ip">178.156.222.220</div>
     <div class="server-spec">cpx21 &bull; 3 vCPU &bull; 4 GB RAM &bull; Ubuntu 24.04</div>
+    <div class="task-status idle" id="task-agent-04">
+      <div class="task-name"><span class="task-indicator idle"></span>Idle</div>
+      <span class="task-duration">&mdash;</span>
+    </div>
     <div class="modules-section">
       <div class="module-group">
         <div class="module-name">execution</div>
@@ -334,13 +461,17 @@
   </div>
 
   <!-- Agent-05 -->
-  <div class="server-card running">
+  <div class="server-card running" data-agent="agent-05">
     <div class="card-header">
       <div class="server-name">Agent-05</div>
       <div class="status-badge running"><span class="status-dot running"></span> Running</div>
     </div>
     <div class="server-ip">5.161.73.195</div>
     <div class="server-spec">cpx21 &bull; 3 vCPU &bull; 4 GB RAM &bull; Ubuntu 24.04</div>
+    <div class="task-status idle" id="task-agent-05">
+      <div class="task-name"><span class="task-indicator idle"></span>Idle</div>
+      <span class="task-duration">&mdash;</span>
+    </div>
     <div class="modules-section">
       <div class="module-group">
         <div class="module-name">pipeline</div>
@@ -359,13 +490,17 @@
   </div>
 
   <!-- Agent-06 (Hetzner Project 2 / HETZNER_API_TOKEN_2 — Hillsboro, OR — Ops/Monitoring) -->
-  <div class="server-card running">
+  <div class="server-card running" data-agent="agent-06">
     <div class="card-header">
       <div class="server-name">Agent-06</div>
       <div class="status-badge running"><span class="status-dot running"></span> Running</div>
     </div>
     <div class="server-ip">5.78.178.81</div>
     <div class="server-spec">cpx31 &bull; 4 vCPU &bull; 8 GB RAM &bull; Ubuntu 24.04 &bull; Hillsboro, OR (Token 2)</div>
+    <div class="task-status idle" id="task-agent-06">
+      <div class="task-name"><span class="task-indicator idle"></span>Idle</div>
+      <span class="task-duration">&mdash;</span>
+    </div>
     <div class="modules-section">
       <div class="module-group">
         <div class="module-name">deploy</div>
@@ -387,13 +522,17 @@
   </div>
 
   <!-- Agent-07 -->
-  <div class="server-card pending">
+  <div class="server-card pending" data-agent="agent-07">
     <div class="card-header">
       <div class="server-name">Agent-07</div>
       <div class="status-badge pending"><span class="status-dot pending"></span> Limit Reached</div>
     </div>
     <div class="server-ip">(pending)</div>
     <div class="server-spec">cpx21 &bull; 3 vCPU &bull; 4 GB RAM &bull; Ubuntu 24.04</div>
+    <div class="task-status idle" id="task-agent-07">
+      <div class="task-name"><span class="task-indicator idle"></span>Idle</div>
+      <span class="task-duration">&mdash;</span>
+    </div>
     <div class="modules-section">
       <div class="module-group">
         <div class="roles">
@@ -404,13 +543,17 @@
   </div>
 
   <!-- Agent-08 -->
-  <div class="server-card pending">
+  <div class="server-card pending" data-agent="agent-08">
     <div class="card-header">
       <div class="server-name">Agent-08</div>
       <div class="status-badge pending"><span class="status-dot pending"></span> Limit Reached</div>
     </div>
     <div class="server-ip">(pending)</div>
     <div class="server-spec">cpx21 &bull; 3 vCPU &bull; 4 GB RAM &bull; Ubuntu 24.04</div>
+    <div class="task-status idle" id="task-agent-08">
+      <div class="task-name"><span class="task-indicator idle"></span>Idle</div>
+      <span class="task-duration">&mdash;</span>
+    </div>
     <div class="modules-section">
       <div class="module-group">
         <div class="roles">
@@ -423,8 +566,104 @@
 </div>
 
 <div class="footer">
-  Hetzner Project 1 (Ashburn): <span>5 servers</span> &mdash; Project 2 (Hillsboro): <span>1 server</span> &mdash; 2 pending limit increase &mdash; Last updated: 2026-03-09
+  Hetzner Project 1 (Ashburn): <span>5 servers</span> &mdash; Project 2 (Hillsboro): <span>1 server</span> &mdash; 2 pending limit increase
+  <div class="footer-refresh">
+    Last refreshed: <span id="last-refreshed">&mdash;</span> &mdash; Next refresh in <span class="refresh-countdown" id="refresh-countdown">60</span>s
+  </div>
 </div>
+
+<script>
+// ============================================================
+// TASK STATUS DATA — Update this object to reflect live status
+// ============================================================
+const TASK_STATUS = {
+  "agent-01": { task: "Ready \u2014 Execute role assigned", status: "idle", started: null },
+  "agent-02": { task: "Idle", status: "idle", started: null },
+  "agent-03": { task: "Idle", status: "idle", started: null },
+  "agent-04": { task: "Idle", status: "idle", started: null },
+  "agent-05": { task: "Idle", status: "idle", started: null },
+  "agent-06": { task: "Deploy Ops \u2014 Monitoring Active", status: "working", started: "2026-03-10T04:38:00Z" },
+  "agent-07": { task: "Pending", status: "pending", started: null },
+  "agent-08": { task: "Pending", status: "pending", started: null },
+};
+
+const REFRESH_INTERVAL = 60; // seconds
+let countdown = REFRESH_INTERVAL;
+
+function formatDuration(startedISO) {
+  if (!startedISO) return "\u2014";
+  const now = new Date();
+  const started = new Date(startedISO);
+  let diffMs = now - started;
+  if (diffMs < 0) diffMs = 0;
+  const totalMin = Math.floor(diffMs / 60000);
+  const hours = Math.floor(totalMin / 60);
+  const mins = totalMin % 60;
+  if (hours > 0) return hours + "h " + mins + "m";
+  if (mins > 0) return mins + "m";
+  return "<1m";
+}
+
+function isStalled(startedISO) {
+  if (!startedISO) return false;
+  const diffMs = new Date() - new Date(startedISO);
+  return diffMs > 2 * 60 * 60 * 1000; // 2 hours
+}
+
+function resolveStatusClass(entry) {
+  if (entry.status === "working") {
+    return isStalled(entry.started) ? "stalled" : "working";
+  }
+  if (entry.status === "pending") return "pending-task";
+  return "idle";
+}
+
+function renderTaskStatus() {
+  let activeCount = 0;
+
+  for (const [agentId, entry] of Object.entries(TASK_STATUS)) {
+    const el = document.getElementById("task-" + agentId);
+    if (!el) continue;
+
+    const statusClass = resolveStatusClass(entry);
+    el.className = "task-status " + statusClass;
+
+    const duration = formatDuration(entry.started);
+    const statusLabel = statusClass === "stalled" ? " (STALLED)" : "";
+
+    el.innerHTML =
+      '<div class="task-name"><span class="task-indicator ' + statusClass + '"></span>' +
+      escapeHtml(entry.task) + statusLabel + '</div>' +
+      '<span class="task-duration">' + duration + '</span>';
+
+    if (entry.status === "working") activeCount++;
+  }
+
+  document.getElementById("active-tasks-count").textContent = activeCount;
+  document.getElementById("last-refreshed").textContent = new Date().toLocaleTimeString();
+}
+
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.appendChild(document.createTextNode(str));
+  return div.innerHTML;
+}
+
+function tickCountdown() {
+  countdown--;
+  if (countdown <= 0) {
+    countdown = REFRESH_INTERVAL;
+    renderTaskStatus();
+  }
+  document.getElementById("refresh-countdown").textContent = countdown;
+}
+
+// Initial render
+renderTaskStatus();
+
+// Update countdown every second, full refresh every REFRESH_INTERVAL seconds
+setInterval(tickCountdown, 1000);
+</script>
 
 </body>
 </html>

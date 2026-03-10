@@ -6,7 +6,7 @@
 ## Servers
 | Server | IP | Type | Roles |
 |---|---|---|---|
-| agent-01 | 5.161.189.143 | cpx21 | (Unassigned — available) |
+| agent-01 | 5.161.189.143 | cpx21 | Execute |
 | agent-02 | 5.161.74.39 | cpx21 | Intake, Triage, Security Reviewer |
 | agent-03 | 5.161.81.193 | cpx21 | Planner, Fix Reviewer, Policy Reviewer, Logic Reviewer, Perf Reviewer |
 | agent-04 | 178.156.222.220 | cpx21 | Execute, Change Reviewer, Rule Enforcer, Build Validator |
@@ -55,6 +55,7 @@
 | agents/roles/review/policy-reviewer/ROLE.md | Agent-03 | Policy Reviewer |
 | agents/roles/review/logic-reviewer/ROLE.md | Agent-03 | Logic Reviewer |
 | agents/roles/review/perf-reviewer/ROLE.md | Agent-03 | Perf Reviewer |
+| agents/roles/execution/execute/ROLE.md | Agent-01 | Execute |
 | agents/roles/execution/execute/ROLE.md | Agent-04 | Execute |
 | agents/roles/enforcement/change-reviewer/ROLE.md | Agent-04 | Change Reviewer |
 | agents/roles/enforcement/rule-enforcer/ROLE.md | Agent-04 | Rule Enforcer |
