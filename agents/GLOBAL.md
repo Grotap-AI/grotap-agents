@@ -53,11 +53,17 @@ Code: `platform/` | Docs: `docs/` | Tasks: `agents/tasks/`
 | Agent-04 | `178.156.222.220` | Execute, Change Reviewer, Rule Enforcer, Build Validator | — |
 | Agent-05 | `5.161.73.195` | Pipeline Detail, Audit Filters, Mobile Approvals | Execute |
 | Agent-06 | `5.78.178.81` | Deploy Verifier, Deploy Executor, Env Validator, Health Monitor, DNS Watchdog, Post-Deploy QA | — |
+| Agent-07 | `89.167.66.105` | Execute | — |
+| Agent-08 | `77.42.42.213` | Execute | — |
 
+**Priority #1 role: DISPATCH COORDINATOR** — keeping all servers at max capacity overrides all other work.
 Overflow = Execute tasks dispatched only when server has free slots. Primary roles always take priority.
 Each server supports up to 3 concurrent tasks via git worktrees (isolated working directories).
+For auto-dispatch: `bash agents/continuous-dispatch.sh` (runs forever, checks every 60s).
 
-## Dispatch
+## Dispatch — 24/7 CONTINUOUS, NEVER IDLE
+Agents must NEVER sit idle. When a task completes, dispatch the next immediately.
+The coordinator session must always keep all servers at max capacity (3 tasks each).
 ```bash
 # Manual (specify server IP) — each task gets its own worktree
 bash agents/dispatch.sh <task.md> <server-ip> <session-name>
@@ -66,6 +72,8 @@ bash agents/dispatch-execute.sh <task.md> <session-name>
 # Check server slots, CPU, memory, load
 bash agents/server-status.sh
 ```
+**Dispatch priority**: pending/ first, then active/ backlog (034-932), lowest ID first.
+After dispatching, verify tmux sessions started. If a server errors, fix and re-dispatch.
 
 ## Code Review Pipeline
 ```bash
