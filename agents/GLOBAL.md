@@ -65,19 +65,24 @@ bash agents/dispatch.sh <task.md> <server-ip> <session-name>
 ANY reviewer returning FAIL = branch blocked. No exceptions.
 
 ## Deployment
-Vercel (NOT auto-deploy from git push):
-```bash
-VTOKEN=$(doppler secrets get VERCEL_TOKEN --project grotap --config dev --plain)
-cd platform/frontend && npx vercel --token "$VTOKEN" --prod --yes
-```
-Backend (Railway):
-```bash
-cd platform/backend && doppler run --project grotap --config dev -- railway up --detach --service grotap-backend
-```
+Both auto-deploy on push to `master`:
+- **Frontend (Vercel)**: deploys ~1 min after push
+- **Backend (Railway)**: deploys ~2 min after push
+No manual deploy commands needed. Just push to master.
 
 ## Backend Auth — Critical
 FastAPI middleware sets `request.state.organization_id` — NOT `tenant_id`.
 `request.state.tenant_id` → AttributeError → 500 on all requests.
+
+## Git Discipline — ALL AGENTS, NO EXCEPTIONS
+| # | Rule |
+|---|---|
+| 1 | **Branch is `master`** — not `main`. Always `git pull origin master`. |
+| 2 | **Pull before push** — always `git pull origin master --rebase` (or branch) before pushing. |
+| 3 | **Never `git add -A` or `git add .`** — stage specific files only. Wildcard staging picks up unrelated files. |
+| 4 | **Always push after commit** — uncommitted or unpushed work is invisible to everyone. A task is not done until pushed. |
+| 5 | **Task files are gitignored** — `agents/tasks/pending/`, `active/`, `done/`, `archive/` are NOT tracked. Do not try to `git add` them. |
+| 6 | **Type-check before commit** — run `cd frontend && npx tsc --noEmit` for frontend changes. Fix errors before committing. |
 
 ## Common FAIL Causes
 - Unused TS imports (`noUnusedLocals: true` → build error)

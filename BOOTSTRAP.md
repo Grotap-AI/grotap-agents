@@ -10,7 +10,7 @@ all five steps below. Do not skip steps on "quick" sessions — there are none.
 ---
 
 ### Step 1 — Verify Git State
-Run: `git pull origin main`
+Run: `git pull origin master`
 Run: `git rev-parse HEAD`
 Record the full 40-character commit hash. This is your SESSION_COMMIT.
 Report: `Session initialized at commit: {SESSION_COMMIT}`
