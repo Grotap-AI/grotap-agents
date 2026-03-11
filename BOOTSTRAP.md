@@ -41,7 +41,7 @@ Your server is determined by the IP you are running on:
 | 5.161.73.195 | Agent-05 | agents/servers/agent-05.md | Overflow executor when idle |
 | 5.78.178.81 | Agent-06 | agents/servers/agent-06.md | Deploy ops only — never executes |
 | 89.167.66.105 | Agent-07 | agents/servers/agent-07.md | Primary executor (3 worktree slots) |
-| 77.42.42.213 | Agent-08 | agents/servers/agent-08.md | Primary executor (3 worktree slots) |
+| 77.42.42.213 | Agent-08 | agents/servers/agent-08.md | **Dispatch Coordinator** (systemd) + Execute (2 slots) |
 
 If you are executing a task via overflow (dispatched by `dispatch-execute.sh`),
 load `roles/execution/MODULE.md` + `roles/execution/execute/ROLE.md` as your role context.
@@ -79,8 +79,28 @@ After bootstrap and task completion, the coordinator MUST:
 5. If a server errors (missing API key, stale worktree): fix and re-dispatch immediately
 6. Never stop. Never pause. When one batch finishes, dispatch the next.
 
+## SSH Connection — MANDATORY
+All agent servers use SSH key auth. **Never connect by raw IP.** Use the configured aliases.
+```bash
+# CORRECT — uses ~/.ssh/config aliases (User: agent, Key: ~/.ssh/grotap_agents)
+ssh agent-01        # 5.161.189.143
+ssh agent-02        # 5.161.74.39
+ssh agent-03        # 5.161.81.193
+ssh agent-04        # 178.156.222.220
+ssh agent-05        # 5.161.73.195
+ssh agent-06        # 5.78.178.81
+ssh agent-07        # 89.167.66.105
+ssh agent-08        # 77.42.42.213
+
+# WRONG — wastes tokens on auth failures
+ssh root@5.161.189.143
+ssh 5.161.189.143
+```
+If SSH fails: check `~/.ssh/config` exists with `IdentityFile ~/.ssh/grotap_agents` and `User agent`.
+
 ## Anti-Patterns (never do these)
 - Skip bootstrap on "quick" sessions — every session bootstraps, no exceptions
+- **SSH by raw IP** — always use `ssh agent-XX` aliases, never `ssh root@<ip>` or `ssh <ip>`
 - Load agents/tasks/*.md as context — task files are inputs, not context
 - Load docs/CLAUDE.md as context — human docs only, use agents/GLOBAL.md instead
 - Load CLAUDE_CODE_INSTRUCTIONS.md — planning artifact, archived

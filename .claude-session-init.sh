@@ -37,6 +37,8 @@ REQUIRED_FILES=(
   "agents/servers/agent-04.md"
   "agents/servers/agent-05.md"
   "agents/servers/agent-06.md"
+  "agents/servers/agent-07.md"
+  "agents/servers/agent-08.md"
 )
 
 for f in "${REQUIRED_FILES[@]}"; do

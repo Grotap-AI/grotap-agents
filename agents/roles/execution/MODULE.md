@@ -13,18 +13,21 @@ Nothing is built without a plan. Nothing is deployed without passing the
 ## Executor Pool
 | Tier | Servers | Behavior |
 |------|---------|----------|
-| Primary | Agent-01, Agent-04 | Always execute. First choice for all execution tasks. |
-| Overflow | Agent-02, Agent-03, Agent-05 | Execute when slots available. Primary roles always take priority. |
+| Primary | Agent-01, Agent-04, Agent-07 | Always execute. First choice for all execution tasks. 3 slots each. |
+| Primary | Agent-08 | Dispatch Coordinator + Execute. 2 execution slots. |
+| Overflow | Agent-02, Agent-03, Agent-05 | Execute when slots available. Primary roles always take priority. 3 slots each. |
 
-Each server supports **3 concurrent tasks** via git worktrees. Each task gets an
-isolated working directory at `/home/agent/worktrees/<session>/` with its own branch.
+Each server supports **3 concurrent tasks** via git worktrees (Agent-08: 2 slots,
+1 reserved for dispatch). Each task gets an isolated working directory at
+`/home/agent/worktrees/<session>/` with its own branch.
 No conflicts between concurrent tasks on the same server.
 
 Overflow executors follow the exact same checklist, hard stops, and review
 requirements as primary executors. Use `dispatch-execute.sh` to auto-route
 to the server with the most free slots — primaries first, then overflow.
 
-**Total capacity: 15 concurrent execution tasks** (5 servers x 3 slots each).
+**Total capacity: 20 concurrent execution tasks** (3 primary x 3 + Agent-08 x 2 + 3 overflow x 3).
+Agent-06 is deploy ops only — never executes.
 
 ## Execution Sequence (always in this order)
 1. Read the approved plan from the task handoff
