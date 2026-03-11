@@ -82,21 +82,22 @@ After bootstrap and task completion, the coordinator MUST:
 ## SSH Connection — MANDATORY
 All agent servers use SSH key auth. **Never connect by raw IP.** Use the configured aliases.
 ```bash
-# CORRECT — uses ~/.ssh/config aliases (User: agent, Key: ~/.ssh/grotap_agents)
-ssh agent-01        # 5.161.189.143
-ssh agent-02        # 5.161.74.39
-ssh agent-03        # 5.161.81.193
-ssh agent-04        # 178.156.222.220
-ssh agent-05        # 5.161.73.195
-ssh agent-06        # 5.78.178.81
-ssh agent-07        # 89.167.66.105
-ssh agent-08        # 77.42.42.213
+# CORRECT — uses ~/.ssh/config aliases (Key: ~/.ssh/grotap_agents)
+ssh agent-01        # 5.161.189.143  (User: agent)
+ssh agent-02        # 5.161.74.39    (User: root)
+ssh agent-03        # 5.161.81.193   (User: root)
+ssh agent-04        # 178.156.222.220 (User: root)
+ssh agent-05        # 5.161.73.195   (User: root)
+ssh agent-06        # 5.78.178.81    (User: root)
+ssh agent-07        # 89.167.66.105  (User: root)
+ssh agent-08        # 77.42.42.213   (User: agent)
 
 # WRONG — wastes tokens on auth failures
 ssh root@5.161.189.143
+ssh agent@5.161.74.39
 ssh 5.161.189.143
 ```
-If SSH fails: check `~/.ssh/config` exists with `IdentityFile ~/.ssh/grotap_agents` and `User agent`.
+If SSH fails: check `~/.ssh/config` — Agent-01/08 use `User agent`, all others use `User root`.
 
 ## Anti-Patterns (never do these)
 - Skip bootstrap on "quick" sessions — every session bootstraps, no exceptions

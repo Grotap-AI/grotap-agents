@@ -65,7 +65,8 @@ For auto-dispatch: `bash agents/continuous-dispatch.sh` (runs forever, checks ev
 
 ## SSH — ALWAYS USE ALIASES
 **Never SSH by raw IP.** Use `ssh agent-01` through `ssh agent-08` (configured in `~/.ssh/config`).
-Raw IP connections fail auth and waste tokens. Key: `~/.ssh/grotap_agents`, User: `agent`.
+Raw IP connections fail auth and waste tokens. Key: `~/.ssh/grotap_agents`.
+Agent-01/08: `User agent`. All others: `User root`.
 
 ## Dispatch — 24/7 CONTINUOUS, NEVER IDLE
 Agents must NEVER sit idle. When a task completes, dispatch the next immediately.
