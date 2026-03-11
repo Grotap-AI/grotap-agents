@@ -28,7 +28,7 @@ Code: `platform/` | Docs: `docs/` | Tasks: `agents/tasks/`
 
 | # | Rule |
 |---|---|
-| 1 | **DOPPLER HOLDS ALL SECRETS** — No `.env`, no hardcoded values. Local: `doppler run -- <cmd>`. Never set tokens inline. |
+| 1 | **DOPPLER IS THE ONLY SECRET STORE** — No `.env` in CI, no GitHub secrets (except `DOPPLER_SERVICE_TOKEN`), no hardcoded values. Local: `doppler run -- <cmd>`. CI/CD: `doppler run --` injects all secrets. To update any secret (RAILWAY_TOKEN, API keys, etc.): update it in **Doppler** (`grotap` project, `prd`/`dev` config). NEVER tell a human to update GitHub secrets. |
 | 2 | **NO PYTHON FOR AGENTS** — TypeScript/JS only. Python = FastAPI backend only. |
 | 3 | **NO DIRECT 3RD-PARTY CALLS** — All SDK calls via vendor wrappers in `app/providers/`. |
 | 4 | **NO SHARED TENANT DATA** — Every DB query scoped to `tenant_id`. No cross-tenant reads. |
@@ -55,6 +55,8 @@ Code: `platform/` | Docs: `docs/` | Tasks: `agents/tasks/`
 | Agent-06 | `5.78.178.81` | Deploy Verifier, Deploy Executor, Env Validator, Health Monitor, DNS Watchdog, Post-Deploy QA | — |
 | Agent-07 | `89.167.66.105` | Execute | — |
 | Agent-08 | `77.42.42.213` | **Dispatch Coordinator** | Execute (2 slots) |
+| Agent-09 | `46.62.184.50` | Execute | — |
+| Agent-10 | `46.62.184.52` | Execute | — |
 
 **Agent-08 is the DISPATCH COORDINATOR** — its #1 job is keeping all servers at max capacity 24/7.
 Runs two systemd services: `grotap-dispatch` (picks up tasks) + `grotap-watchdog` (recovers failures).
@@ -64,7 +66,7 @@ Each server supports up to 3 concurrent tasks via git worktrees (isolated workin
 For auto-dispatch: `bash agents/continuous-dispatch.sh` (runs forever, checks every 60s).
 
 ## SSH — ALWAYS USE ALIASES
-**Never SSH by raw IP.** Use `ssh agent-01` through `ssh agent-08` (configured in `~/.ssh/config`).
+**Never SSH by raw IP.** Use `ssh agent-01` through `ssh agent-10` (configured in `~/.ssh/config`).
 Raw IP connections fail auth and waste tokens. Key: `~/.ssh/grotap_agents`.
 Agent-01/08: `User agent`. All others: `User root`.
 
@@ -108,7 +110,7 @@ FastAPI middleware sets `request.state.organization_id` — NOT `tenant_id`.
 | 1 | **Branch is `master`** — not `main`. Always `git pull origin master`. |
 | 2 | **Pull before push** — always `git pull origin master --rebase` (or branch) before pushing. |
 | 3 | **Never `git add -A` or `git add .`** — stage specific files only. Wildcard staging picks up unrelated files. |
-| 4 | **Always push after commit** — uncommitted or unpushed work is invisible to everyone. A task is not done until pushed. |
+| 4 | **A task is NOT done until merged to master and deployed.** Pushed branch ≠ done. Passed review ≠ done. Only merged + deployed = done. |
 | 5 | **Task files are gitignored** — `agents/tasks/pending/`, `active/`, `done/`, `archive/` are NOT tracked. Do not try to `git add` them. |
 | 6 | **Type-check before commit** — run `cd frontend && npx tsc --noEmit` for frontend changes. Fix errors before committing. |
 
