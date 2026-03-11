@@ -99,6 +99,34 @@ ssh 5.161.189.143
 ```
 If SSH fails: check `~/.ssh/config` — Agent-01/08 use `User agent`, all others use `User root`.
 
+## Known Server Setup Requirements
+Before dispatching, verify these are in place on every executor server:
+1. **API key in BOTH files**: `/home/agent/.env` AND `/home/agent/.profile` must contain `export ANTHROPIC_API_KEY=...`
+2. **Git safe.directory**: On servers where dispatch runs as root but repos are owned by `agent`, run:
+   `git config --global --add safe.directory /home/agent/grotap-platform`
+   `git config --global --add safe.directory /home/agent/grotap-agents`
+3. **Task files not in git**: `agents/tasks/pending/` and `agents/tasks/active/` are local-only. When setting up dispatch on a new server, SCP task files first:
+   `scp -r agents/tasks/pending agent-08:/home/agent/grotap-platform/agents/tasks/`
+   `scp -r agents/tasks/active agent-08:/home/agent/grotap-platform/agents/tasks/`
+4. **SSH from dispatch coordinator (agent-08)**: Needs `~/.ssh/grotap_agents` key + `~/.ssh/config` with all server entries
+5. **Status server**: `node agents/status-server.js` must be running locally for dashboard to show data
+
+## Server SSH Access Matrix
+| Server | `agent` user SSH | `root` user SSH | Notes |
+|--------|:-:|:-:|---|
+| agent-01 | OK | OK | Primary executor |
+| agent-02 | root only | OK | Overflow |
+| agent-03 | root only | OK | Overflow |
+| agent-04 | root only | OK | Primary executor |
+| agent-05 | root only | OK | Overflow |
+| agent-06 | root only | OK | Deploy only — no Claude CLI |
+| agent-07 | root only | OK | Primary executor |
+| agent-08 | OK | OK | Dispatch coordinator |
+
+`dispatch.sh` uses `root@IP` for all operations (mkdir, scp, tmux). This is correct.
+`server-status.sh` and `status-server.js` also use `root@IP`. This is correct.
+Local `ssh agent-XX` aliases use mixed users — see `~/.ssh/config`.
+
 ## Anti-Patterns (never do these)
 - Skip bootstrap on "quick" sessions — every session bootstraps, no exceptions
 - **SSH by raw IP** — always use `ssh agent-XX` aliases, never `ssh root@<ip>` or `ssh <ip>`
@@ -107,3 +135,5 @@ If SSH fails: check `~/.ssh/config` — Agent-01/08 use `User agent`, all others
 - Load CLAUDE_CODE_INSTRUCTIONS.md — planning artifact, archived
 - Begin work before outputting BOOTSTRAP COMPLETE confirmation
 - **Leave agents idle** — if a server has free slots, dispatch immediately
+- **Assume task files are in git** — pending/active dirs are local, must be synced manually
+- **Forget status-server.js** — dashboard is blank without it running on localhost:7654
