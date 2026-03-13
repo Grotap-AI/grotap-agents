@@ -1,11 +1,8 @@
-# agents/GLOBAL.md
-# Universal context — loaded first by every agent session on every server.
-# Load order: GLOBAL.md → MODULE.md → ROLE.md → handoff.md
+# agents/GLOBAL.md — Load order: GLOBAL.md → MODULE.md → ROLE.md → handoff.md
 # Max 200 lines enforced by pre-commit hook.
 
 ## Platform
-grotap — multi-tenant AI-powered SaaS platform.
-Every feature is a discrete app. Tenants subscribe to apps.
+grotap — multi-tenant AI-powered SaaS. Every feature = discrete app. Tenants subscribe to apps.
 Code: `platform/` | Docs: `docs/` | Tasks: `agents/tasks/`
 
 ## Stack
@@ -13,111 +10,88 @@ Code: `platform/` | Docs: `docs/` | Tasks: `agents/tasks/`
 |---|---|---|
 | Frontend | React + Vercel | `platform/frontend/` |
 | Backend | FastAPI + Railway | `platform/backend/` |
-| Auth | WorkOS — multi-tenant JWT | `app/providers/workos.py` |
-| Database | Neon Postgres — database-per-tenant | `green-rice-76766370` (control) |
-| Knowledge | PageIndex — reasoning-based retrieval | via `app/providers/pageindex.py` |
-| Jobs | INNGEST — durable workflows | `platform/agent-worker/` |
-| Agents | LangGraph + LangSmith — TypeScript only | `platform/agent-worker/` |
-| Storage | Cloudflare R2 → PageIndex ingestion | via `app/providers/r2.py` |
-| Billing | Stripe — per-tenant metering | via `app/providers/stripe.py` |
-| Mobile | Expo | via Expo MCP |
-| Screen Share | Cobrowse.IO | `lib/cobrowse.ts` wrapper |
+| Auth | WorkOS JWT | `app/providers/workos.py` |
+| Database | Neon Postgres (db-per-tenant) | control: `green-rice-76766370` |
+| Knowledge | PageIndex (reasoning-based) | `app/providers/pageindex.py` |
+| Jobs | INNGEST | `platform/agent-worker/` |
+| Agents | LangGraph + LangSmith (TS only) | `platform/agent-worker/` |
+| Storage | Cloudflare R2 → PageIndex | `app/providers/r2.py` |
+| Billing | Stripe metering | `app/providers/stripe.py` |
+| Mobile | Expo MCP | `platform/mobile/` |
+| Cobrowse | Cobrowse.IO | `lib/cobrowse.ts` |
 | Secret Scan | GitGuardian MCP | compliance-checker node |
 
-## ⛔ ABSOLUTE RULES — ALL AGENTS, NO EXCEPTIONS
+## ⚠ Common FAIL Causes — Check Before Committing
+- Unused TS imports → `noUnusedLocals: true` → build error. Remove them.
+- `request.state.tenant_id` → AttributeError → 500. Use `request.state.organization_id`.
+- `RAILWAY_TOKEN` (wrong) — use `RAILWAY_API_TOKEN` for account tokens.
+- UPDATE missing `session_id` scope from its SELECT → data leak.
+- Status fields without explicit allowlist validation → security hole.
+- `pipeline_cases` tenant column is `org_id` NOT `organization_id`.
+- JSONB: `->>` for text comparison; `->` returns JSONB (type mismatch in WHERE).
+- UNIQUE constraint with COALESCE → invalid Postgres. Use `CREATE UNIQUE INDEX`.
+- `| head -4` in scripts → use `| head -n 4`.
 
+## ⛔ Absolute Rules — All Agents, No Exceptions
 | # | Rule |
 |---|---|
-| 1 | **DOPPLER IS THE ONLY SECRET STORE** — No `.env` in CI, no GitHub secrets (except `DOPPLER_SERVICE_TOKEN`), no hardcoded values. Local: `doppler run -- <cmd>`. CI/CD: `doppler run --` injects all secrets. To update any secret (RAILWAY_TOKEN, API keys, etc.): update it in **Doppler** (`grotap` project, `prd`/`dev` config). NEVER tell a human to update GitHub secrets. |
+| 1 | **DOPPLER ONLY** — No `.env` in CI, no GitHub secrets (except `DOPPLER_SERVICE_TOKEN`). Local: `doppler run -- <cmd>`. CI: `doppler run --` injects all secrets. Update secrets in Doppler (`grotap` prd/dev). NEVER tell human to update GitHub secrets. |
 | 2 | **NO PYTHON FOR AGENTS** — TypeScript/JS only. Python = FastAPI backend only. |
-| 3 | **NO DIRECT 3RD-PARTY CALLS** — All SDK calls via vendor wrappers in `app/providers/`. |
+| 3 | **NO DIRECT 3RD-PARTY CALLS** — All SDK calls via `app/providers/` wrappers. |
 | 4 | **NO SHARED TENANT DATA** — Every DB query scoped to `tenant_id`. No cross-tenant reads. |
-| 5 | **NO SHARED DATABASE SCHEMAS** — Neon database-per-tenant. Never row-level separation. |
+| 5 | **NO SHARED DB SCHEMAS** — Neon database-per-tenant. Never row-level separation. |
 | 6 | **NO SKIPPING COMPLIANCE** — GitGuardian MCP + compliance node before every deploy. |
-| 7 | **NO VECTOR EMBEDDINGS FOR RETRIEVAL** — PageIndex reasoning-based retrieval only. |
-| 8 | **NO MERGE WITHOUT 4-REVIEWER SIGN-OFF** — All of: Build Validator + Logic + Security + Perf = PASS. |
-| 9 | **EVERY APP MUST USE AppShell** — Cobrowse always active. Never call Cobrowse SDK directly. |
+| 7 | **NO VECTOR EMBEDDINGS** — PageIndex reasoning-based retrieval only. No pgvector. |
+| 8 | **NO MERGE WITHOUT 4-REVIEWER SIGN-OFF** — Build Validator + Logic + Security + Perf = all PASS. Run `./agents/review-pipeline.sh <branch>` then `./agents/collect-reviews.sh --wait <branch>`. |
+| 9 | **AppShell + COBROWSE MANDATORY** — All apps render `AppShell`. Never remove Cobrowse components. Never call Cobrowse SDK directly — use `lib/cobrowse.ts`. |
 
 ## Key IDs
 - Control plane Neon: `green-rice-76766370`
-- Grotap tenant Neon: `proud-union-74070434`
-- Grotap tenant ID: `c7d02593-955c-4ff4-8117-3b2bb267f518`
+- Grotap tenant Neon: `proud-union-74070434` / ID: `c7d02593-955c-4ff4-8117-3b2bb267f518`
 - Railway project: `f9bf333c-f929-413e-a95c-7923e10b5777`
 
 ## Agent Servers
-| Server | IP | Primary Roles | Overflow |
-|---|---|---|---|
-| Agent-01 | `5.161.189.143` | Execute | — |
-| Agent-02 | `5.161.74.39` | Intake, Triage, Security Reviewer | Execute |
-| Agent-03 | `5.161.81.193` | Planner, Fix/Logic/Policy/Perf Reviewer | Execute |
-| Agent-04 | `178.156.222.220` | Execute, Change Reviewer, Rule Enforcer, Build Validator | — |
-| Agent-05 | `5.161.73.195` | Pipeline Detail, Audit Filters, Mobile Approvals | Execute |
-| Agent-06 | `5.78.178.81` | Deploy Verifier, Deploy Executor, Env Validator, Health Monitor, DNS Watchdog, Post-Deploy QA | — |
-| Agent-07 | `89.167.66.105` | Execute | — |
-| Agent-08 | `77.42.42.213` | **Dispatch Coordinator** | Execute (2 slots) |
-| Agent-09 | `46.62.184.50` | Execute | — |
-| Agent-10 | `46.62.184.52` | Execute | — |
+| Server | IP | Roles |
+|---|---|---|
+| agent-01 | 5.161.189.143 | Execute (primary) |
+| agent-02 | 5.161.74.39 | Intake, Triage, Security Reviewer; overflow exec |
+| agent-03 | 5.161.81.193 | Planner, Fix/Logic/Policy/Perf Reviewer; overflow exec |
+| agent-04 | 178.156.222.220 | Execute (primary), Change Reviewer, Build Validator |
+| agent-05 | 5.161.73.195 | Pipeline Detail, Audit, Mobile; overflow exec |
+| agent-06 | 5.78.178.81 | **Deploy only — 0 exec slots. Never dispatch tasks here.** |
+| agent-07 | 89.167.66.105 | Execute (primary) |
+| agent-08 | 77.42.42.213 | **Dispatch Coordinator** + Execute (2 slots) |
+| agent-09 | 46.62.184.50 | Execute (primary) |
+| agent-10 | 46.62.184.52 | Execute (primary) |
 
-**Agent-08 is the DISPATCH COORDINATOR** — its #1 job is keeping all servers at max capacity 24/7.
-Runs two systemd services: `grotap-dispatch` (picks up tasks) + `grotap-watchdog` (recovers failures).
-Both survive reboots. Never stop. Failed tasks auto-recover back to pending/ for re-dispatch.
-Overflow = Execute tasks dispatched only when server has free slots. Primary roles always take priority.
-Each server supports up to 3 concurrent tasks via git worktrees (isolated working directories).
-For auto-dispatch: `bash agents/continuous-dispatch.sh` (runs forever, checks every 60s).
+SSH: always `ssh agent-NN` aliases. Never raw IP. Key: `~/.ssh/grotap_agents`. agent-01/08: `User agent`. All others: `User root`.
+agent-08: systemd services `grotap-dispatch` + `grotap-watchdog` — both must always run. Max 3 tasks/server via worktrees.
 
-## SSH — ALWAYS USE ALIASES
-**Never SSH by raw IP.** Use `ssh agent-01` through `ssh agent-10` (configured in `~/.ssh/config`).
-Raw IP connections fail auth and waste tokens. Key: `~/.ssh/grotap_agents`.
-Agent-01/08: `User agent`. All others: `User root`.
-
-## Dispatch — 24/7 CONTINUOUS, NEVER IDLE
-Agents must NEVER sit idle. When a task completes, dispatch the next immediately.
-The coordinator session must always keep all servers at max capacity (3 tasks each).
+## Dispatch — 24/7, Never Idle
 ```bash
-# Manual (specify server IP) — each task gets its own worktree
-bash agents/dispatch.sh <task.md> <server-ip> <session-name>
-# Auto-route execution (picks server with most free slots — primary first, then overflow)
-bash agents/dispatch-execute.sh <task.md> <session-name>
-# Check server slots, CPU, memory, load
-bash agents/server-status.sh
+bash agents/dispatch.sh <task.md> <server-ip> <session>   # manual
+bash agents/dispatch-execute.sh <task.md> <session>       # auto-route (most free slots)
+bash agents/server-status.sh                              # check slots/load
 ```
-**Dispatch priority**: pending/ first, then active/ backlog (034-932), lowest ID first.
-After dispatching, verify tmux sessions started. If a server errors, fix and re-dispatch.
+Priority: `pending/` first, then `active/` backlog, lowest ID first. Verify tmux sessions after dispatch.
 
-## Code Review Pipeline
+## Code Review
 ```bash
-./agents/review-pipeline.sh <branch>
-./agents/collect-reviews.sh --wait <branch>
+./agents/review-pipeline.sh <branch> && ./agents/collect-reviews.sh --wait <branch>
 ```
-ANY reviewer returning FAIL = branch blocked. No exceptions.
+ANY reviewer FAIL = branch blocked. No exceptions.
 
 ## Deployment
 - **Backend (Railway)**: auto-deploys on push to `master` (~2 min)
-- **Frontend (Vercel)**: requires manual CLI deploy after push:
-```bash
-VTOKEN=$(doppler secrets get VERCEL_TOKEN --project grotap --config prd --plain)
-cd platform/frontend && npx vercel --token "$VTOKEN" --prod --yes
-```
-Agents on Hetzner servers: push your branch, then request Vercel deploy from coordinator.
+- **Frontend (Vercel)**: auto-deploys via CI on push to `master` (paths: `frontend/**`)
+- Agents on Hetzner: push branch → request merge+deploy from coordinator
 
-## Backend Auth — Critical
-FastAPI middleware sets `request.state.organization_id` — NOT `tenant_id`.
-`request.state.tenant_id` → AttributeError → 500 on all requests.
-
-## Git Discipline — ALL AGENTS, NO EXCEPTIONS
+## Git Discipline
 | # | Rule |
 |---|---|
-| 1 | **Branch is `master`** — not `main`. Always `git pull origin master`. |
-| 2 | **Pull before push** — always `git pull origin master --rebase` (or branch) before pushing. |
-| 3 | **Never `git add -A` or `git add .`** — stage specific files only. Wildcard staging picks up unrelated files. |
-| 4 | **A task is NOT done until merged to master and deployed.** Pushed branch ≠ done. Passed review ≠ done. Only merged + deployed = done. |
-| 5 | **Task files are gitignored** — `agents/tasks/pending/`, `active/`, `done/`, `archive/` are NOT tracked. Do not try to `git add` them. |
-| 6 | **Type-check before commit** — run `cd frontend && npx tsc --noEmit` for frontend changes. Fix errors before committing. |
-
-## Common FAIL Causes
-- Unused TS imports (`noUnusedLocals: true` → build error)
-- UPDATE missing `session_id` scope from corresponding SELECT
-- Status fields without explicit allowlist validation
-- `pipeline_cases` tenant column is `org_id` NOT `organization_id`
-- JSONB: `->>` for text comparison, `->` returns JSONB (type mismatch)
-- `| head -4` with CLI output → use `| head -n 4`
+| 1 | Branch is `master` — not `main`. Always `git pull origin master`. |
+| 2 | Pull before push — `git pull origin master --rebase` before pushing. |
+| 3 | Never `git add -A` or `git add .` — stage specific files only. |
+| 4 | Task NOT done until merged to master and deployed. Pushed ≠ done. Reviewed ≠ done. |
+| 5 | Task files are gitignored — `agents/tasks/pending/active/done/archive/` not tracked. |
+| 6 | Type-check before commit — `cd frontend && npx tsc --noEmit`. Fix errors first. |
