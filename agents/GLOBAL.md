@@ -77,9 +77,10 @@ Priority: `pending/` first, then `active/` backlog, lowest ID first. Verify tmux
 
 ## Code Review
 ```bash
+/codex:review                    # pre-commit — run before every commit
 ./agents/review-pipeline.sh <branch> && ./agents/collect-reviews.sh --wait <branch>
 ```
-ANY reviewer FAIL = branch blocked. No exceptions.
+ANY reviewer FAIL = branch blocked. No exceptions. Codex pre-commit review is mandatory but separate from Rule 8 pipeline.
 
 ## Deployment
 - **Backend (Railway)**: auto-deploys on push to `master` (~2 min)

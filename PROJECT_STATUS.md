@@ -91,3 +91,6 @@ Multi-brand schema, brand resolution, 22 apps, platform cleanup, framework clean
 
 ### Wave 4 — Pipeline + Agentic (feature branches, not yet merged)
 Pipeline enhancements (968-973), Agentic workflow (974-980)
+
+### Dev Tooling
+- Codex (GPT-5.4): pre-commit review gate, adversarial auditor, rescue delegator — integrated 2026-04-04

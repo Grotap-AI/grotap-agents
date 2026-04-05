@@ -1,11 +1,12 @@
 # BOOTSTRAP.md — Mandatory Session Init. No exceptions. No quick sessions.
 
-## 5 Steps (do all, in order)
+## 6 Steps (do all, in order)
 1. `git pull origin master` + `git rev-parse HEAD` → record as SESSION_COMMIT
 2. `./.claude-session-init.sh --validate` → STOP if fails, report error
-3. Load context in order: `GLOBAL.md` → `servers/{server}.md` → `roles/{module}/MODULE.md` → `roles/{module}/{role}/ROLE.md` → `state/handoffs/handoff-{ticketId}-*.md`
-4. Check handoff `generated_at_commit` vs SESSION_COMMIT: 1-5 commits = flag STALE; 6+ = stop, request human review; missing field = reject, request regeneration
-5. Output: `BOOTSTRAP COMPLETE | Commit: {SESSION_COMMIT} | Role: {role} | Server: {server}`
+3. `/codex:setup` → verify Codex CLI ready. WARN if unavailable (non-blocking).
+4. Load context in order: `GLOBAL.md` → `servers/{server}.md` → `roles/{module}/MODULE.md` → `roles/{module}/{role}/ROLE.md` → `state/handoffs/handoff-{ticketId}-*.md`
+5. Check handoff `generated_at_commit` vs SESSION_COMMIT: 1-5 commits = flag STALE; 6+ = stop, request human review; missing field = reject, request regeneration
+6. Output: `BOOTSTRAP COMPLETE | Commit: {SESSION_COMMIT} | Role: {role} | Server: {server} | Codex: {ready|unavailable}`
 
 ## Server → Context File Map
 | IP | Server | File | SSH User |
