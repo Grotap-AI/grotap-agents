@@ -3,17 +3,24 @@
 # Tier 1 file — only Tech Lead may modify.
 # Last updated: 2026-03-09
 
-## Servers
-| Server | IP | Type | Roles |
+## Servers (consolidated 2026-04-29)
+| Server | IP | Type | Roles | Status |
+|---|---|---|---|---|
+| agent-02 | 5.161.74.39 | cpx21 | Intake, Triage, Security Reviewer, Execute (overflow) | Active |
+| agent-03 | 5.161.81.193 | cpx21 | Planner, Fix Reviewer, Policy Reviewer, Logic Reviewer, Perf Reviewer, Execute (overflow) | Active |
+| agent-04 | 178.156.222.220 | cpx21 | Execute, Change Reviewer, Rule Enforcer, Build Validator | Active |
+| agent-05 | 5.161.73.195 | cpx21 | Pipeline Detail, Audit Filters, Mobile Approvals, Marketing, Execute (overflow) | Active |
+| agent-07 | 89.167.66.105 | Debian 13 | Execute | Active |
+| agent-08 | 77.42.42.213 | Debian 13 | Dispatch Coordinator, Deploy Ops (health/DNS/deploy crons), Execute | Active |
+
+## Retired Servers (shut down 2026-04-29)
+| Server | IP | Type | Reason |
 |---|---|---|---|
-| agent-01 | 5.161.189.143 | cpx21 | Execute |
-| agent-02 | 5.161.74.39 | cpx21 | Intake, Triage, Security Reviewer, Execute (overflow) |
-| agent-03 | 5.161.81.193 | cpx21 | Planner, Fix Reviewer, Policy Reviewer, Logic Reviewer, Perf Reviewer, Execute (overflow) |
-| agent-04 | 178.156.222.220 | cpx21 | Execute, Change Reviewer, Rule Enforcer, Build Validator |
-| agent-05 | 5.161.73.195 | cpx21 | Pipeline Detail, Audit Filters, Mobile Approvals, Execute (overflow) |
-| agent-06 | 5.78.178.81 | cpx31 | Deploy Verifier, Deploy Executor, Env Validator, Health Monitor, DNS Watchdog, Post-Deploy QA |
-| agent-07 | 89.167.66.105 | Debian 13 | Execute |
-| agent-08 | 77.42.42.213 | Debian 13 | Execute |
+| agent-01 | 5.161.189.143 | cpx21 | Redundant — Execute role covered by agent-04, 07, 08 |
+| agent-06 | 5.78.178.81 | cpx31 | Deploy ops crons moved to agent-08 |
+| agent-09 | 46.62.184.50 | Dedicated 62GB | Overkill — Execute role doesn't need 62GB RAM |
+| agent-10 | 46.62.184.52 | Dedicated 62GB | Overkill — Execute role doesn't need 62GB RAM |
+| agent-11 | 46.62.184.51 | Dedicated 62GB | Marketing role moved to agent-05 |
 
 ## Tier 1 — Protected Files
 | File | Owner |
@@ -31,8 +38,6 @@
 | agents/servers/agent-03.md | Agent-03 | Infra Lead |
 | agents/servers/agent-04.md | Agent-04 | Infra Lead |
 | agents/servers/agent-05.md | Agent-05 | Infra Lead |
-| agents/servers/agent-01.md | Agent-01 | Infra Lead |
-| agents/servers/agent-06.md | Agent-06 | Infra Lead |
 | agents/servers/agent-07.md | Agent-07 | Infra Lead |
 | agents/servers/agent-08.md | Agent-08 | Infra Lead |
 | agents/roles/intake/MODULE.md | Agent-02 | Domain Lead |

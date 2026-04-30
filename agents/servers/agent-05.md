@@ -1,6 +1,7 @@
 # agents/servers/agent-05.md
 # Server: Agent-05 | IP: 5.161.73.195
-# Roles: Pipeline Detail | Audit Filters | Mobile Approvals | Execute (overflow)
+# Roles: Pipeline Detail | Audit Filters | Mobile Approvals | Marketing | Execute (overflow)
+# Note: Marketing role consolidated from agent-11 (2026-04-29)
 
 ## Role Assignments
 
@@ -19,16 +20,23 @@ trigger:    task.channel == 'mobile' AND task.type == 'approval'
 priority:   primary
 load_order: GLOBAL.md → roles/approvals/MODULE.md → roles/approvals/mobile-approvals/ROLE.md → handoff (if exists)
 
+### Marketing (consolidated from agent-11, 2026-04-29)
+trigger:    task.type == 'marketing'
+priority:   primary
+capabilities:
+  - Squarespace content management (website, blog, pages)
+  - Instagram publishing & analytics (Meta Business API)
+  - Facebook page management & ads (Meta Business API)
+  - YouTube channel management & uploads (YouTube Data API v3)
+  - TikTok content publishing & analytics (TikTok API)
+
 ### Execute (overflow)
 trigger:    task.stage == 'execution' AND server.idle == true
 priority:   overflow — yields immediately when any primary role is requested
 load_order: GLOBAL.md → roles/execution/MODULE.md → roles/execution/execute/ROLE.md → handoff (if exists)
 
 ## Overflow Rules
-- Execute tasks are only dispatched here when primary executors (Agent-01, Agent-04) are busy
-- If a primary-role task arrives (pipeline, audit, approval), it takes priority
-- Overflow execution does NOT change this server's identity — primary roles always win
-- dispatch-execute.sh handles routing; never manually dispatch execution here
+See `agents/roles/shared/overflow-rules.md` — primary roles (pipeline, audit, approval) always take priority.
 
 ## Dispatch
 bash agents/dispatch.sh agents/tasks/{ticket}.md 5.161.73.195 {session-name}
