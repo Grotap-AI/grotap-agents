@@ -1,9 +1,9 @@
 # agents/servers/agent-08.md
 # Server: Agent-08 | IP: 77.42.42.213
-# Type: Dispatch Coordinator (PRIMARY) + Deploy Ops + Execute (secondary)
+# Type: Dispatch Coordinator (PRIMARY) + Execute (secondary)
 # DC: Helsinki (hel1)
 # Hetzner Project: Secondary (HETZNER_API_TOKEN_2)
-# Note: Deploy ops crons consolidated from agent-06 (2026-04-29)
+# Status: RETIRED (2026-04-29) — dispatch coordinator moved to agent-06
 
 ## Role Assignments
 
@@ -49,11 +49,6 @@ bash /home/agent/self-dispatch.sh
 ## Inbound Routes (this server receives from)
 - self-dispatch.sh — auto-assigns tasks to itself when other servers are full
 - dispatch-execute.sh — auto-routed execution tasks (primary tier)
-
-### Deploy Ops (consolidated from agent-06, 2026-04-29)
-trigger:    scheduled crons (health every 5min, DNS daily, deploy-verify every 15min)
-priority:   background — runs as cron alongside dispatch coordinator
-scripts:    health-monitor.sh, dns-watchdog.sh, deploy-verify.sh, deploy-execute.sh, env-validator.sh
 
 ## Outbound Routes (this server sends to)
 - ALL servers — dispatch coordinator sends tasks to every server

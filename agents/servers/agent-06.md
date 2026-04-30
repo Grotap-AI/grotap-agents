@@ -1,10 +1,25 @@
 # agents/servers/agent-06.md
 # Server: Agent-06 | IP: 5.78.178.81
 # Type: cpx31 (4 vCPU / 8 GB) | DC: Hillsboro, OR (hil-dc1)
-# Roles: Deploy Verifier | Deploy Executor | Env Validator | Health Monitor | DNS Watchdog | Post-Deploy QA
+# Roles: Dispatch Coordinator | Deploy Ops | Execute (2 slots)
 # Hetzner Project: Secondary (HETZNER_API_TOKEN_2)
+# Note: Dispatch coordinator consolidated from agent-08 (2026-04-29)
 
 ## Role Assignments
+
+### Dispatch Coordinator (PRIMARY — #1 PRIORITY, consolidated from agent-08)
+trigger:    ALWAYS RUNNING — systemd service `grotap-dispatch`, never stops
+priority:   #1 — this role overrides all other work on this server
+Runs `continuous-dispatch.sh` as systemd service. Picks tasks from pending/, creates
+worktrees, launches Claude in tmux. Moves tasks pending → active → done.
+- Survives reboots (systemd Restart=always)
+- 2 of 3 slots available for dispatched execution tasks
+- Deploy ops crons run alongside as background processes
+
+### Execute (secondary, 2 slots)
+trigger:    task.stage == 'execution' (only when dispatch has filled other servers first)
+priority:   secondary — dispatch + deploy ops take precedence
+max_slots:  2 (1 slot reserved for dispatch coordination)
 
 ### Deploy Verifier
 trigger:    event == 'merge-to-master' OR task.type == 'deploy-verify'
