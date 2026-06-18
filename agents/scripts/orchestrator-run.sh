@@ -6,6 +6,9 @@
 # parses. All human-readable logging goes to the log file / stderr so it never
 # pollutes the JSON result line.
 #
+# Invoked over SSH as the `agent` user (claude auth + git creds + repos live in
+# /home/agent). Uses python3 for JSON (no jq dependency — jq isn't on the fleet).
+#
 # Modes:
 #   (default)         read task JSON on stdin → execute attempt → push branch
 #   --merge           read {case_id,branch} on stdin → merge branch to master
@@ -22,20 +25,21 @@
 # calls it directly; the legacy self-dispatch loop is untouched.
 set -uo pipefail
 
-PLATFORM_DIR="/home/agent/grotap-platform"
-WORKTREE_ROOT="/home/agent/worktrees"
-LOG="/home/agent/logs/orchestrator-run.log"
-mkdir -p /home/agent/logs "$WORKTREE_ROOT"
+PLATFORM_DIR="$HOME/grotap-platform"
+WORKTREE_ROOT="$HOME/worktrees"
+LOG="$HOME/logs/orchestrator-run.log"
+mkdir -p "$HOME/logs" "$WORKTREE_ROOT"
 
 log() { echo "[$(date -u +%H:%M:%S)] $*" >> "$LOG"; }
 
-# Emit the machine-readable result line and exit. Strings are JSON-escaped via jq.
+# Emit the machine-readable result line and exit. python3 handles JSON escaping.
 emit() {
-  local status="$1" branch="$2" code="$3" errors="$4" summary="$5" tokens="$6"
-  jq -cn \
-    --arg status "$status" --arg branch "$branch" --argjson exit_code "$code" \
-    --arg errors "$errors" --arg summary "$summary" --argjson tokens "$tokens" \
-    '{status:$status,branch:$branch,exit_code:$exit_code,errors:$errors,summary:$summary,tokens:$tokens}'
+  python3 -c '
+import sys, json
+status, branch, code, errors, summary, tokens = sys.argv[1:7]
+print(json.dumps({"status": status, "branch": branch, "exit_code": int(code),
+                  "errors": errors, "summary": summary, "tokens": int(tokens)}))
+' "$1" "$2" "$3" "$4" "$5" "$6"
   exit 0
 }
 
@@ -53,30 +57,37 @@ ensure_repo() {
 
 # ── Merge mode ───────────────────────────────────────────────────────────────
 if [ "${1:-}" = "--merge" ]; then
-  BRANCH="$(echo "$PAYLOAD" | jq -r '.branch')"
-  ensure_repo || { echo '{"merged":false,"error":"repo unavailable"}'; exit 1; }
+  BRANCH="$(printf '%s' "$PAYLOAD" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("branch",""))')"
+  ensure_repo || { echo '{"merged": false, "error": "repo unavailable"}'; exit 1; }
   log "Merging $BRANCH → master"
   git checkout master --quiet >> "$LOG" 2>&1
   git pull origin master --quiet >> "$LOG" 2>&1
   if git merge --no-ff "origin/$BRANCH" -m "merge: $BRANCH (orchestrator-approved)" >> "$LOG" 2>&1; then
     git push origin master >> "$LOG" 2>&1
-    echo '{"merged":true}'
+    echo '{"merged": true}'
     exit 0
   else
     git merge --abort >> "$LOG" 2>&1 || true
-    echo '{"merged":false,"error":"merge conflict"}'
+    echo '{"merged": false, "error": "merge conflict"}'
     exit 1
   fi
 fi
 
-# ── Execute mode ─────────────────────────────────────────────────────────────
-CASE_ID="$(echo "$PAYLOAD" | jq -r '.case_id')"
-BRANCH="$(echo "$PAYLOAD" | jq -r '.branch')"
-TITLE="$(echo "$PAYLOAD" | jq -r '.title')"
-CONTEXT="$(echo "$PAYLOAD" | jq -r '.context')"
-REQUIREMENTS="$(echo "$PAYLOAD" | jq -r '.requirements')"
-ATTEMPT="$(echo "$PAYLOAD" | jq -r '.attempt // 1')"
-PRIOR_ERRORS="$(echo "$PAYLOAD" | jq -r '(.prior_errors // []) | join("\n---\n")')"
+# ── Execute mode — parse task fields from the payload ────────────────────────
+eval "$(printf '%s' "$PAYLOAD" | python3 -c '
+import sys, json, shlex
+d = json.load(sys.stdin)
+def g(k, default=""):
+    v = d.get(k, default)
+    return default if v is None else v
+print("CASE_ID="      + shlex.quote(str(g("case_id"))))
+print("BRANCH="       + shlex.quote(str(g("branch"))))
+print("TITLE="        + shlex.quote(str(g("title"))))
+print("CONTEXT="      + shlex.quote(str(g("context"))))
+print("REQUIREMENTS=" + shlex.quote(str(g("requirements"))))
+print("ATTEMPT="      + shlex.quote(str(g("attempt", 1))))
+print("PRIOR_ERRORS=" + shlex.quote("\n---\n".join(d.get("prior_errors") or [])))
+')"
 
 log "=== Execute case=$CASE_ID branch=$BRANCH attempt=$ATTEMPT ==="
 
@@ -114,20 +125,29 @@ $RETRY_BLOCK
 ## Rules
 - Follow the repo CLAUDE.md and agents/GLOBAL.md rules exactly.
 - Make the minimal correct change. Commit your work with git (do NOT push — the runner pushes).
-- Before finishing, validate: run 'npx tsc --noEmit' in any frontend/TS package you changed, and 'python -m py_compile' on any backend .py file you changed.
+- Before finishing, validate: run 'npx tsc --noEmit' in any frontend/TS package you changed, and 'python3 -m py_compile' on any backend .py file you changed.
 - If you cannot complete the task, explain why clearly."
 
 # ── Run Claude CLI headless ──────────────────────────────────────────────────
 CLAUDE_OUT="$(claude -p "$PROMPT" --output-format json --dangerously-skip-permissions 2>>"$LOG")"
 CLAUDE_RC=$?
 
-IS_ERROR="$(echo "$CLAUDE_OUT" | jq -r '.is_error // true' 2>/dev/null || echo true)"
-RESULT_TEXT="$(echo "$CLAUDE_OUT" | jq -r '.result // ""' 2>/dev/null | head -c 1000)"
-IN_TOK="$(echo "$CLAUDE_OUT" | jq -r '.usage.input_tokens // 0' 2>/dev/null || echo 0)"
-OUT_TOK="$(echo "$CLAUDE_OUT" | jq -r '.usage.output_tokens // 0' 2>/dev/null || echo 0)"
-TOKENS=$(( IN_TOK + OUT_TOK ))
+# Parse claude's JSON result → tab-separated: is_error, result, input_tok, output_tok
+CLAUDE_PARSED="$(printf '%s' "$CLAUDE_OUT" | python3 -c '
+import sys, json
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    print("true\t\t0\t0"); sys.exit(0)
+is_error = str(d.get("is_error", True)).lower()
+result = (d.get("result") or "")[:1000].replace("\n", " ").replace("\t", " ")
+u = d.get("usage") or {}
+print("\t".join([is_error, result, str(u.get("input_tokens", 0) or 0), str(u.get("output_tokens", 0) or 0)]))
+' 2>/dev/null)"
+IFS=$'\t' read -r IS_ERROR RESULT_TEXT IN_TOK OUT_TOK <<< "$CLAUDE_PARSED"
+TOKENS=$(( ${IN_TOK:-0} + ${OUT_TOK:-0} ))
 
-if [ "$CLAUDE_RC" -ne 0 ] || [ "$IS_ERROR" = "true" ]; then
+if [ "$CLAUDE_RC" -ne 0 ] || [ "${IS_ERROR:-true}" = "true" ]; then
   emit "failed" "$BRANCH" "$CLAUDE_RC" "Claude CLI error: $RESULT_TEXT" "Agent run failed" "$TOKENS"
 fi
 
