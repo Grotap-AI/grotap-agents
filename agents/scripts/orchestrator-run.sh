@@ -25,6 +25,16 @@
 # calls it directly; the legacy self-dispatch loop is untouched.
 set -uo pipefail
 
+# This script runs non-interactively over SSH, so login-shell env (where the
+# fleet defines ANTHROPIC_API_KEY and other creds) is NOT loaded. Source it
+# explicitly or Claude CLI fails with "Not logged in". Guard -u while sourcing.
+set +u
+for envf in "$HOME/.env" "$HOME/.profile" "$HOME/.bashrc"; do
+  if [ -f "$envf" ]; then set -a; . "$envf" >/dev/null 2>&1 || true; set +a; fi
+  [ -n "${ANTHROPIC_API_KEY:-}" ] && break
+done
+set -u
+
 PLATFORM_DIR="$HOME/grotap-platform"
 WORKTREE_ROOT="$HOME/worktrees"
 LOG="$HOME/logs/orchestrator-run.log"
