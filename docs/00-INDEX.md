@@ -131,3 +131,4 @@
 | File | Topic |
 |---|---|
 | [apps/rfid-pipe](./12-app-platform/apps/rfid-pipe.md) | RFID Pipe app spec: batch templates, scan review, dashboard, setup |
+| [loop-engine](./12-app-platform/loop-engine.md) | **Loop Engine app spec: per-tenant automation console — loops/bundles, Gmail Cleanup bundle, Inngest scheduler, per-account OAuth** |
