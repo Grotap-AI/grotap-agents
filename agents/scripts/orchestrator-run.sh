@@ -95,6 +95,7 @@ print("BRANCH="       + shlex.quote(str(g("branch"))))
 print("TITLE="        + shlex.quote(str(g("title"))))
 print("CONTEXT="      + shlex.quote(str(g("context"))))
 print("REQUIREMENTS=" + shlex.quote(str(g("requirements"))))
+print("PLAN="         + shlex.quote(str(g("plan"))))
 print("ATTEMPT="      + shlex.quote(str(g("attempt", 1))))
 print("PRIOR_ERRORS=" + shlex.quote("\n---\n".join(d.get("prior_errors") or [])))
 ')"
@@ -117,8 +118,16 @@ RETRY_BLOCK=""
 if [ "$ATTEMPT" -gt 1 ] && [ -n "$PRIOR_ERRORS" ]; then
   RETRY_BLOCK="
 
-## This is retry attempt $ATTEMPT. The previous attempt(s) failed. Fix these issues:
+## This is retry attempt $ATTEMPT. The previous attempt(s) failed. Fix these issues (real output below):
 $PRIOR_ERRORS"
+fi
+
+PLAN_BLOCK=""
+if [ -n "$PLAN" ]; then
+  PLAN_BLOCK="
+
+## Execution Plan (from triage — follow it unless it's clearly wrong)
+$PLAN"
 fi
 
 PROMPT="You are an autonomous engineer working in an isolated git worktree on the grotap-platform repo.
@@ -130,6 +139,7 @@ $CONTEXT
 
 ## Requirements
 $REQUIREMENTS
+$PLAN_BLOCK
 $RETRY_BLOCK
 
 ## Rules
@@ -162,31 +172,39 @@ if [ "$CLAUDE_RC" -ne 0 ] || [ "${IS_ERROR:-true}" = "true" ]; then
 fi
 
 # ── Validate ─────────────────────────────────────────────────────────────────
+# Grounded retries (#3): capture the REAL tool output (truncated) into VALID_ERR
+# so the orchestrator's diagnose node retries against actual compiler errors,
+# not a generic label.
 VALID_ERR=""
 CHANGED="$(git diff --name-only origin/master 2>/dev/null; git diff --cached --name-only 2>/dev/null)"
 
-if echo "$CHANGED" | grep -q '^frontend/' && [ -f frontend/package.json ]; then
-  log "Validating frontend tsc..."
-  if ! (cd frontend && npx tsc --noEmit >> "$LOG" 2>&1); then
-    VALID_ERR="frontend tsc --noEmit failed"
+# Run a tsc check in a changed TS package, appending real output on failure.
+check_tsc() {
+  local pkg="$1"
+  echo "$CHANGED" | grep -q "^${pkg}/" || return 0
+  [ -f "${pkg}/package.json" ] || return 0
+  log "Validating ${pkg} tsc..."
+  local out
+  out="$(cd "$pkg" && npx tsc --noEmit 2>&1)"
+  if [ $? -ne 0 ]; then
+    VALID_ERR="${VALID_ERR:+$VALID_ERR
+
+}### ${pkg} tsc --noEmit failed:
+$(printf '%s' "$out" | tail -c 2000)"
   fi
-fi
-if echo "$CHANGED" | grep -q '^agent-worker/' && [ -f agent-worker/package.json ]; then
-  log "Validating agent-worker tsc..."
-  if ! (cd agent-worker && npx tsc --noEmit >> "$LOG" 2>&1); then
-    VALID_ERR="${VALID_ERR:+$VALID_ERR; }agent-worker tsc --noEmit failed"
-  fi
-fi
-if echo "$CHANGED" | grep -q '^orchestrator/' && [ -f orchestrator/package.json ]; then
-  log "Validating orchestrator tsc..."
-  if ! (cd orchestrator && npx tsc --noEmit >> "$LOG" 2>&1); then
-    VALID_ERR="${VALID_ERR:+$VALID_ERR; }orchestrator tsc --noEmit failed"
-  fi
-fi
+}
+check_tsc frontend
+check_tsc agent-worker
+check_tsc orchestrator
+
 while IFS= read -r pyf; do
   [ -z "$pyf" ] && continue
-  if ! python3 -m py_compile "$pyf" >> "$LOG" 2>&1; then
-    VALID_ERR="${VALID_ERR:+$VALID_ERR; }py_compile failed: $pyf"
+  pyout="$(python3 -m py_compile "$pyf" 2>&1)"
+  if [ $? -ne 0 ]; then
+    VALID_ERR="${VALID_ERR:+$VALID_ERR
+
+}### py_compile failed ($pyf):
+$(printf '%s' "$pyout" | tail -c 1000)"
   fi
 done < <(echo "$CHANGED" | grep '\.py$')
 
