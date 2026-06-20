@@ -96,6 +96,7 @@ print("TITLE="        + shlex.quote(str(g("title"))))
 print("CONTEXT="      + shlex.quote(str(g("context"))))
 print("REQUIREMENTS=" + shlex.quote(str(g("requirements"))))
 print("PLAN="         + shlex.quote(str(g("plan"))))
+print("CONTEXT_PACK=" + shlex.quote(str(g("context_pack"))))
 print("ATTEMPT="      + shlex.quote(str(g("attempt", 1))))
 print("PRIOR_ERRORS=" + shlex.quote("\n---\n".join(d.get("prior_errors") or [])))
 ')"
@@ -130,6 +131,14 @@ if [ -n "$PLAN" ]; then
 $PLAN"
 fi
 
+KNOWLEDGE_BLOCK=""
+if [ -n "$CONTEXT_PACK" ]; then
+  KNOWLEDGE_BLOCK="
+
+## Platform Knowledge (grounded from our docs — prefer this over assumptions)
+$CONTEXT_PACK"
+fi
+
 PROMPT="You are an autonomous engineer working in an isolated git worktree on the grotap-platform repo.
 
 # Task: $TITLE
@@ -139,6 +148,7 @@ $CONTEXT
 
 ## Requirements
 $REQUIREMENTS
+$KNOWLEDGE_BLOCK
 $PLAN_BLOCK
 $RETRY_BLOCK
 
