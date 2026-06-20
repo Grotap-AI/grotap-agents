@@ -43,13 +43,19 @@ mkdir -p "$HOME/logs" "$WORKTREE_ROOT"
 log() { echo "[$(date -u +%H:%M:%S)] $*" >> "$LOG"; }
 
 # Emit the machine-readable result line and exit. python3 handles JSON escaping.
+# Optional 7th arg = a verify JSON object string (Layer 9 build/lint evidence).
 emit() {
   python3 -c '
 import sys, json
 status, branch, code, errors, summary, tokens = sys.argv[1:7]
-print(json.dumps({"status": status, "branch": branch, "exit_code": int(code),
-                  "errors": errors, "summary": summary, "tokens": int(tokens)}))
-' "$1" "$2" "$3" "$4" "$5" "$6"
+out = {"status": status, "branch": branch, "exit_code": int(code),
+       "errors": errors, "summary": summary, "tokens": int(tokens)}
+verify = sys.argv[7] if len(sys.argv) > 7 else ""
+if verify:
+    try: out["verify"] = json.loads(verify)
+    except Exception: pass
+print(json.dumps(out))
+' "$1" "$2" "$3" "$4" "$5" "$6" "${7:-}"
   exit 0
 }
 
@@ -246,56 +252,113 @@ if [ "$CLAUDE_RC" -ne 0 ] || [ "${IS_ERROR:-true}" = "true" ]; then
   emit "failed" "$BRANCH" "$CLAUDE_RC" "Claude CLI error: $RESULT_TEXT" "Agent run failed" "$TOKENS"
 fi
 
-# ── Validate ─────────────────────────────────────────────────────────────────
-# Grounded retries (#3): capture the REAL tool output (truncated) into VALID_ERR
-# so the orchestrator's diagnose node retries against actual compiler errors,
-# not a generic label.
+# ── Verify (Layer 9) ─────────────────────────────────────────────────────────
+# Real on-server verification, stronger than a typecheck: full `npm run build`
+# for the frontend (catches bundling/import errors tsc misses), tsc for the TS
+# workers, eslint as a soft signal, py_compile for Python, and any package
+# `test` script that exists. Hard failures (build/tsc/py_compile/tests) set
+# VALID_ERR — captured verbatim so the diagnose node retries against the REAL
+# error (grounded retries, #3). Every check is recorded in VERIFY_CHECKS so the
+# review node + human gate see exactly what passed.
 VALID_ERR=""
+VERIFY_CHECKS=""   # newline-separated "name: pass|FAIL|warn|skipped"
 CHANGED="$(git diff --name-only origin/master 2>/dev/null; git diff --cached --name-only 2>/dev/null)"
 
-# Run a tsc check in a changed TS package, appending real output on failure.
-check_tsc() {
-  local pkg="$1"
+add_check() { VERIFY_CHECKS="${VERIFY_CHECKS:+$VERIFY_CHECKS
+}$1"; }
+add_fail()  { VALID_ERR="${VALID_ERR:+$VALID_ERR
+
+}### $1:
+$(printf '%s' "$2" | tail -c 2000)"; }
+
+# Hard build/tsc verification for a changed TS package. mode = build|tsc.
+verify_ts() {
+  local pkg="$1" mode="$2"
   echo "$CHANGED" | grep -q "^${pkg}/" || return 0
   [ -f "${pkg}/package.json" ] || return 0
-  log "Validating ${pkg} tsc..."
-  local out
-  out="$(cd "$pkg" && npx tsc --noEmit 2>&1)"
-  if [ $? -ne 0 ]; then
-    VALID_ERR="${VALID_ERR:+$VALID_ERR
-
-}### ${pkg} tsc --noEmit failed:
-$(printf '%s' "$out" | tail -c 2000)"
+  if [ ! -d "${pkg}/node_modules" ]; then
+    add_check "${pkg} ${mode}: skipped (no deps on server)"
+    return 0
+  fi
+  log "Verifying ${pkg} (${mode})..."
+  local out rc
+  if [ "$mode" = "build" ]; then
+    out="$(cd "$pkg" && timeout 360 npm run build 2>&1)"; rc=$?
+  else
+    out="$(cd "$pkg" && timeout 240 npx tsc --noEmit 2>&1)"; rc=$?
+  fi
+  if [ "$rc" -ne 0 ]; then
+    add_check "${pkg} ${mode}: FAIL"
+    add_fail "${pkg} ${mode} failed" "$out"
+  else
+    add_check "${pkg} ${mode}: pass"
   fi
 }
-check_tsc frontend
-check_tsc agent-worker
-check_tsc orchestrator
+verify_ts frontend build          # tsc && vite build — real bundle
+verify_ts agent-worker tsc
+verify_ts orchestrator tsc
+verify_ts ingestion-worker tsc
 
+# Soft signal: frontend lint (recorded, never blocks — style ≠ correctness).
+if echo "$CHANGED" | grep -q '^frontend/' && [ -d frontend/node_modules ]; then
+  if (cd frontend && timeout 180 npm run lint >/dev/null 2>&1); then
+    add_check "frontend lint: pass"
+  else
+    add_check "frontend lint: warn"
+  fi
+fi
+
+# Python: compile every changed .py (hard).
 while IFS= read -r pyf; do
   [ -z "$pyf" ] && continue
   pyout="$(python3 -m py_compile "$pyf" 2>&1)"
   if [ $? -ne 0 ]; then
-    VALID_ERR="${VALID_ERR:+$VALID_ERR
-
-}### py_compile failed ($pyf):
-$(printf '%s' "$pyout" | tail -c 1000)"
+    add_check "py_compile ${pyf}: FAIL"
+    add_fail "py_compile failed (${pyf})" "$pyout"
+  else
+    add_check "py_compile ${pyf}: pass"
   fi
 done < <(echo "$CHANGED" | grep '\.py$')
 
+# Run a package `test` script if one exists (future-proof; most have none today).
+for pkg in frontend agent-worker orchestrator ingestion-worker backend; do
+  echo "$CHANGED" | grep -q "^${pkg}/" || continue
+  [ -f "${pkg}/package.json" ] && [ -d "${pkg}/node_modules" ] || continue
+  if node -e "process.exit((require('./${pkg}/package.json').scripts||{}).test?0:1)" 2>/dev/null; then
+    log "Running ${pkg} tests..."
+    tout="$(cd "$pkg" && timeout 300 npm test 2>&1)"
+    if [ $? -ne 0 ]; then
+      add_check "${pkg} tests: FAIL"; add_fail "${pkg} tests failed" "$tout"
+    else
+      add_check "${pkg} tests: pass"
+    fi
+  fi
+done
+
+# Build the verify evidence object passed back to the orchestrator.
+build_verify_json() {
+  local passed="$1"
+  python3 -c '
+import sys, json
+checks = [c for c in sys.argv[1].split("\n") if c.strip()]
+print(json.dumps({"checks": checks, "passed": sys.argv[2] == "1",
+                  "details": sys.argv[3][:2000]}))
+' "$VERIFY_CHECKS" "$passed" "$VALID_ERR"
+}
+
 # Did the agent actually produce committed changes?
 if ! git rev-parse --verify HEAD >/dev/null 2>&1 || [ -z "$(git log origin/master..HEAD --oneline 2>/dev/null)" ]; then
-  emit "failed" "$BRANCH" 1 "No commits produced on $BRANCH" "Agent made no committed changes" "$TOKENS"
+  emit "failed" "$BRANCH" 1 "No commits produced on $BRANCH" "Agent made no committed changes" "$TOKENS" "$(build_verify_json 0)"
 fi
 
 if [ -n "$VALID_ERR" ]; then
-  emit "failed" "$BRANCH" 1 "$VALID_ERR" "Validation failed" "$TOKENS"
+  emit "failed" "$BRANCH" 1 "$VALID_ERR" "Verification failed" "$TOKENS" "$(build_verify_json 0)"
 fi
 
 # ── Push branch (orchestrator decides on merge later, after human gate) ──────
 if ! git push -u origin "$BRANCH" --force-with-lease >> "$LOG" 2>&1; then
-  emit "failed" "$BRANCH" 1 "git push failed" "Could not push branch" "$TOKENS"
+  emit "failed" "$BRANCH" 1 "git push failed" "Could not push branch" "$TOKENS" "$(build_verify_json 1)"
 fi
 
-log "=== Success case=$CASE_ID branch=$BRANCH tokens=$TOKENS ==="
-emit "success" "$BRANCH" 0 "" "$RESULT_TEXT" "$TOKENS"
+log "=== Success case=$CASE_ID branch=$BRANCH tokens=$TOKENS checks=[$VERIFY_CHECKS] ==="
+emit "success" "$BRANCH" 0 "" "$RESULT_TEXT" "$TOKENS" "$(build_verify_json 1)"
