@@ -97,6 +97,7 @@ print("CONTEXT="      + shlex.quote(str(g("context"))))
 print("REQUIREMENTS=" + shlex.quote(str(g("requirements"))))
 print("PLAN="         + shlex.quote(str(g("plan"))))
 print("CONTEXT_PACK=" + shlex.quote(str(g("context_pack"))))
+print("COMPLEXITY="   + shlex.quote(str(g("complexity", "medium"))))
 print("ATTEMPT="      + shlex.quote(str(g("attempt", 1))))
 print("PRIOR_ERRORS=" + shlex.quote("\n---\n".join(d.get("prior_errors") or [])))
 ')"
@@ -158,8 +159,69 @@ $RETRY_BLOCK
 - Before finishing, validate: run 'npx tsc --noEmit' in any frontend/TS package you changed, and 'python3 -m py_compile' on any backend .py file you changed.
 - If you cannot complete the task, explain why clearly."
 
+# ── Permission policy ────────────────────────────────────────────────────────
+# Replaces --dangerously-skip-permissions with an explicit allow/deny policy so
+# the agent can do normal dev work (git/npm/tsc/python/file edits) but CANNOT
+# exfiltrate (curl/wget/ssh/scp/nc), read secrets (.env, ~/.ssh, doppler), or
+# run destructive/privileged commands. `deny` always wins over `allow`.
+#
+# The settings file lives OUTSIDE the worktree (so it's never committed) and is
+# passed via --settings (highest precedence). Rollout is env-gated per the
+# CLAUDE.md "framework change → staging first" rule:
+#   CLAUDE_PERMISSION_MODE=acceptEdits  (default) — enforce allow/deny policy
+#   CLAUDE_PERMISSION_MODE=dontAsk                — strict fail-closed (deny, no prompt)
+#   CLAUDE_PERMISSION_MODE=bypass                 — emergency rollback to old behavior
+PERM_MODE="${CLAUDE_PERMISSION_MODE:-acceptEdits}"
+SETTINGS_FILE="$HOME/.config/orchestrator/claude-settings.json"
+mkdir -p "$(dirname "$SETTINGS_FILE")"
+cat > "$SETTINGS_FILE" <<'JSON'
+{
+  "permissions": {
+    "allow": [
+      "Read", "Edit", "Write",
+      "Bash(git *)",
+      "Bash(npm *)", "Bash(npx *)", "Bash(pnpm *)", "Bash(yarn *)", "Bash(node *)",
+      "Bash(python *)", "Bash(python3 *)", "Bash(pip *)", "Bash(pip3 *)",
+      "Bash(pytest *)", "Bash(ruff *)", "Bash(mypy *)",
+      "Bash(tsc *)", "Bash(eslint *)", "Bash(prettier *)", "Bash(vite *)",
+      "Bash(ls *)", "Bash(cat *)", "Bash(head *)", "Bash(tail *)",
+      "Bash(grep *)", "Bash(rg *)", "Bash(find *)", "Bash(wc *)",
+      "Bash(sort *)", "Bash(uniq *)", "Bash(diff *)",
+      "Bash(mkdir *)", "Bash(cp *)", "Bash(mv *)", "Bash(touch *)",
+      "Bash(echo *)", "Bash(sed *)", "Bash(awk *)",
+      "Bash(cd *)", "Bash(pwd)", "Bash(test *)", "Bash(env)"
+    ],
+    "deny": [
+      "Bash(curl *)", "Bash(wget *)",
+      "Bash(ssh *)", "Bash(scp *)", "Bash(sftp *)", "Bash(rsync *)",
+      "Bash(nc *)", "Bash(ncat *)", "Bash(telnet *)",
+      "Bash(doppler *)", "Bash(sudo *)",
+      "Bash(cat *.env*)", "Bash(cat *secret*)", "Bash(cat *.pem)",
+      "Bash(cat ~/.ssh/*)", "Bash(cat ~/.aws/*)",
+      "Read(.env)", "Read(.env.*)", "Read(**/.env)", "Read(**/.env.*)",
+      "Read(~/.ssh/**)", "Read(~/.aws/**)", "Read(~/.config/doppler/**)",
+      "Read(**/id_rsa*)", "Read(**/*.pem)"
+    ]
+  }
+}
+JSON
+
+# ── Model selection by complexity (cost control — #5) ────────────────────────
+# Default the heavy coding model to the task's complexity tier; override with
+# CODING_MODEL to pin a single model fleet-wide.
+case "$COMPLEXITY" in
+  complex) MODEL="${CODING_MODEL:-claude-opus-4-8}" ;;
+  *)       MODEL="${CODING_MODEL:-claude-sonnet-4-6}" ;;
+esac
+
 # ── Run Claude CLI headless ──────────────────────────────────────────────────
-CLAUDE_OUT="$(claude -p "$PROMPT" --output-format json --dangerously-skip-permissions 2>>"$LOG")"
+if [ "$PERM_MODE" = "bypass" ]; then
+  PERM_ARGS=(--dangerously-skip-permissions)
+else
+  PERM_ARGS=(--permission-mode "$PERM_MODE" --settings "$SETTINGS_FILE")
+fi
+log "Running Claude: model=$MODEL perm_mode=$PERM_MODE"
+CLAUDE_OUT="$(claude -p "$PROMPT" --model "$MODEL" --output-format json "${PERM_ARGS[@]}" 2>>"$LOG")"
 CLAUDE_RC=$?
 
 # Parse claude's JSON result → tab-separated: is_error, result, input_tok, output_tok
