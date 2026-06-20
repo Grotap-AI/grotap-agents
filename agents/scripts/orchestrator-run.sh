@@ -167,11 +167,14 @@ $RETRY_BLOCK
 #
 # The settings file lives OUTSIDE the worktree (so it's never committed) and is
 # passed via --settings (highest precedence). Rollout is env-gated per the
-# CLAUDE.md "framework change → staging first" rule:
-#   CLAUDE_PERMISSION_MODE=acceptEdits  (default) — enforce allow/deny policy
+# CLAUDE.md "framework change → staging first" rule. The orchestrator is LIVE,
+# so the DEFAULT preserves current behavior; flip the env in Doppler to enforce
+# after validating on one server (a headless permission prompt would hang a slot
+# until the SSH timeout, so prove the allow-list is complete before fleet-wide):
+#   CLAUDE_PERMISSION_MODE=bypass       (default) — current behavior (skip perms)
+#   CLAUDE_PERMISSION_MODE=acceptEdits            — enforce allow/deny policy
 #   CLAUDE_PERMISSION_MODE=dontAsk                — strict fail-closed (deny, no prompt)
-#   CLAUDE_PERMISSION_MODE=bypass                 — emergency rollback to old behavior
-PERM_MODE="${CLAUDE_PERMISSION_MODE:-acceptEdits}"
+PERM_MODE="${CLAUDE_PERMISSION_MODE:-bypass}"
 SETTINGS_FILE="$HOME/.config/orchestrator/claude-settings.json"
 mkdir -p "$(dirname "$SETTINGS_FILE")"
 cat > "$SETTINGS_FILE" <<'JSON'
