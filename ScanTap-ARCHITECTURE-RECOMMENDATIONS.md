@@ -80,6 +80,14 @@ Onboard Manorview **through the P0-fixed flow**, not by hand: provision its Neon
 
 ---
 
+## Status — landed 2026-06-19 (branch `feature/provisioning-p0-postgis`)
+- ✅ **D1** — `subscribe_app` now fires `app/subscribed`; `seed_app_schemas.sql` registers `db_schema`+`migrations[]`; worker rfid-pipe migrations synced/canonical. App schemas now auto-provision on subscribe.
+- ✅ **D2** — `v002_locations.sql` reworked to PostGIS (`boundary geography(Polygon,4326)` from `geo_points` via trigger, GiST index). Validated on a Neon branch (polygon build + point-in-polygon correct).
+- 🟡 **D3** — GUC `app.current_tenant_id` now set per tenant connection (the missing half). **Full enforcement still needs `FORCE ROW LEVEL SECURITY` or a non-owner app role** (Neon's default owner role bypasses RLS) — staging follow-up.
+- ⏳ Not started: connection-string encryption, WorkOS webhook signature, reconcile endpoint + `location_id` on records (P1 #5), frontend Locations page, mobile.
+
+Pushed to a feature branch only — **prod (master) untouched**. Promote via staging per CLAUDE.md.
+
 ## Decisions needed from you
 - **D1:** Do P0 (provisioning fixes) **before** onboarding Manorview, so Manorview is the first clean automated onboarding? (Recommended.) Or hand-provision Manorview now and fix automation later?
 - **D2:** Adopt **PostGIS** for Locations geo (update `v002`)? (Recommended.)
