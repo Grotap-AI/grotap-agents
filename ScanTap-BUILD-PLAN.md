@@ -60,7 +60,18 @@ Branch convention for all platform cases: **base + target `staging`**. Mobile ca
 - **Routing:** new tenant + control-plane registration is platform-level → **staging first** per CLAUDE.md, then promote. App-scoped Locations page/router can ship the app fast-path once the tenant exists.
 
 **Wave 1 dispatched immediately:** A, D, F (no cross-dependencies; F is independent of ScanTap).
-**Wave 2 (B, C, E, G):** created in the pipeline and released once their foundation merges to staging. G's schema + seed artifacts are pre-built (see above) so it reduces to: provision tenant → migrate+seed → build page/router → create user.
+**Wave 2 (B, C, E):** created in the pipeline and released once their foundation merges to staging.
+
+## Phase 2 cases — dispatched 2026-06-20 (from the architecture review)
+Cases A–F are in flight (FOUNDATION + HI reached `change_review`). These three close the gaps the review surfaced and are aligned to what actually shipped (PostGIS `rfid_pipe.locations`, the activated subscribe→provision flow). Created + assigned to `agent-team` via `scripts/scantap_phase2_cases.py`.
+
+| # | Case | case_id | Release |
+|---|---|---|---|
+| G | **Platform provisioning hardening** — make RLS truly enforce (FORCE RLS / non-owner role; owner currently bypasses), encrypt `tenants.neon_database_url`, verify WorkOS webhook signature, add re-provision/backfill, collapse the two app catalogs. | CASE-20260620-1892B2 | staging |
+| H | **ScanTap Locations screen** — backend CRUD + PostGIS reconcile (`ST_Contains`→`ST_DWithin`, ~5 m confidence flag) + frontend grid (Location/Zone/Site/Geo 1–25 + detail) + map capture. **Supersedes the locations/geo bits of A & B** (use `rfid_pipe.locations`, not `scantap_locations`; PostGIS, not haversine). | CASE-20260620-B1BA6F | app fast-path |
+| I | **Manorview Farms onboarding** — provision tenant via the fixed flow, auto-provision `rfid_pipe` incl `v002`, load the 514-row seed, create `info+Manorviewuser1@grotap.com` (password at first login), verify tenant-scoped login + Locations grid. | CASE-20260620-249223 | staging |
+
+**Already landed on master (groundwork for the above):** subscribe fires `app/subscribed`; tenant pool sets `app.current_tenant_id`; `apps.migrations` lists `v001+v002`; `v002_locations.sql` is PostGIS (validated on a Neon branch). See `ScanTap-ARCHITECTURE-RECOMMENDATIONS.md`.
 
 ## Open items to wire later (post-MVP)
 - Real SBI connection (vouchers, production work orders, customer sync, live inventory, count write-back).
