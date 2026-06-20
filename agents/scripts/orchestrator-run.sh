@@ -80,7 +80,13 @@ if [ "${1:-}" = "--merge" ]; then
   git pull origin master --quiet >> "$LOG" 2>&1
   if git merge --no-ff "origin/$BRANCH" -m "merge: $BRANCH (orchestrator-approved)" >> "$LOG" 2>&1; then
     git push origin master >> "$LOG" 2>&1
-    echo '{"merged": true}'
+    # Branch hygiene: its commits are now in master, so delete it remotely +
+    # locally + drop the worktree. Prevents the orphan-branch accumulation that
+    # required a manual 1,135-branch cleanup. Best-effort — never fails the merge.
+    git push origin --delete "$BRANCH" >> "$LOG" 2>&1 || true
+    git worktree remove --force "$WORKTREE_ROOT/${BRANCH#case-}" >> "$LOG" 2>&1 || true
+    git branch -D "$BRANCH" >> "$LOG" 2>&1 || true
+    echo '{"merged": true, "branch_deleted": true}'
     exit 0
   else
     git merge --abort >> "$LOG" 2>&1 || true
