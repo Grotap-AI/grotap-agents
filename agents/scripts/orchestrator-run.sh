@@ -276,9 +276,20 @@ verify_ts() {
   local pkg="$1" mode="$2"
   echo "$CHANGED" | grep -q "^${pkg}/" || return 0
   [ -f "${pkg}/package.json" ] || return 0
+  # Self-heal deps so verification actually runs fleet-wide (node_modules coverage
+  # varies per server). npm ci needs the lockfile; an install failure degrades to
+  # a skip — never a false task failure.
   if [ ! -d "${pkg}/node_modules" ]; then
-    add_check "${pkg} ${mode}: skipped (no deps on server)"
-    return 0
+    if [ -f "${pkg}/package-lock.json" ]; then
+      log "Installing ${pkg} deps (npm ci)..."
+      if ! (cd "$pkg" && timeout 420 npm ci --prefer-offline --no-audit --no-fund >>"$LOG" 2>&1); then
+        add_check "${pkg} ${mode}: skipped (dep install failed)"
+        return 0
+      fi
+    else
+      add_check "${pkg} ${mode}: skipped (no lockfile)"
+      return 0
+    fi
   fi
   log "Verifying ${pkg} (${mode})..."
   local out rc
