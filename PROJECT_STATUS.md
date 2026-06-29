@@ -59,7 +59,7 @@ All secrets populated including STRIPE_WEBHOOK_SECRET, COBROWSE_API_KEY, EXPO_TO
 - **Primary executors**: Agent-01, Agent-04, Agent-07 (3 slots each) + Agent-08 (2 slots, 1 reserved for dispatch)
 - **Overflow executors**: Agent-02, Agent-03, Agent-05 — execute when slots available, primary roles take priority
 - **Deploy ops**: Agent-06 — deploy only, never executes tasks
-- **Dispatch Coordinator**: Agent-08 — runs `grotap-dispatch` + `grotap-watchdog` systemd services 24/7
+- **Dispatch cadence**: ONCE DAILY at 12:00 UTC (changed 2026-06-28) — agent-06 root cron `auto_dispatch_dependents.py` + backend `pipeline_automation` anchored to noon. NOT 24/7; do not run always-on dispatch services.
 - **Total capacity**: 20 concurrent execution tasks (3 primary x 3 + Agent-08 x 2 + 3 overflow x 3)
 - `dispatch.sh` — worktree-isolated task dispatch (each task gets `/home/agent/worktrees/<session>/`)
 - `dispatch-execute.sh` — auto-routes to server with most free slots (primary first, then overflow)

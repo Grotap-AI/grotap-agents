@@ -67,13 +67,19 @@ Code: `platform/` | Docs: `docs/` | Tasks: `agents/tasks/`
 SSH: always `ssh agent-NN` aliases. Never raw IP. Key: `~/.ssh/grotap_agents`. agent-01/08: `User agent`. All others: `User root`.
 agent-08: systemd services `grotap-dispatch` + `grotap-watchdog` — both must always run. Max 3 tasks/server via worktrees.
 
-## Dispatch — 24/7, Never Idle
+## Dispatch — ONCE DAILY at High Noon (12:00 UTC) — changed 2026-06-28
+**The old "24/7, never idle" policy is RETIRED.** Per the platform owner (2026-06-28), pipeline
+work + agent assignment run **once a day at 12:00 UTC**, NOT continuously. Do NOT restart
+`continuous-dispatch.sh` or any always-on dispatch loop/systemd service.
+- Scheduled: agent-06 root cron `auto_dispatch_dependents.py` at `0 12 * * *`; backend
+  `pipeline_automation` row anchored to 12:00 UTC daily (interval_hours=24).
+- Manual one-off dispatch is still fine when a human asks:
 ```bash
 bash agents/dispatch.sh <task.md> <server-ip> <session>   # manual
 bash agents/dispatch-execute.sh <task.md> <session>       # auto-route (most free slots)
 bash agents/server-status.sh                              # check slots/load
 ```
-Priority: `pending/` first, then `active/` backlog, lowest ID first. Verify tmux sessions after dispatch.
+Priority within a run: `pending/` first, then `active/` backlog, lowest ID first. Verify tmux sessions after dispatch.
 
 ## Code Review
 ```bash
