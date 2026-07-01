@@ -31,6 +31,8 @@ Code: `platform/` | Docs: `docs/` | Tasks: `agents/tasks/`
 - JSONB: `->>` for text comparison; `->` returns JSONB (type mismatch in WHERE).
 - UNIQUE constraint with COALESCE → invalid Postgres. Use `CREATE UNIQUE INDEX`.
 - `| head -4` in scripts → use `| head -n 4`.
+- **Schema rename/move on an EXISTING tenant → use `ALTER SCHEMA old RENAME TO new` (guarded by `to_regnamespace`), then re-GRANT app_user (USAGE+DML+ALTER DEFAULT PRIVILEGES). NEVER re-`CREATE` the schema — that leaves live data stranded in the old one.** Order rename migration BEFORE the create/alter migrations so existing tenants rename-then-noop and fresh tenants create directly.
+- **Rename/refactor task → before push, `git grep -nE "<old-identifier>"` MUST return zero (minus intended compat shims/redirects), AND `tsc --noEmit` + `py_compile` pass.** Also update the app-catalog slug/name seed (`tenant_db.py`, `seed_apps.sql`) — a rename that leaves the old slug is not done.
 
 ## ⛔ Absolute Rules — All Agents, No Exceptions
 | # | Rule |
@@ -102,3 +104,4 @@ ANY reviewer FAIL = branch blocked. No exceptions. Codex pre-commit review is ma
 | 4 | Task NOT done until merged to master and deployed. Pushed ≠ done. Reviewed ≠ done. |
 | 5 | Task files are gitignored — `agents/tasks/pending/active/done/archive/` not tracked. |
 | 6 | Type-check before commit — `cd frontend && npx tsc --noEmit`. Fix errors first. |
+| 7 | **ONE app changed at once = ONE branch, built in sequence.** Do NOT fan a single-app change into many parallel branches — they touch the same files, collide, and create merge churn for zero isolation benefit. Only use separate branches for genuinely independent work (different apps/subsystems). Coupled steps stack on the same branch so each starts from the latest state. |
