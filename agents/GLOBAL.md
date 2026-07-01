@@ -34,6 +34,7 @@ Code: `platform/` | Docs: `docs/` | Tasks: `agents/tasks/`
 - **Schema rename/move on an EXISTING tenant → use `ALTER SCHEMA old RENAME TO new` (guarded by `to_regnamespace`), then re-GRANT app_user (USAGE+DML+ALTER DEFAULT PRIVILEGES). NEVER re-`CREATE` the schema — that leaves live data stranded in the old one.** Order rename migration BEFORE the create/alter migrations so existing tenants rename-then-noop and fresh tenants create directly.
 - **Rename/refactor task → before push, `git grep -nE "<old-identifier>"` MUST return zero (minus intended compat shims/redirects), AND `tsc --noEmit` + `py_compile` pass.** Also update the app-catalog slug/name seed (`seed_apps.sql`, `seed_brands_apps.sql`, `control_plane.py`) — a rename that leaves the old slug is not done.
 - **App schema migrations live at repo-root `migrations/apps/<slug>/vNNN_*.sql`** — NOT `backend/migrations/apps/`. The appSchemaProvision worker reads the repo-root tree; a migration placed under `backend/` is invisible to provisioning even if listed in `phase5_app_schema_migrations.sql`.
+- **RLS tenant-isolation policies MUST use `current_setting('app.current_tenant_id')::uuid`** — NOT `app.tenant_id` or any other name. That is the GUC `tenant_db.py` sets per-connection; a policy keyed on a different GUC silently returns ZERO rows on RLS-enforced (non-owner) tenants while appearing to work on owner-URL tenants. Match the existing tables' policy verbatim.
 
 ## ⛔ Absolute Rules — All Agents, No Exceptions
 | # | Rule |
