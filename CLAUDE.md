@@ -21,3 +21,10 @@ Do not skip this on "quick" sessions — there are none.
 ## Rules
 
 Full rules are in `agents/GLOBAL.md`. The 9 absolute rules are enforced on every task.
+
+## Default Execution — PIPELINE-FIRST
+
+For any substantive change, the DEFAULT is to route it through the pipeline / agent fleet (plan → prompt
+the owner → dispatch → review + teach the machine), NOT to build it myself — dogfooding the fleet makes it
+smarter faster. Full rule + workflow in `platform/CLAUDE.md` ("Default Execution — PIPELINE-FIRST").
+I keep only the review gate and owner-approved irreversible ops (live migrations, data loads).
