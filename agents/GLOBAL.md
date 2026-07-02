@@ -88,6 +88,17 @@ bash agents/server-status.sh                              # check slots/load
 ```
 Priority within a run: `pending/` first, then `active/` backlog, lowest ID first. Verify tmux sessions after dispatch.
 
+## Coding Pilot (CODING_PILOT env flag)
+Open-weight lane (qwen-2.5-coder-32b via OpenRouter) runs **instead of Claude** for `simple` tasks
+when `CODING_PILOT=1` is set on the dispatch server (unset by default — never enable without owner approval).
+- **Never piloted:** P0/P1 priority, medium/complex tasks, or runs over the 2/day cap per server.
+- **Gate:** after pilot commits, `tsc --noEmit` (frontend/agent-worker/orchestrator) + `py_compile` must
+  pass; any gate fail → reset worktree + automatic Claude fallback.
+- **Telemetry:** pilot runs → `service=fleet-pilot`; fallback Claude runs → `meta.pilot_fallback=true`.
+  Pass rate: `fleet-pilot ok runs ÷ (fleet-pilot runs + pilot_fallback runs)`.
+- **To disable:** `unset CODING_PILOT` or set to `0`. No code change needed.
+- Pilot window: ≤20 cases or 2 weeks; success bar ≥70% gate-pass AND ≥90% cost reduction vs Sonnet.
+
 ## Code Review
 ```bash
 /codex:review                    # pre-commit — run before every commit
