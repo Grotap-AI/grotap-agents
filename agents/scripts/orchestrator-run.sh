@@ -61,11 +61,44 @@ print(json.dumps(out))
 
 PAYLOAD="$(cat)"
 
+# ── Self-healing git auth (durability fix) ───────────────────────────────────
+# The original design relied SOLELY on a per-repo credential helper that shells
+# out to `doppler secrets get GITHUB_TOKEN`. That breaks whenever the agent's
+# Doppler token isn't resolvable in this non-interactive SSH context (the classic
+# ~75s "Authentication failed" push failure), and it silently reverts on server
+# reprovision. This resolves a token from the ENV first (sourced from ~/.env
+# above — survives Doppler being unavailable), then falls back to Doppler, and
+# installs a helper that reads the token from an exported var so it is NEVER
+# written to .gitconfig on disk. The logic lives in this repo, so it re-deploys
+# with the fleet and survives reprovision.
+ensure_git_auth() {
+  export GH_PUSH_TOKEN="${GITHUB_TOKEN:-}"
+  if [ -z "$GH_PUSH_TOKEN" ]; then
+    GH_PUSH_TOKEN="$(doppler secrets get GITHUB_TOKEN --project grotap --config prd --plain 2>/dev/null || true)"
+    export GH_PUSH_TOKEN
+  fi
+  if [ -z "$GH_PUSH_TOKEN" ]; then
+    log "WARN: no GitHub token resolved (env GITHUB_TOKEN or Doppler) — git push may fail"
+    return 0
+  fi
+  local helper='!f() { echo username=x-access-token; echo "password=$GH_PUSH_TOKEN"; }; f'
+  # Global helper covers a fresh clone (no repo config yet).
+  git config --global credential.helper "$helper" >> "$LOG" 2>&1 || true
+  # Repo-scope reset + override beats any stale doppler-only helper baked into
+  # $PLATFORM_DIR/.git/config by an older bootstrap. Worktrees share this config.
+  if [ -d "$PLATFORM_DIR/.git" ]; then
+    git -C "$PLATFORM_DIR" config credential.helper "" >> "$LOG" 2>&1 || true
+    git -C "$PLATFORM_DIR" config --add credential.helper "$helper" >> "$LOG" 2>&1 || true
+  fi
+}
+
 # ── Ensure platform repo exists and is current ───────────────────────────────
 ensure_repo() {
+  ensure_git_auth
   if [ ! -d "$PLATFORM_DIR/.git" ]; then
     log "Cloning grotap-platform..."
     git clone https://github.com/Grotap-AI/grotap-platform.git "$PLATFORM_DIR" >> "$LOG" 2>&1
+    ensure_git_auth   # re-assert repo-scope helper now that .git exists
   fi
   cd "$PLATFORM_DIR" || return 1
   git fetch origin master --quiet >> "$LOG" 2>&1
