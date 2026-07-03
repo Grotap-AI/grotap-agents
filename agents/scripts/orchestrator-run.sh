@@ -61,34 +61,37 @@ print(json.dumps(out))
 
 PAYLOAD="$(cat)"
 
-# ── Self-healing git auth (durability fix) ───────────────────────────────────
-# The original design relied SOLELY on a per-repo credential helper that shells
-# out to `doppler secrets get GITHUB_TOKEN`. That breaks whenever the agent's
-# Doppler token isn't resolvable in this non-interactive SSH context (the classic
-# ~75s "Authentication failed" push failure), and it silently reverts on server
-# reprovision. This resolves a token from the ENV first (sourced from ~/.env
-# above — survives Doppler being unavailable), then falls back to Doppler, and
-# installs a helper that reads the token from an exported var so it is NEVER
-# written to .gitconfig on disk. The logic lives in this repo, so it re-deploys
-# with the fleet and survives reprovision.
+# ── Self-healing git auth (durability fix, v2) ───────────────────────────────
+# .gitconfig is PERSISTENT and shared by every process on the box; the env of
+# whichever process wrote it is not. The previous version persisted an inline
+# helper reading $GH_PUSH_TOKEN — it worked inside this script (which exports
+# the var) but broke every OTHER push path (dispatch.sh runners) with empty-
+# password "Authentication failed" each time an orchestrator run rewrote the
+# config (2026-07-03 outage). So: persist only a SELF-SUFFICIENT helper script
+# that resolves the token per call — env GITHUB_TOKEN first (sourced from
+# ~/.env), Doppler fallback (survives rotation). Re-written on every run so it
+# survives reprovision and stale copies.
 ensure_git_auth() {
-  export GH_PUSH_TOKEN="${GITHUB_TOKEN:-}"
-  if [ -z "$GH_PUSH_TOKEN" ]; then
-    GH_PUSH_TOKEN="$(doppler secrets get GITHUB_TOKEN --project grotap --config prd --plain 2>/dev/null || true)"
-    export GH_PUSH_TOKEN
+  mkdir -p "$HOME/bin"
+  cat > "$HOME/bin/git-credential-doppler" <<'HELPER'
+#!/bin/sh
+# git credential helper — env GITHUB_TOKEN first, then Doppler. Self-sufficient:
+# safe to persist in .gitconfig (no dependency on the caller's environment).
+tok="${GITHUB_TOKEN:-}"
+[ -z "$tok" ] && tok="$(doppler secrets get GITHUB_TOKEN --project grotap --config prd --plain 2>/dev/null)"
+echo username=x-access-token
+echo "password=$tok"
+HELPER
+  chmod +x "$HOME/bin/git-credential-doppler"
+  if [ -z "${GITHUB_TOKEN:-}" ] && ! doppler secrets get GITHUB_TOKEN --project grotap --config prd --plain >/dev/null 2>&1; then
+    log "WARN: no GitHub token resolvable (env GITHUB_TOKEN or Doppler) — git push may fail"
   fi
-  if [ -z "$GH_PUSH_TOKEN" ]; then
-    log "WARN: no GitHub token resolved (env GITHUB_TOKEN or Doppler) — git push may fail"
-    return 0
-  fi
-  local helper='!f() { echo username=x-access-token; echo "password=$GH_PUSH_TOKEN"; }; f'
-  # Global helper covers a fresh clone (no repo config yet).
-  git config --global credential.helper "$helper" >> "$LOG" 2>&1 || true
-  # Repo-scope reset + override beats any stale doppler-only helper baked into
-  # $PLATFORM_DIR/.git/config by an older bootstrap. Worktrees share this config.
+  # --replace-all: collapse any stale/duplicate helper entries (empty-string
+  # resets and old inline $GH_PUSH_TOKEN helpers included). Worktrees share
+  # the repo config, so this covers them too.
+  git config --global --replace-all credential.helper "!$HOME/bin/git-credential-doppler" >> "$LOG" 2>&1 || true
   if [ -d "$PLATFORM_DIR/.git" ]; then
-    git -C "$PLATFORM_DIR" config credential.helper "" >> "$LOG" 2>&1 || true
-    git -C "$PLATFORM_DIR" config --add credential.helper "$helper" >> "$LOG" 2>&1 || true
+    git -C "$PLATFORM_DIR" config --replace-all credential.helper "!$HOME/bin/git-credential-doppler" >> "$LOG" 2>&1 || true
   fi
 }
 
