@@ -79,6 +79,7 @@ Code: `platform/` | Docs: `docs/` | Tasks: `agents/tasks/`
 
 SSH: always `ssh agent-NN` aliases. Never raw IP. Key: `~/.ssh/grotap_agents`. agent-01/08: `User agent`. All others: `User root`.
 agent-08: systemd services `grotap-dispatch` + `grotap-watchdog` — both must always run. Max 3 tasks/server via worktrees.
+Git auth on exec servers (02–06): `credential.helper = /home/agent/bin/git-credential-doppler` (fetches `GITHUB_TOKEN` from Doppler per call — survives token rotation; installed 2026-07-03 after the 6/25 rotation silently broke `$GH_PUSH_TOKEN`-based auth fleet-wide for 8 days). NEVER set a static token in `~/.env`; if git auth fails, check `doppler me` works as the `agent` user first.
 
 ## Dispatch — ONCE DAILY at High Noon (12:00 UTC) — changed 2026-06-28
 **The old "24/7, never idle" policy is RETIRED.** Per the platform owner (2026-06-28), pipeline
