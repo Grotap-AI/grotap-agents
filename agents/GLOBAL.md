@@ -138,3 +138,16 @@ ANY reviewer FAIL = branch blocked. No exceptions. Codex pre-commit review is ma
 | 6 | Type-check before commit — `cd frontend && npx tsc --noEmit`. Fix errors first. |
 | 7 | **ONE app changed at once = ONE branch, built in sequence.** Do NOT fan a single-app change into many parallel branches — they touch the same files, collide, and create merge churn for zero isolation benefit. Only use separate branches for genuinely independent work (different apps/subsystems). Coupled steps stack on the same branch so each starts from the latest state. |
 | 8 | **Stage every NEW file you create — explicitly, by name — and verify with `git status` before you finish.** A pushed branch that imports/references a module you created but never committed crashes the whole backend on startup (`ModuleNotFoundError`). The runner now runs `git add -A` as a safety net (respecting `.gitignore`), but do NOT rely on it — new files are your responsibility. This is the #1 cause of broken half-merged branches. |
+
+## Review-Sweep Lessons (57-branch gate, 2026-07-04)
+| # | Lesson |
+|---|---|
+| 1 | **Cross-case contracts are exact:** before writing a consumer of a sibling case's schema, `grep` its migration for the REAL column names/types. A webhook UPDATEd invented columns (`stripe_account_id`) while the sibling created `stripe_connect_account_id` — silent no-op forever. Same for shared TS shapes across split cases. |
+| 2 | **Never swallow schema errors.** `try/except: log-and-continue` around DB writes hides missing-column bugs from every reviewer. Let unexpected DB errors surface at ERROR level. |
+| 3 | **Billing idempotency keys are deterministic, never `uuid4()` per call** — a fresh key defeats Stripe retry-safety and double-bills. Derive from stable ids (`account-{brand_id}`, `invoice-{brand_id}-{period}`). |
+| 4 | **Branch from CURRENT master and always push YOUR case branch.** Stale bases turned a 1-file utility into a 54-file diff; 7 coalesced cases pushed no per-case branch, making review/revert impossible. |
+| 5 | **One owner per hot file / one case per enforcement surface.** Two agents built duplicate OAuth in the same router with different secret names; three branches each partially rewrote app-visibility filters, leaving subscribe/vote leaks. Visibility/authz changes must cover EVERY read+write path (list, my-apps, subscribe, request, vote, pricing, brands) in ONE case. |
+| 6 | **Third-party callback endpoints (OAuth, webhooks) go in PUBLIC_PATHS** — the caller has no JWT; shipping the callback without it 401s the whole flow. |
+| 7 | **A new unique/invariant index ships WITH a dedupe migration.** `CREATE UNIQUE INDEX` at startup assumes clean data; promote-only backfills don't clean duplicates and the index throws on boot. |
+| 8 | **Appending to a shared init hunk (control_plane.py initialize etc.)? Use your OWN `pool.execute` block** and don't re-ADD columns a sibling already added — same-anchor appends are the #1 merge-conflict source. |
+| 9 | **Verify referenced modules/pages exist before wiring routes** (a route importing a nonexistent page breaks the whole frontend build), and check master first before re-adding "foundation" work that already landed. |
