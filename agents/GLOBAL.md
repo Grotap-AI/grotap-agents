@@ -151,3 +151,11 @@ ANY reviewer FAIL = branch blocked. No exceptions. Codex pre-commit review is ma
 | 7 | **A new unique/invariant index ships WITH a dedupe migration.** `CREATE UNIQUE INDEX` at startup assumes clean data; promote-only backfills don't clean duplicates and the index throws on boot. |
 | 8 | **Appending to a shared init hunk (control_plane.py initialize etc.)? Use your OWN `pool.execute` block** and don't re-ADD columns a sibling already added — same-anchor appends are the #1 merge-conflict source. |
 | 9 | **Verify referenced modules/pages exist before wiring routes** (a route importing a nonexistent page breaks the whole frontend build), and check master first before re-adding "foundation" work that already landed. |
+
+## Boot-Time Failure Lessons (2026-07-04 outage)
+| # | Lesson |
+|---|---|
+| 1 | **`py_compile` does NOT catch FastAPI import-time crashes.** Before pushing ANY backend change, boot-test the app: `python -c "import app.main"` (dummy env vars for required settings). A router that compiles can still assert during route registration and take down every deploy — e.g. `from __future__ import annotations` + `status_code=204` + `-> None` return annotation asserts "204 must not have a response body" on FastAPI 0.115. With a bodyless status code, pass `response_model=None` explicitly. |
+| 2 | **Orchestrator boot must NEVER re-enter threads paused at an interrupt gate** (`next=['human_gate']`). Those are awaiting a human decision, not crashed — re-running them re-executes finished work and destroys the pause state (8 approved-review cases were marked failed this way). |
+| 3 | **Do not open unbounded concurrent SSH connections to one host.** sshd MaxStartups drops the stampede and every 60s ctrl command times out. Reuse a pooled connection per host, serialize control commands, retry with backoff. |
+| 4 | **Verification/gate-shaped tasks (no code expected) must report success without commits** — "no commits produced" is only a failure for build tasks. Say so explicitly in the task file until the framework supports it. |
