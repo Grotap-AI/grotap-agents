@@ -57,7 +57,7 @@ Code: `platform/` | Docs: `docs/` | Tasks: `agents/tasks/`
 ## ⛔ Absolute Rules — All Agents, No Exceptions
 | # | Rule |
 |---|---|
-| 1 | **DOPPLER ONLY** — No `.env` in CI, no GitHub secrets (except `DOPPLER_SERVICE_TOKEN`). Local: `doppler run -- <cmd>`. CI: `doppler run --` injects all secrets. Update secrets in Doppler (`grotap` prd/dev). NEVER tell human to update GitHub secrets. |
+| 1 | **DOPPLER ONLY** — No `.env` in CI, no GitHub secrets (except `DOPPLER_SERVICE_TOKEN`). Local: `doppler run -- <cmd>`. CI: `doppler run --` injects all secrets. Update secrets in Doppler (`grotap` prd/dev). NEVER tell human to update GitHub secrets. **NEVER put secret VALUES in chat/prompts/task files/logs/commits — transcripts persist.** When a human must supply a secret, direct them to the Doppler dashboard or a terminal OUTSIDE any AI session; never ask them to paste it to an agent. |
 | 2 | **NO PYTHON FOR AGENTS** — TypeScript/JS only. Python = FastAPI backend only. |
 | 3 | **NO DIRECT 3RD-PARTY CALLS** — All SDK calls via `app/providers/` wrappers. |
 | 4 | **NO SHARED TENANT DATA** — Every DB query scoped to `tenant_id`. No cross-tenant reads. |
