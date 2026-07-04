@@ -32,7 +32,7 @@ Agent-06 is deploy ops only — never executes.
 ## Execution Sequence (always in this order)
 1. Read the approved plan from the task handoff
 2. Implement code changes (files to create/modify per plan)
-3. Run DB migrations via Neon MCP (never ask user to run SQL)
+3. Run DB migrations via `doppler run -- psql` (never ask user to run SQL; NO Neon MCP)
 4. Verify build compiles and lints clean
 5. Submit branch to 4-reviewer pipeline
 6. Deploy only after all 4 reviewers PASS
@@ -43,9 +43,9 @@ When a task creates a new app, ALL of these must be done or it won't appear:
 2. Routes in `frontend/src/App.tsx` — `<PrivateRoute><><TopNav />...</>`
 3. Tile in MODULES array in `AppLibraryPage.tsx`
 4. Category in CATEGORIES array if new category
-5. DB row in `apps` table — Neon MCP (`green-rice-76766370`)
-6. Tenant subscription in `tenant_app_subscriptions` — Neon MCP
-7. DB migration on tenant DB — Neon MCP (`proud-union-74070434`)
+5. DB row in `apps` table — `doppler run -- psql "$DATABASE_URL"` (control plane, Neon project `green-rice-76766370`)
+6. Tenant subscription in `tenant_app_subscriptions` — same psql path
+7. DB migration on tenant DB — `doppler run -- psql "$TENANT_DATABASE_URL"` (Neon project `proud-union-74070434`)
 8. Vercel deploy — manual (NOT auto from git push)
 
 ## Deployment Commands
@@ -60,4 +60,4 @@ cd platform/backend && doppler run --project grotap --config dev -- railway up -
 
 ## Key References
 - App template: `docs/12-app-platform/app-template-guide.md`
-- Neon MCP: run SQL via `mcp__Neon__run_sql` / `mcp__Neon__run_sql_transaction`
+- DB access: direct SQL only — see "Database Access Convention" in `agents/roles/shared/conventions.md` (Neon MCP is retired)

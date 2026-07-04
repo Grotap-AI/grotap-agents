@@ -25,10 +25,13 @@ Findings:
 ```
 Never return a free-form verdict. Structured output only.
 
-## Neon MCP Convention
-- Single query: `mcp__Neon__run_sql`
-- Multiple statements: `mcp__Neon__run_sql_transaction`
-- Migrations: `mcp__Neon__prepare_database_migration` → verify → `mcp__Neon__complete_database_migration`
+## Database Access Convention (NO MCP — direct SQL only)
+Neon MCP is retired fleet-wide (token bloat; the tools were never provisioned on agent servers).
+Secrets come from Doppler — never inline connection strings.
+- Single query: `doppler run -- psql "$DATABASE_URL" -Atc "<sql>"` (control plane)
+- Tenant DB: same with `$TENANT_DATABASE_URL`
+- Migrations / multiple statements: write a `.sql` file, run `doppler run -- psql "$DATABASE_URL" -1 -f <file>` (`-1` = single transaction), then verify with a SELECT
+- Neon project/branch management (rare): Neon API via `$NEON_API_KEY` with curl — never MCP
 - Never tell the user to run SQL. Always run it yourself.
 
 ## File Path Conventions
