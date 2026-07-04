@@ -39,9 +39,10 @@ cd "$AGENTS_REPO"   && git fetch origin -q && git reset --hard origin/master -q
 cd "$PLATFORM_REPO" && git fetch origin --prune -q && git checkout master -q && git reset --hard origin/master -q \
   || { fail_hold "bootstrap failed: could not sync grotap-platform to origin/master"; exit 1; }
 
-# Quick exit when the queue is empty
-QUEUE=$(doppler run --project grotap --config prd -- psql "$DATABASE_URL" -Atc \
-  "SELECT count(*) FROM pipeline_cases WHERE status='change_review'" 2>/dev/null || echo "?")
+# Quick exit when the queue is empty. NB: single quotes — DATABASE_URL must be
+# expanded INSIDE the doppler-injected environment, not by this outer shell.
+QUEUE=$(doppler run --project grotap --config prd -- sh -c \
+  'psql "$DATABASE_URL" -Atc "SELECT count(*) FROM pipeline_cases WHERE status='"'"'change_review'"'"'"' 2>/dev/null || echo "?")
 echo "queue: $QUEUE change_review cases"
 if [ "$QUEUE" = "0" ]; then echo "queue empty — nothing to do"; exit 0; fi
 
