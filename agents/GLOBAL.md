@@ -46,6 +46,7 @@ Code: `platform/` | Docs: `docs/` | Tasks: `agents/tasks/` | Fleet scripts: plat
 - No `SELECT SUM(...) FOR UPDATE` (invalid) — lock the parent row or take an advisory lock. Dynamic UPDATE SET builders: never hardcode a column AND loop it.
 - Schema rename on an existing tenant: `ALTER SCHEMA … RENAME` (guard `to_regnamespace`) + re-GRANT app_user — never re-CREATE. Rotate DB role creds via `ALTER ROLE … WITH PASSWORD` — `DROP ROLE` fails once policies/grants depend on it.
 - RLS policies keyed EXACTLY on `current_setting('app.current_tenant_id')::uuid` — any other GUC name silently returns zero rows on enforced tenants. No tenant-specific seed rows in shared app migrations (they run on EVERY tenant).
+- `GENERATED ALWAYS AS` requires IMMUTABLE expressions (`convert_from`/`jsonb_build_object` are STABLE → 42P17 at apply) — use a plain column + app-layer sync. A migration that remaps live values (status/billing_model renames) must update EVERY query filtering on the old value in the SAME change — grep consumers first (a prepay→prepay_credits rename would have zeroed the daily drawdown).
 
 ### Auth & security
 - `request.state.organization_id` (NOT `tenant_id` → AttributeError → 500).
@@ -57,6 +58,7 @@ Code: `platform/` | Docs: `docs/` | Tasks: `agents/tasks/` | Fleet scripts: plat
 - Webhooks: verify signature, be idempotent (dedup on event id), return non-2xx on transient failure (2xx = sender never retries), and survive out-of-order/duplicate delivery.
 - A connect/OAuth flow requests the scopes its CONSUMER case needs — trace the whole feature across split cases (scope, token, schema, enum).
 - Rebasing onto a hardened master must preserve auth guards master added; never re-add a provider wrapper that already exists.
+- NEVER pass user-submitted strings to readFile/exec/path APIs — resolve against an allowlisted root, reject absolute paths and `..`, cap read size (a raw `readFile(source_doc)` would have exfiltrated orchestrator secrets into agent context).
 
 ### Wiring & contracts
 - Importing/creating ≠ wiring: a new router is dead until `include_router` lands in main.py; an imported helper needs a real call site; every UI action needs an endpoint that EXISTS (grep the router — extend it if the task is "UI-only" and it's missing). Verify referenced modules/pages exist before wiring routes; check master before re-building landed work.
@@ -81,6 +83,7 @@ Code: `platform/` | Docs: `docs/` | Tasks: `agents/tasks/` | Fleet scripts: plat
 ### Build & ship
 - `py_compile` misses import-time crashes — boot-test `python -c "import app.main"` before any backend push. FastAPI 0.115: bodyless status codes (204) need `response_model=None` (a `-> None` annotation asserts at route registration).
 - Actually RUN `tsc --noEmit` + `py_compile` — "it compiles" is a command, not a claim. Grep your diff for committed conflict markers (`^<<<<<<<`).
+- Before finalizing, re-diff against CURRENT master: if master already landed your feature or rewrote the region, adapt or report-and-stop — never commit your stale copy of a hot file (a wholesale main.py replacement merged textually "clean" and would have deleted 5 live routers). Verify APIs/exception classes exist in the PINNED lib version (asyncpg has no `PoolAcquisitionError`); Dockerfiles that `npm run build` need devDeps installed first (`npm ci` then prune), not `--omit=dev`.
 - Rename/refactor: `git grep <old-identifier>` returns zero (minus intended shims) AND app-catalog seeds updated (`seed_apps.sql`, `seed_brands_apps.sql`, `control_plane.py`).
 - Stay in scope: no `npm install`, `package.json`/lockfile edits, or dep bumps unless the task IS a dependency upgrade.
 - `railway up` is not done until `railway status --json` shows latestDeployment SUCCESS (healthcheck window ≥ slow boot; a failed healthcheck silently leaves the OLD image live). Use `RAILWAY_API_TOKEN` (not `RAILWAY_TOKEN`). Railway env vars are STATIC — after any Doppler rotation, refresh every service copy (`platform/scripts/railway_secret_audit.py`; runbook: `platform/docs/SECRET_ROTATION_RUNBOOK.md`).
@@ -118,7 +121,7 @@ Open-weight lane (qwen-2.5-coder-32b via OpenRouter) replaces Claude for `simple
 `/codex:review` before every commit (mandatory; separate from Rule 7 pipeline), then the Rule 7 review pipeline. ANY reviewer FAIL = branch blocked. No exceptions.
 
 ## Deployment
-Backend (Railway) auto-deploys on push to `master` (~2 min); frontend (Vercel) via CI on push to `master` (paths `frontend/**`). Agents on Hetzner: push branch → request merge+deploy from coordinator.
+Frontend (Vercel) via CI on push to `master` (paths `frontend/**`). Backend Railway GitHub auto-deploy is BROKEN (case RLWAY1) — deploy via `doppler run -- railway up --service grotap-backend --detach` from `backend/`. Orchestrator: GitHub Actions `deploy-railway.yml` runs `railway up` on master pushes touching `orchestrator/**` (tip-commit detection only until CASE-20260705-C29667 lands — multi-commit pushes may silently skip; verify, fall back to manual `railway up`). Agents on Hetzner: push branch → request merge+deploy from coordinator.
 
 ## Git Discipline
 | # | Rule |
