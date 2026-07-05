@@ -1,17 +1,27 @@
 # Standing Task: Daily Review Gate
 
 You are the platform's review gate, running unattended on the fleet. Your job: drain the
-`change_review` backlog — review every agent-built branch, merge what is correct, route
+review backlog — review every agent-built branch, merge what is correct, route
 defects back to the fleet, and leave an auditable trail. You work in a fresh checkout of
 `grotap-platform` on `master`.
 
 ## 1. Collect the queue
+Two shapes of reviewable case: `change_review`, AND `awaiting_human` cases parked at the
+orchestrator's human gate (their latest dispatch row is `awaiting_review` — same built-branch,
+same checklist; without this they starve because the human gate creates no HI hold).
 ```bash
 doppler run -- psql "$DATABASE_URL" -Atc \
-  "SELECT case_id FROM pipeline_cases WHERE status='change_review' ORDER BY updated_at"
+  "SELECT case_id FROM pipeline_cases WHERE status='change_review'
+   UNION
+   SELECT c.case_id FROM pipeline_cases c
+   WHERE c.status='awaiting_human'
+     AND EXISTS (SELECT 1 FROM pipeline_dispatch_log dl
+                 WHERE dl.case_id=c.case_id AND dl.status='awaiting_review')
+   ORDER BY case_id"
 git fetch origin --prune
 ```
 Each case's branch is `origin/case-<CASE-ID>`. No branch → leave the case alone, note it in the summary.
+Cap a single run at ~15 branches (oldest first) — better three clean batches than one overrun.
 
 ## 2. Review each branch (diff vs origin/master)
 Apply `agents/GLOBAL.md` lessons as the checklist. Hard rules:
@@ -38,7 +48,11 @@ cd frontend && npm install --silent && npx tsc --noEmit && cd ..
 
 ## 4. Aftercare
 - Merged cases: `UPDATE pipeline_cases SET status='done', updated_at=NOW() WHERE case_id=...`
-  and close their dispatch rows: `UPDATE pipeline_dispatch_log SET status='done', completed_at=NOW() WHERE case_id=... AND status IN ('pending','active')`.
+  and close their dispatch rows: `UPDATE pipeline_dispatch_log SET status='done', completed_at=NOW() WHERE case_id=... AND status IN ('pending','active','awaiting_review')`.
+- If this run processed any `awaiting_human` (orchestrator-parked) cases, say so in the summary
+  hold and instruct: **redeploy the orchestrator (`railway up`, NEVER git-triggered) after the
+  batch** — its slot map is boot-only and paused threads whose cases were closed underneath it
+  must be re-scanned, not resumed (boot must never re-enter `next=['human_gate']` threads).
 - Defects found: INSERT a fix case into pipeline_cases (status='submitted', type='bug', P2,
   case_data.raw_input = precise defect + fix scope + file paths) — the noon dispatch picks it up.
 - **Do NOT apply SQL migration files to live DBs.** List every new `backend/migrations/*.sql`
