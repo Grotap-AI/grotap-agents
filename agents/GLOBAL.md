@@ -99,27 +99,22 @@ bash agents/dispatch-execute.sh <task.md> <session>       # auto-route (most fre
 ```
 
 ## Coding Pilot (CODING_PILOT env flag)
-Open-weight lane (qwen-2.5-coder-32b via OpenRouter) runs **instead of Claude** for `simple` tasks
-when `CODING_PILOT=1` is set on the dispatch server (unset by default — never enable without owner approval).
-- **Never piloted:** P0/P1 priority, medium/complex tasks, or runs over the 2/day cap per server.
-- **Gate:** after pilot commits, `tsc --noEmit` (frontend/agent-worker/orchestrator) + `py_compile` must
-  pass; any gate fail → reset worktree + automatic Claude fallback.
-- **Telemetry:** pilot runs → `service=fleet-pilot`; fallback Claude runs → `meta.pilot_fallback=true`.
-  Pass rate: `fleet-pilot ok runs ÷ (fleet-pilot runs + pilot_fallback runs)`.
-- **To disable:** `unset CODING_PILOT` or set to `0`. No code change needed.
-- Pilot window: ≤20 cases or 2 weeks; success bar ≥70% gate-pass AND ≥90% cost reduction vs Sonnet.
+Open-weight lane (qwen-2.5-coder-32b via OpenRouter) replaces Claude for `simple` tasks when
+`CODING_PILOT=1` on the dispatch server (unset by default — never enable without owner approval).
+Never piloted: P0/P1, medium/complex, or >2/day/server. Gate: after pilot commits, `tsc --noEmit`
+(frontend/agent-worker/orchestrator) + `py_compile` must pass; any fail → reset worktree + automatic
+Claude fallback. Telemetry: pilot → `service=fleet-pilot`; fallback → `meta.pilot_fallback=true`;
+pass rate = fleet-pilot ok ÷ (fleet-pilot + pilot_fallback). Disable: unset or `0`.
+Window: ≤20 cases or 2 weeks; success bar ≥70% gate-pass AND ≥90% cost reduction vs Sonnet.
 
 ## Code Review
-```bash
-/codex:review                    # pre-commit — run before every commit
-./agents/review-pipeline.sh <branch> && ./agents/collect-reviews.sh --wait <branch>
-```
-ANY reviewer FAIL = branch blocked. No exceptions. Codex pre-commit review is mandatory but separate from Rule 8 pipeline.
+`/codex:review` before every commit (mandatory; separate from Rule 8 pipeline), then
+`./agents/review-pipeline.sh <branch> && ./agents/collect-reviews.sh --wait <branch>`.
+ANY reviewer FAIL = branch blocked. No exceptions.
 
 ## Deployment
-- **Backend (Railway)**: auto-deploys on push to `master` (~2 min)
-- **Frontend (Vercel)**: auto-deploys via CI on push to `master` (paths: `frontend/**`)
-- Agents on Hetzner: push branch → request merge+deploy from coordinator
+Backend (Railway) auto-deploys on push to `master` (~2 min); frontend (Vercel) via CI on push to
+`master` (paths `frontend/**`). Agents on Hetzner: push branch → request merge+deploy from coordinator.
 
 ## Git Discipline
 | # | Rule |
