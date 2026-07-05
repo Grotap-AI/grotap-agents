@@ -90,19 +90,13 @@ SSH: always `ssh agent-NN` aliases. Never raw IP. Key: `~/.ssh/grotap_agents`. a
 agent-08: systemd services `grotap-dispatch` + `grotap-watchdog` — both must always run. Max 3 tasks/server via worktrees.
 Git auth on exec servers (02–06): `credential.helper = /home/agent/bin/git-credential-doppler` (fetches `GITHUB_TOKEN` from Doppler per call — survives token rotation; installed 2026-07-03 after the 6/25 rotation silently broke `$GH_PUSH_TOKEN`-based auth fleet-wide for 8 days). NEVER set a static token in `~/.env`; if git auth fails, check `doppler me` works as the `agent` user first.
 
-## Dispatch — ONCE DAILY at High Noon (12:00 UTC) — changed 2026-06-28
-**The old "24/7, never idle" policy is RETIRED.** Per the platform owner (2026-06-28), pipeline
-work + agent assignment run **once a day at 12:00 UTC**, NOT continuously. Do NOT restart
-`continuous-dispatch.sh` or any always-on dispatch loop/systemd service.
-- Scheduled: agent-06 root cron `auto_dispatch_dependents.py` at `0 12 * * *`; backend
-  `pipeline_automation` row anchored to 12:00 UTC daily (interval_hours=24).
-- Manual one-off dispatch is still fine when a human asks:
+## Dispatch — CONTINUOUS (changed 2026-07-05; supersedes once-daily noon)
+Backend `pipeline_automation` loop assigns every 3 min + completion-webhook refill; orchestrator
+owns run lifecycle. Manual one-off dispatch when a human asks:
 ```bash
 bash agents/dispatch.sh <task.md> <server-ip> <session>   # manual
 bash agents/dispatch-execute.sh <task.md> <session>       # auto-route (most free slots)
-bash agents/server-status.sh                              # check slots/load
 ```
-Priority within a run: `pending/` first, then `active/` backlog, lowest ID first. Verify tmux sessions after dispatch.
 
 ## Coding Pilot (CODING_PILOT env flag)
 Open-weight lane (qwen-2.5-coder-32b via OpenRouter) runs **instead of Claude** for `simple` tasks
@@ -195,3 +189,10 @@ ANY reviewer FAIL = branch blocked. No exceptions. Codex pre-commit review is ma
 | 4 | **Tests must import the production code they verify — never reimplement the formula in the test file** (drift is then undetectable), and never assert tautologies like `assertEqual(f(x), round(x, n))` where both sides are the same expression. If the logic isn't importable, extract it into a helper first; that refactor IS the task. |
 | 5 | **`require_company_role` checks the caller's role in their OWN tenant only — it never verifies brand/resource ownership.** A brand-scoped endpoint gated by it lets any company admin act on ANY brand_id (a real-money payout endpoint shipped this way). Money-movement and cross-brand endpoints must gate grotap-admin (`_is_grotap_user`) or verify ownership of the specific resource. |
 | 6 | **A new router file is DEAD CODE until `app.include_router(...)` lands in main.py.** Registering it is part of the task; grep main.py for the registration before reporting done (same family as "importing a helper is not wiring it"). |
+
+## Fleet-Outage Lessons (2026-07-05 exit-127 / 3-strike burn-down)
+| # | Lesson |
+|---|---|
+| 1 | **`railway up` is NOT done until the deployment shows SUCCESS.** A failed healthcheck silently leaves the OLD image live (the fixed orchestrator sat unshipped 3.5h while the broken one 3-struck 40+ cases). After any `railway up`: `railway status --json` → latestDeployment.status must be SUCCESS; healthcheck window must cover slow boot work (orchestrator boot-scan ≈60s → timeout 300s). |
+| 2 | **Failure-triggered instant re-assign turns a systemic fault into a retry massacre.** With the completion webhook refilling on every `failed`, one broken dispatch path burned all 3 strikes per case in ~6 min. Any auto-retry on failure needs backoff or a circuit breaker (N fast-fails in a row on one host/path → pause that path, alert). |
+| 3 | **Infra-caused dispatch failures are `failed_infra`, not `failed`** — they must not count toward the 3-strike case kill. When resurrecting: relabel rows, reset case to `plan_approved`, skip decomposed parents. |
