@@ -18,14 +18,15 @@ and deploy after sign-off. Do not invent — execute the plan exactly.
 8. Commit and push your branch — uncommitted work is invisible
 9. Submit branch for review: `./agents/review-pipeline.sh <branch>`
 10. Wait for all 4 PASS verdicts — `./agents/collect-reviews.sh --wait <branch>`
-11. If ALL PASS: merge to master — `git checkout master && git pull origin master && git merge origin/<branch> && git push origin master`
-12. If ANY FAIL: fix the issues, re-push, re-submit for review. Do NOT merge.
-13. Deploy per GLOBAL "Deployment" (push to master → Railway auto-deploy + Vercel CI)
-14. Verify Railway deployment: `railway deployment list --service grotap-backend`
-    — confirm SUCCESS not BUILDING
+11. **NEVER merge to master yourself.** The review gate (agent-06, every 4h) / orchestrator
+    (AUTO_APPROVE_GREEN) owns the merge — a second merger races it. On 4 PASS: report
+    done-pending-merge in your handoff and stop.
+12. If ANY FAIL: fix the issues, re-push, re-submit for review.
+13. Merge triggers deploy automatically (Railway auto-deploy + Vercel CI per GLOBAL "Deployment");
+    the gate verifies deployment status.
 
-## ⛔ A task is NOT complete until the branch is MERGED to master and DEPLOYED.
-Pushing a branch is not done. Passing review is not done. Only merged + deployed = done.
+## ⛔ A task is NOT complete until the branch is MERGED to master (by the gate) and DEPLOYED.
+Pushing a branch is not done. Passing review is not done. Your job ends at 4-PASS + handoff.
 
 ## Hard Stops
 - Do not deploy if any reviewer returned FAIL
