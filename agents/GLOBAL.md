@@ -72,22 +72,19 @@ Code: `platform/` | Docs: `docs/` | Tasks: `agents/tasks/`
 - Grotap tenant Neon: `proud-union-74070434` / ID: `c7d02593-955c-4ff4-8117-3b2bb267f518`
 - Railway project: `f9bf333c-f929-413e-a95c-7923e10b5777`
 
-## Agent Servers
+## Agent Servers (dispatch pool = FLEET_HOSTS on the orchestrator — keep in sync)
 | Server | IP | Roles |
 |---|---|---|
-| agent-01 | 5.161.189.143 | Execute (primary) |
-| agent-02 | 5.161.74.39 | Intake, Triage, Security Reviewer; overflow exec |
-| agent-03 | 5.161.81.193 | Planner, Fix/Logic/Policy/Perf Reviewer; overflow exec |
-| agent-04 | 178.156.222.220 | Execute (primary), Change Reviewer, Build Validator |
-| agent-05 | 5.161.73.195 | Pipeline Detail, Audit, Mobile; overflow exec |
-| agent-06 | 5.78.178.81 | **Deploy only — 0 exec slots. Never dispatch tasks here.** |
-| agent-07 | 89.167.66.105 | Execute (primary) |
-| agent-08 | 77.42.42.213 | **Dispatch Coordinator** + Execute (2 slots) |
-| agent-09 | 46.62.184.50 | Execute (primary) |
-| agent-10 | 46.62.184.52 | Execute (primary) |
+| agent-02 | 5.161.74.39 | Execute (3 slots); Intake, Triage, Security Reviewer |
+| agent-03 | 5.161.81.193 | Execute (3 slots); Planner, Fix/Logic/Policy/Perf Reviewer |
+| agent-04 | 178.156.222.220 | Execute (3 slots); Change Reviewer, Build Validator |
+| agent-05 | 5.161.73.195 | Execute (3 slots); Pipeline Detail, Audit, Mobile |
+| agent-06 | 5.78.178.81 | **Dispatch Coordinator + Deploy Ops** + Execute (2 slots) |
+| agent-01 | 5.161.189.143 | Cobrowse AI agents host — not in dispatch pool |
+| agent-07/09/10 | — | Idle, decommission pending. agent-08 RETIRED 4/29 (was coordinator). Never dispatch to any of these. |
 
-SSH: always `ssh agent-NN` aliases. Never raw IP. Key: `~/.ssh/grotap_agents`. agent-01/08: `User agent`. All others: `User root`.
-agent-08: systemd services `grotap-dispatch` + `grotap-watchdog` — both must always run. Max 3 tasks/server via worktrees.
+SSH: always `ssh agent-NN` aliases. Never raw IP. Key: `~/.ssh/grotap_agents`. agent-01: `User agent`. All others: `User root`.
+agent-06: systemd services `grotap-dispatch` + `grotap-watchdog` — both must always run. Max 3 tasks/server via worktrees.
 Git auth on exec servers (02–06): `credential.helper = /home/agent/bin/git-credential-doppler` (fetches `GITHUB_TOKEN` from Doppler per call — survives token rotation; installed 2026-07-03 after the 6/25 rotation silently broke `$GH_PUSH_TOKEN`-based auth fleet-wide for 8 days). NEVER set a static token in `~/.env`; if git auth fails, check `doppler me` works as the `agent` user first.
 
 ## Dispatch — CONTINUOUS (changed 2026-07-05; supersedes once-daily noon)

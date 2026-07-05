@@ -42,6 +42,16 @@ mkdir -p "$HOME/logs" "$WORKTREE_ROOT"
 
 log() { echo "[$(date -u +%H:%M:%S)] $*" >> "$LOG"; }
 
+# ── Shared-repo lock ──────────────────────────────────────────────────────────
+# Up to 3 runners share $PLATFORM_DIR per server; concurrent fetch / worktree
+# add / push race on refs ("cannot lock ref ... but expected") and killed
+# bootstraps ~60s in (52 failed dispatches on 2026-07-05). Serialize every git
+# op that mutates the shared clone. The fd lock releases automatically on exit,
+# so emit()'s exit paths can never leak a held lock.
+REPO_LOCK="$HOME/.grotap-platform.git.lock"
+repo_lock()   { exec 9>"$REPO_LOCK"; flock -w 300 9 || log "WARN: repo lock timeout — proceeding unlocked"; }
+repo_unlock() { exec 9>&- 2>/dev/null || true; }
+
 # Emit the machine-readable result line and exit. python3 handles JSON escaping.
 # Optional 7th arg = a verify JSON object string (Layer 9 build/lint evidence).
 emit() {
@@ -104,12 +114,13 @@ ensure_repo() {
     ensure_git_auth   # re-assert repo-scope helper now that .git exists
   fi
   cd "$PLATFORM_DIR" || return 1
-  git fetch origin master --quiet >> "$LOG" 2>&1
+  git fetch origin master --quiet >> "$LOG" 2>&1 || { sleep 5; git fetch origin master --quiet >> "$LOG" 2>&1; }
 }
 
 # ── Merge mode ───────────────────────────────────────────────────────────────
 if [ "${1:-}" = "--merge" ]; then
   BRANCH="$(printf '%s' "$PAYLOAD" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("branch",""))')"
+  repo_lock  # held until exit — merge mode checkouts/pulls the shared clone directly
   ensure_repo || { echo '{"merged": false, "error": "repo unavailable"}'; exit 1; }
   log "Merging $BRANCH → master"
   git checkout master --quiet >> "$LOG" 2>&1
@@ -152,6 +163,7 @@ print("PRIOR_ERRORS=" + shlex.quote("\n---\n".join(d.get("prior_errors") or []))
 
 log "=== Execute case=$CASE_ID branch=$BRANCH attempt=$ATTEMPT ==="
 
+repo_lock
 ensure_repo || emit "failed" "$BRANCH" 1 "Platform repo unavailable" "Could not clone/fetch grotap-platform" 0
 
 # Fresh worktree per attempt (idempotent: remove a stale one first).
@@ -161,6 +173,7 @@ git branch -D "$BRANCH" >> "$LOG" 2>&1 || true
 if ! git worktree add -b "$BRANCH" "$WT" origin/master >> "$LOG" 2>&1; then
   emit "failed" "$BRANCH" 1 "Could not create worktree/branch" "git worktree add failed" 0
 fi
+repo_unlock  # the long Claude run must not hold the shared-repo lock
 cd "$WT" || emit "failed" "$BRANCH" 1 "Worktree missing" "cd into worktree failed" 0
 
 # ── Build the Claude CLI prompt ──────────────────────────────────────────────
@@ -409,9 +422,12 @@ if [ -n "$VALID_ERR" ]; then
 fi
 
 # ── Push branch (orchestrator decides on merge later, after human gate) ──────
+repo_lock  # pushes update shared remote-tracking refs — same race as fetch
 if ! git push -u origin "$BRANCH" --force-with-lease >> "$LOG" 2>&1; then
+  repo_unlock
   emit "failed" "$BRANCH" 1 "git push failed" "Could not push branch" "$TOKENS" "$(build_verify_json 1)"
 fi
+repo_unlock
 
 log "=== Success case=$CASE_ID branch=$BRANCH tokens=$TOKENS checks=[$VERIFY_CHECKS] ==="
 emit "success" "$BRANCH" 0 "" "$RESULT_TEXT" "$TOKENS" "$(build_verify_json 1)"
