@@ -11,34 +11,38 @@
     background: #0d1117;
     color: #e6edf3;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
-    padding: 40px;
+    padding: 24px 32px;
     min-height: 100vh;
   }
 
-  h1 {
-    font-size: 3.2rem;
+  /* Header: title left, summary right */
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  .header-left h1 {
+    font-size: 2rem;
     font-weight: 700;
-    text-align: center;
-    margin-bottom: 12px;
     letter-spacing: -0.5px;
     background: linear-gradient(135deg, #58a6ff, #bc8cff);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
   }
 
-  .subtitle {
-    text-align: center;
-    font-size: 1.3rem;
+  .header-left .subtitle {
+    font-size: 0.95rem;
     color: #8b949e;
-    margin-bottom: 40px;
+    margin-top: 2px;
   }
 
-  /* Summary Bar */
   .summary-bar {
     display: flex;
-    justify-content: center;
-    gap: 48px;
-    margin-bottom: 48px;
+    gap: 32px;
     flex-wrap: wrap;
   }
 
@@ -47,43 +51,87 @@
   }
 
   .summary-value {
-    font-size: 4rem;
+    font-size: 2.2rem;
     font-weight: 800;
     line-height: 1;
   }
 
   .summary-label {
-    font-size: 1.3rem;
+    font-size: 0.75rem;
     color: #8b949e;
-    margin-top: 6px;
+    margin-top: 2px;
     text-transform: uppercase;
-    letter-spacing: 2px;
+    letter-spacing: 1.5px;
   }
 
   .summary-value.total { color: #58a6ff; }
   .summary-value.running { color: #3fb950; }
   .summary-value.pending { color: #d29922; }
+  .summary-value.active { color: #58a6ff; }
 
-  /* Server Grid */
+  /* Department section headers */
+  .dept-header {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 8px;
+    margin-bottom: 4px;
+  }
+
+  .dept-label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    padding: 3px 12px;
+    border-radius: 999px;
+  }
+
+  .dept-label.software {
+    background: rgba(88, 166, 255, 0.1);
+    color: #58a6ff;
+    border: 1px solid rgba(88, 166, 255, 0.2);
+  }
+
+  .dept-label.marketing {
+    background: rgba(63, 185, 80, 0.1);
+    color: #3fb950;
+    border: 1px solid rgba(63, 185, 80, 0.2);
+  }
+
+  .dept-line {
+    flex: 1;
+    height: 1px;
+    background: rgba(255,255,255,0.06);
+  }
+
+  /* Marketing role badge */
+  .role-badge.marketing {
+    background: rgba(63, 185, 80, 0.12);
+    color: #3fb950;
+    border: 1px solid rgba(63, 185, 80, 0.25);
+  }
+
+  /* Server Grid — compact */
   .server-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(520px, 1fr));
-    gap: 28px;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 12px;
     max-width: 1800px;
-    margin: 0 auto;
   }
 
   .server-card {
     background: #161b22;
-    border-radius: 16px;
-    padding: 32px 36px;
-    border-left: 6px solid;
-    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    border-radius: 10px;
+    padding: 14px 18px;
+    border-left: 4px solid;
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
   }
 
   .server-card:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 8px 30px rgba(0,0,0,0.4);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
   }
 
   .server-card.running { border-left-color: #3fb950; }
@@ -93,21 +141,21 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 20px;
+    margin-bottom: 8px;
   }
 
   .server-name {
-    font-size: 2.2rem;
+    font-size: 1.2rem;
     font-weight: 700;
   }
 
   .status-badge {
     display: flex;
     align-items: center;
-    gap: 10px;
-    font-size: 1.2rem;
+    gap: 6px;
+    font-size: 0.8rem;
     font-weight: 600;
-    padding: 6px 18px;
+    padding: 3px 10px;
     border-radius: 999px;
   }
 
@@ -122,85 +170,65 @@
   }
 
   .status-dot {
-    width: 14px;
-    height: 14px;
+    width: 8px;
+    height: 8px;
     border-radius: 50%;
     display: inline-block;
   }
 
   .status-dot.running {
     background: #3fb950;
-    box-shadow: 0 0 8px #3fb950;
+    box-shadow: 0 0 6px #3fb950;
     animation: pulse-green 2s infinite;
   }
 
   .status-dot.pending {
     background: #d29922;
-    box-shadow: 0 0 8px #d29922;
+    box-shadow: 0 0 6px #d29922;
     animation: pulse-yellow 2s infinite;
   }
 
   @keyframes pulse-green {
-    0%, 100% { box-shadow: 0 0 4px #3fb950; }
-    50% { box-shadow: 0 0 16px #3fb950; }
+    0%, 100% { box-shadow: 0 0 3px #3fb950; }
+    50% { box-shadow: 0 0 12px #3fb950; }
   }
 
   @keyframes pulse-yellow {
-    0%, 100% { box-shadow: 0 0 4px #d29922; }
-    50% { box-shadow: 0 0 16px #d29922; }
-  }
-
-  .server-ip {
-    font-size: 1.4rem;
-    color: #8b949e;
-    font-family: 'Consolas', 'Courier New', monospace;
-    margin-bottom: 20px;
-  }
-
-  .server-spec {
-    font-size: 1.05rem;
-    color: #6e7681;
-    margin-bottom: 22px;
+    0%, 100% { box-shadow: 0 0 3px #d29922; }
+    50% { box-shadow: 0 0 12px #d29922; }
   }
 
   .modules-section {
-    margin-bottom: 8px;
+    margin-bottom: 4px;
   }
 
   .module-group {
-    margin-bottom: 16px;
+    margin-bottom: 6px;
   }
 
   .module-name {
-    font-size: 1.15rem;
+    font-size: 0.7rem;
     color: #bc8cff;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 1.5px;
-    margin-bottom: 10px;
+    letter-spacing: 1.2px;
+    margin-bottom: 4px;
   }
 
   .roles {
     display: flex;
     flex-wrap: wrap;
-    gap: 10px;
+    gap: 5px;
   }
 
   .role-badge {
-    font-size: 1.15rem;
+    font-size: 0.8rem;
     font-weight: 600;
-    padding: 8px 18px;
-    border-radius: 10px;
+    padding: 3px 10px;
+    border-radius: 6px;
     background: rgba(88, 166, 255, 0.12);
     color: #58a6ff;
     border: 1px solid rgba(88, 166, 255, 0.25);
-  }
-
-  .role-badge.unassigned {
-    background: rgba(139, 148, 158, 0.1);
-    color: #6e7681;
-    border-color: rgba(139, 148, 158, 0.2);
-    font-style: italic;
   }
 
   .role-badge.overflow {
@@ -210,50 +238,27 @@
     font-style: italic;
   }
 
-  /* Footer */
-  .footer {
-    text-align: center;
-    margin-top: 56px;
-    color: #484f58;
-    font-size: 1.1rem;
-  }
-
-  .footer span { color: #6e7681; }
-
-  .summary-value.active { color: #58a6ff; }
-
-  /* Task Status Section */
+  /* Task Status — compact */
   .task-status {
-    margin-top: 20px;
-    padding: 18px 20px;
-    border-radius: 12px;
+    margin-top: 8px;
+    margin-bottom: 8px;
+    padding: 8px 12px;
+    border-radius: 8px;
     background: rgba(0,0,0,0.25);
     border: 1px solid rgba(255,255,255,0.06);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
   }
 
-  .task-status.idle {
-    border-left: 4px solid #484f58;
-  }
-
-  .task-status.working {
-    border-left: 4px solid #58a6ff;
-    background: rgba(88, 166, 255, 0.06);
-  }
-
-  .task-status.stalled {
-    border-left: 4px solid #f85149;
-    background: rgba(248, 81, 73, 0.06);
-  }
-
-  .task-status.pending-task {
-    border-left: 4px solid #d29922;
-    background: rgba(210, 153, 34, 0.06);
-  }
+  .task-status.idle { border-left: 3px solid #484f58; }
+  .task-status.working { border-left: 3px solid #58a6ff; background: rgba(88, 166, 255, 0.06); }
+  .task-status.stalled { border-left: 3px solid #f85149; background: rgba(248, 81, 73, 0.06); }
+  .task-status.pending-task { border-left: 3px solid #d29922; background: rgba(210, 153, 34, 0.06); }
 
   .task-name {
-    font-size: 1.4rem;
+    font-size: 0.85rem;
     font-weight: 700;
-    margin-bottom: 8px;
   }
 
   .task-status.idle .task-name { color: #6e7681; }
@@ -262,34 +267,17 @@
   .task-status.pending-task .task-name { color: #d29922; }
 
   .task-duration {
-    display: inline-block;
-    font-size: 1.05rem;
+    font-size: 0.75rem;
     font-weight: 600;
-    padding: 4px 14px;
+    padding: 2px 8px;
     border-radius: 999px;
+    white-space: nowrap;
   }
 
-  .task-status.idle .task-duration {
-    background: rgba(139, 148, 158, 0.12);
-    color: #6e7681;
-  }
-
-  .task-status.working .task-duration {
-    background: rgba(88, 166, 255, 0.15);
-    color: #58a6ff;
-    animation: pulse-blue 2s infinite;
-  }
-
-  .task-status.stalled .task-duration {
-    background: rgba(248, 81, 73, 0.15);
-    color: #f85149;
-    animation: pulse-red 1.5s infinite;
-  }
-
-  .task-status.pending-task .task-duration {
-    background: rgba(210, 153, 34, 0.12);
-    color: #d29922;
-  }
+  .task-status.idle .task-duration { background: rgba(139, 148, 158, 0.12); color: #6e7681; }
+  .task-status.working .task-duration { background: rgba(88, 166, 255, 0.15); color: #58a6ff; }
+  .task-status.stalled .task-duration { background: rgba(248, 81, 73, 0.15); color: #f85149; }
+  .task-status.pending-task .task-duration { background: rgba(210, 153, 34, 0.12); color: #d29922; }
 
   @keyframes pulse-blue {
     0%, 100% { box-shadow: 0 0 4px rgba(88, 166, 255, 0.3); }
@@ -303,22 +291,31 @@
 
   .task-indicator {
     display: inline-block;
-    width: 10px;
-    height: 10px;
+    width: 7px;
+    height: 7px;
     border-radius: 50%;
-    margin-right: 8px;
+    margin-right: 6px;
     vertical-align: middle;
   }
 
   .task-indicator.idle { background: #484f58; }
-  .task-indicator.working { background: #58a6ff; box-shadow: 0 0 8px #58a6ff; animation: pulse-blue 2s infinite; }
-  .task-indicator.stalled { background: #f85149; box-shadow: 0 0 8px #f85149; animation: pulse-red 1.5s infinite; }
+  .task-indicator.working { background: #58a6ff; box-shadow: 0 0 6px #58a6ff; animation: pulse-blue 2s infinite; }
+  .task-indicator.stalled { background: #f85149; box-shadow: 0 0 6px #f85149; animation: pulse-red 1.5s infinite; }
   .task-indicator.pending-task { background: #d29922; }
 
-  /* Footer refresh info */
+  /* Footer */
+  .footer {
+    text-align: center;
+    margin-top: 24px;
+    color: #484f58;
+    font-size: 0.85rem;
+  }
+
+  .footer span { color: #6e7681; }
+
   .footer-refresh {
-    margin-top: 8px;
-    font-size: 1rem;
+    margin-top: 4px;
+    font-size: 0.8rem;
     color: #484f58;
   }
 
@@ -330,31 +327,40 @@
 </head>
 <body>
 
-<h1>Grotap Agent Cluster Dashboard</h1>
-<p class="subtitle">Hetzner Cloud &mdash; Multi-DC Fleet &mdash; Ashburn + Hillsboro + Helsinki &mdash; 8 Servers Live</p>
-
-<!-- Summary Bar -->
-<div class="summary-bar">
-  <div class="summary-item">
-    <div class="summary-value total">8</div>
-    <div class="summary-label">Total Servers</div>
+<!-- Header: title left, numbers right -->
+<div class="header">
+  <div class="header-left">
+    <h1>Grotap Agent Cluster</h1>
+    <div class="subtitle">Hetzner Cloud + Dedicated &mdash; Ashburn + Hillsboro + Helsinki</div>
   </div>
-  <div class="summary-item">
-    <div class="summary-value running">8</div>
-    <div class="summary-label">Running</div>
-  </div>
-  <div class="summary-item">
-    <div class="summary-value pending">0</div>
-    <div class="summary-label">Pending</div>
-  </div>
-  <div class="summary-item">
-    <div class="summary-value active" id="active-tasks-count">0</div>
-    <div class="summary-label">Active Tasks</div>
+  <div class="summary-bar">
+    <div class="summary-item">
+      <div class="summary-value total">11</div>
+      <div class="summary-label">Servers</div>
+    </div>
+    <div class="summary-item">
+      <div class="summary-value running">10</div>
+      <div class="summary-label">Running</div>
+    </div>
+    <div class="summary-item">
+      <div class="summary-value pending">0</div>
+      <div class="summary-label">Pending</div>
+    </div>
+    <div class="summary-item">
+      <div class="summary-value active" id="active-tasks-count">0</div>
+      <div class="summary-label">Tasks</div>
+    </div>
   </div>
 </div>
 
 <!-- Server Grid -->
 <div class="server-grid">
+
+  <!-- Department: Software Development -->
+  <div class="dept-header">
+    <span class="dept-label software">Software Development</span>
+    <div class="dept-line"></div>
+  </div>
 
   <!-- Agent-01 -->
   <div class="server-card running" data-agent="agent-01">
@@ -362,8 +368,6 @@
       <div class="server-name">Agent-01</div>
       <div class="status-badge running"><span class="status-dot running"></span> Running</div>
     </div>
-    <div class="server-ip">5.161.189.143</div>
-    <div class="server-spec">cpx21 &bull; 3 vCPU &bull; 4 GB RAM &bull; Ubuntu 24.04</div>
     <div class="task-status idle" id="task-agent-01">
       <div class="task-name"><span class="task-indicator idle"></span>Idle</div>
       <span class="task-duration">&mdash;</span>
@@ -384,8 +388,6 @@
       <div class="server-name">Agent-02</div>
       <div class="status-badge running"><span class="status-dot running"></span> Running</div>
     </div>
-    <div class="server-ip">5.161.74.39</div>
-    <div class="server-spec">cpx21 &bull; 3 vCPU &bull; 4 GB RAM &bull; Ubuntu 24.04</div>
     <div class="task-status idle" id="task-agent-02">
       <div class="task-name"><span class="task-indicator idle"></span>Idle</div>
       <span class="task-duration">&mdash;</span>
@@ -419,8 +421,6 @@
       <div class="server-name">Agent-03</div>
       <div class="status-badge running"><span class="status-dot running"></span> Running</div>
     </div>
-    <div class="server-ip">5.161.81.193</div>
-    <div class="server-spec">cpx21 &bull; 3 vCPU &bull; 4 GB RAM &bull; Ubuntu 24.04</div>
     <div class="task-status idle" id="task-agent-03">
       <div class="task-name"><span class="task-indicator idle"></span>Idle</div>
       <span class="task-duration">&mdash;</span>
@@ -456,8 +456,6 @@
       <div class="server-name">Agent-04</div>
       <div class="status-badge running"><span class="status-dot running"></span> Running</div>
     </div>
-    <div class="server-ip">178.156.222.220</div>
-    <div class="server-spec">cpx21 &bull; 3 vCPU &bull; 4 GB RAM &bull; Ubuntu 24.04</div>
     <div class="task-status idle" id="task-agent-04">
       <div class="task-name"><span class="task-indicator idle"></span>Idle</div>
       <span class="task-duration">&mdash;</span>
@@ -486,8 +484,6 @@
       <div class="server-name">Agent-05</div>
       <div class="status-badge running"><span class="status-dot running"></span> Running</div>
     </div>
-    <div class="server-ip">5.161.73.195</div>
-    <div class="server-spec">cpx21 &bull; 3 vCPU &bull; 4 GB RAM &bull; Ubuntu 24.04</div>
     <div class="task-status idle" id="task-agent-05">
       <div class="task-name"><span class="task-indicator idle"></span>Idle</div>
       <span class="task-duration">&mdash;</span>
@@ -515,14 +511,12 @@
     </div>
   </div>
 
-  <!-- Agent-06 (Hetzner Project 2 / HETZNER_API_TOKEN_2 — Hillsboro, OR — Ops/Monitoring) -->
+  <!-- Agent-06 -->
   <div class="server-card running" data-agent="agent-06">
     <div class="card-header">
       <div class="server-name">Agent-06</div>
       <div class="status-badge running"><span class="status-dot running"></span> Running</div>
     </div>
-    <div class="server-ip">5.78.178.81</div>
-    <div class="server-spec">cpx31 &bull; 4 vCPU &bull; 8 GB RAM &bull; Ubuntu 24.04 &bull; Hillsboro, OR (Token 2)</div>
     <div class="task-status idle" id="task-agent-06">
       <div class="task-name"><span class="task-indicator idle"></span>Idle</div>
       <span class="task-duration">&mdash;</span>
@@ -547,14 +541,12 @@
     </div>
   </div>
 
-  <!-- Agent-07 (Hetzner Project 2 — Debian 13 — Dedicated Executor) -->
+  <!-- Agent-07 -->
   <div class="server-card running" data-agent="agent-07">
     <div class="card-header">
       <div class="server-name">Agent-07</div>
       <div class="status-badge running"><span class="status-dot running"></span> Running</div>
     </div>
-    <div class="server-ip">89.167.66.105</div>
-    <div class="server-spec">Debian 13 &bull; 3 worktree slots &bull; Hetzner (Token 2)</div>
     <div class="task-status idle" id="task-agent-07">
       <div class="task-name"><span class="task-indicator idle"></span>Idle</div>
       <span class="task-duration">&mdash;</span>
@@ -569,14 +561,12 @@
     </div>
   </div>
 
-  <!-- Agent-08 (Hetzner Project 2 — Helsinki — Debian 13 — Dedicated Executor) -->
+  <!-- Agent-08 -->
   <div class="server-card running" data-agent="agent-08">
     <div class="card-header">
       <div class="server-name">Agent-08</div>
       <div class="status-badge running"><span class="status-dot running"></span> Running</div>
     </div>
-    <div class="server-ip">77.42.42.213</div>
-    <div class="server-spec">Debian 13 &bull; 3 worktree slots &bull; Helsinki (Token 2)</div>
     <div class="task-status idle" id="task-agent-08">
       <div class="task-name"><span class="task-indicator idle"></span>Idle</div>
       <span class="task-duration">&mdash;</span>
@@ -591,22 +581,95 @@
     </div>
   </div>
 
+  <!-- Agent-09 -->
+  <div class="server-card running" data-agent="agent-09">
+    <div class="card-header">
+      <div class="server-name">Agent-09</div>
+      <div class="status-badge running"><span class="status-dot running"></span> Running</div>
+    </div>
+    <div class="task-status idle" id="task-agent-09">
+      <div class="task-name"><span class="task-indicator idle"></span>Idle</div>
+      <span class="task-duration">&mdash;</span>
+    </div>
+    <div class="modules-section">
+      <div class="module-group">
+        <div class="module-name">execution</div>
+        <div class="roles">
+          <span class="role-badge">Execute (primary)</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Agent-10 -->
+  <div class="server-card running" data-agent="agent-10">
+    <div class="card-header">
+      <div class="server-name">Agent-10</div>
+      <div class="status-badge running"><span class="status-dot running"></span> Running</div>
+    </div>
+    <div class="task-status idle" id="task-agent-10">
+      <div class="task-name"><span class="task-indicator idle"></span>Idle</div>
+      <span class="task-duration">&mdash;</span>
+    </div>
+    <div class="modules-section">
+      <div class="module-group">
+        <div class="module-name">execution</div>
+        <div class="roles">
+          <span class="role-badge">Execute (primary)</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- Department: Marketing -->
+  <div class="dept-header">
+    <span class="dept-label marketing">Marketing</span>
+    <div class="dept-line"></div>
+  </div>
+
+  <!-- Agent-11 -->
+  <div class="server-card running" data-agent="agent-11">
+    <div class="card-header">
+      <div class="server-name">Agent-11</div>
+      <div class="status-badge running"><span class="status-dot running"></span> Running</div>
+    </div>
+    <div class="task-status idle" id="task-agent-11">
+      <div class="task-name"><span class="task-indicator idle"></span>Idle</div>
+      <span class="task-duration">&mdash;</span>
+    </div>
+    <div class="modules-section">
+      <div class="module-group">
+        <div class="module-name">social media</div>
+        <div class="roles">
+          <span class="role-badge marketing">Instagram</span>
+          <span class="role-badge marketing">Facebook</span>
+          <span class="role-badge marketing">YouTube</span>
+          <span class="role-badge marketing">TikTok</span>
+        </div>
+      </div>
+      <div class="module-group">
+        <div class="module-name">platform</div>
+        <div class="roles">
+          <span class="role-badge marketing">Squarespace</span>
+          <span class="role-badge marketing">Ayrshare</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <div class="footer">
-  Hetzner Project 1 (Ashburn): <span>5 servers</span> &mdash; Project 2 (Hillsboro + Helsinki): <span>3 servers</span> &mdash; All servers live
+  Hetzner Cloud (Ashburn): <span>5 servers</span> &mdash; Cloud (Hillsboro + Helsinki): <span>3 servers</span> &mdash; Dedicated EX44 (Helsinki): <span>3 servers</span>
   <div class="footer-refresh">
-    Last refreshed: <span id="last-refreshed">&mdash;</span> &mdash; Next refresh in <span class="refresh-countdown" id="refresh-countdown">60</span>s
+    Last refreshed: <span id="last-refreshed">&mdash;</span> &mdash; Next refresh in <span class="refresh-countdown" id="refresh-countdown">2</span>s
   </div>
 </div>
 
 <script>
-// ============================================================
-// LIVE DASHBOARD — polls status-server.js every 2 seconds
-// Start server: node platform/agents/status-server.js
-// ============================================================
 const STATUS_URL = "http://localhost:7654";
-const POLL_INTERVAL = 2000; // ms
+const POLL_INTERVAL = 2000;
 let lastData = null;
 let connected = false;
 
@@ -664,7 +727,6 @@ async function poll() {
   }
 }
 
-// Poll immediately, then every 2 seconds
 poll();
 setInterval(poll, POLL_INTERVAL);
 </script>
