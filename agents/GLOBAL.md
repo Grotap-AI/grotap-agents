@@ -24,7 +24,7 @@ Code: `platform/` | Docs: `docs/` | Tasks: `agents/tasks/`
 ## ⚠ Common FAIL Causes — Check Before Committing
 - Unused TS imports → `noUnusedLocals: true` → build error. Remove them.
 - `request.state.tenant_id` → AttributeError → 500. Use `request.state.organization_id`.
-- `RAILWAY_TOKEN` (wrong) — use `RAILWAY_API_TOKEN` for account tokens.
+- `RAILWAY_TOKEN` (wrong) — use `RAILWAY_API_TOKEN` for account tokens. Railway env vars are STATIC (frozen at deploy — they never read Doppler at runtime): after ANY secret rotation in Doppler, refresh EVERY Railway service carrying a copy via `railway variables --set` (audit/sync: `platform/scripts/railway_secret_audit.py`; full procedure + intentional per-service overrides that must NOT be "fixed": `platform/docs/SECRET_ROTATION_RUNBOOK.md`).
 - UPDATE missing `session_id` scope from its SELECT → data leak.
 - Status fields without explicit allowlist validation → security hole.
 - `pipeline_cases` tenant column is `org_id` NOT `organization_id`.
