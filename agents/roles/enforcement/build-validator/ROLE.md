@@ -30,37 +30,6 @@ Errors:
 ```
 
 ## Handoff
-PASS → none (terminal — branch approved for merge and deploy)
+Routes: PASS → none (terminal — branch approved for merge and deploy)
 FAIL → agent-04 / execute (fix build errors)
-next_server: [per verdict]
-next_role: [per verdict]
-priority: normal
-
-## Handoff Template
----
-generated_at_commit: {SESSION_COMMIT}
-generated_at_timestamp: {SESSION_TIMESTAMP}
-generated_by_role: build-validator
-generated_by_server: agent-04
-ticket_id: {ticketId}
-
-## Staleness Declaration
-# Receiving agent MUST compare generated_at_commit to SESSION_COMMIT.
-# If they differ: prepend '⚠️ STALE HANDOFF' and re-read MODULE.md + ROLE.md.
-
-## Task Context
-module: enforcement
-task_type: build
-ticket_description: {description}
-
-## Outputs
-verdict: PASS | FAIL
-ts_errors: {count}
-lint_errors: {count}
-fastapi_starts: YES | NO
-health_routes_present: YES | NO
-
-## Next Role
-next_role: none | execute
-next_server: none | agent-04
-priority: normal
+Output fields: see `agents/roles/shared/handoff-schema.md` → build-validator

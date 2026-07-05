@@ -9,7 +9,7 @@ production — Railway, Vercel, and all infrastructure. It catches the gap betwe
 
 ## Why This Module Exists
 Documented failure patterns that prompted this module:
-1. Vercel does NOT auto-deploy — every frontend change requires manual CLI deploy
+1. Frontend deploys via CI (`deploy-frontend.yml`, paths `frontend/**`) — merges touching only other paths don't redeploy it, and a failed CI run silently leaves prod stale
 2. Railway auto-deploy sometimes fails silently ("no associated build")
 3. Doppler secrets missing from prd config blocked all production deploys
 4. DNS wildcard misconfiguration routed API traffic to Vercel instead of Railway
@@ -21,7 +21,7 @@ Documented failure patterns that prompted this module:
 | Role | When It Runs | What It Checks |
 |---|---|---|
 | Deploy Verifier | After every merge to master | Railway + Vercel deploy status = SUCCESS |
-| Deploy Executor | After build-validator PASS | Runs manual Vercel deploy + confirms Railway auto-deploy |
+| Deploy Executor | Deploy-verifier FAIL | Manual Vercel/Railway (re)deploy when CI/auto-deploy failed |
 | Env Validator | Before deploy OR on schedule | Doppler dev/prd secret parity, required env vars present |
 | Health Monitor | Continuous / on schedule | Polls api.grotap.com/health, apps.grotap.com, agents.grotap.com |
 | DNS Watchdog | On schedule / after infra changes | DNS records match expected targets, no wildcard drift |
@@ -37,10 +37,24 @@ Documented failure patterns that prompted this module:
 All deployment-ops roles run on Agent-06 (cpx31 / 4 vCPU / 8 GB / Hillsboro).
 Agent-06 is the ops/monitoring server — it does not run dev tasks.
 
+## Railway Service IDs (canonical copy — ROLE files reference this table)
+| Service | ID |
+|---|---|
+| grotap-backend | 6cad7f74-9329-406e-b733-719a33c53ac3 |
+| grotap-ingestion-worker | 179c40ce-cd06-4c66-a10b-35b347f1ac67 |
+| grotap-agent-worker | 18c95d3f-c41a-43e8-a552-c358491856af |
+
+## Expected DNS (canonical copy — ROLE files reference this table)
+| Record | Type | Target | Notes |
+|---|---|---|---|
+| apps.grotap.com | CNAME | cname.vercel-dns.com | Vercel frontend |
+| api.grotap.com | CNAME | Railway target | Backend API |
+| agents.grotap.com | CNAME | cname.vercel-dns.com | Agents brand frontend |
+| agents.grotap.ai | CNAME | cname.vercel-dns.com | Agents brand (.ai TLD) |
+| *.grotap.com | — | MUST NOT EXIST | Wildcard was removed — never re-add |
+
 ## Key References
 - Vercel manual deploy: `doppler secrets get VERCEL_TOKEN` + `npx vercel --prod --yes`
 - Railway verify: `railway deployment list --service grotap-backend` → confirm SUCCESS
-- Railway services: backend=6cad7f74, ingestion=179c40ce, agent-worker=18c95d3f
 - Doppler: project=grotap, configs=dev+prd
-- DNS: apps.grotap.com → Vercel, api.grotap.com → Railway, agents.grotap.com → Vercel
 - Health endpoint: GET api.grotap.com/health

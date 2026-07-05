@@ -31,35 +31,6 @@ Next action: {recommendation}
 ```
 
 ## Handoff
-BLOCKED  → agent-03 / fix-reviewer (to address FAIL findings)
+Routes: BLOCKED → agent-03 / fix-reviewer (address FAIL findings)
 APPROVED → agent-04 / execute (ready for execution)
-next_server: [per overall status]
-next_role: [per overall status]
-
-## Handoff Template
----
-generated_at_commit: {SESSION_COMMIT}
-generated_at_timestamp: {SESSION_TIMESTAMP}
-generated_by_role: pipeline-detail
-generated_by_server: agent-05
-ticket_id: {ticketId}
-
-## Staleness Declaration
-# Receiving agent MUST compare generated_at_commit to SESSION_COMMIT.
-# If they differ: prepend '⚠️ STALE HANDOFF' and re-read MODULE.md + ROLE.md.
-
-## Task Context
-module: pipeline
-task_type: pipeline
-ticket_description: {description}
-
-## Outputs
-overall_status: APPROVED | BLOCKED | IN-REVIEW
-reviewers_passed: {list}
-reviewers_failed: {list or NONE}
-reviewers_pending: {list or NONE}
-
-## Next Role
-next_role: fix-reviewer | execute
-next_server: agent-03 | agent-04
-priority: normal | urgent
+Output fields: see `agents/roles/shared/handoff-schema.md` → pipeline-detail

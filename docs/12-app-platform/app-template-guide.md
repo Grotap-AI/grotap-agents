@@ -185,7 +185,7 @@ git push origin feature/app-{suggestion-id}
 ./agents/collect-reviews.sh --wait feature/app-{suggestion-id}
 ```
 
-All 4 reviewers must PASS before merge (Rule 8).
+All 4 reviewers must PASS before merge (Rule 7).
 
 ---
 

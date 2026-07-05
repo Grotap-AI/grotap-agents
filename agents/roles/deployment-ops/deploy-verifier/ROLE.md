@@ -15,11 +15,8 @@ manual deploy, Railway auto-deploy can fail silently, and nobody was checking.
 5. Ingestion-worker deploy fails silently
 
 ## Verification Checklist
-1. Check Railway deployment status for ALL 3 services:
-   - grotap-backend (6cad7f74-9329-406e-b733-719a33c53ac3)
-   - grotap-ingestion-worker (179c40ce-cd06-4c66-a10b-35b347f1ac67)
-   - grotap-agent-worker (18c95d3f-c41a-43e8-a552-c358491856af)
-   - Confirm status == SUCCESS, not BUILDING or FAILED
+1. Check Railway deployment status for ALL 3 services (service IDs: MODULE.md
+   "Railway Service IDs") — confirm status == SUCCESS, not BUILDING or FAILED
 2. Check Vercel deployment status:
    - Compare latest Vercel deploy commit to master HEAD
    - If mismatch → FAIL (frontend not deployed)

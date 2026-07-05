@@ -82,7 +82,7 @@ Seven tabs/screens:
 - Columns: User email, Tenant name, App they're currently on, Last activity, Status
 - **Join Session** button per row — initiates a Cobrowse session with that user
   - User must click "Allow" in their browser before the support agent can see their screen
-  - Session uses `lib/cobrowse.ts` wrapper (Rule 9 — never call Cobrowse SDK directly)
+  - Session uses `lib/cobrowse.ts` wrapper (Rule 8 — never call Cobrowse SDK directly)
 - Grotap users with "Open for Support = true" receive pop-up pings from any user who clicks "Ping for Live Help Now" in the Help menu
 
 ### Tab 5: Scheduled Appointments

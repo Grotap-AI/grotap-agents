@@ -1,56 +1,30 @@
-# Role: Dispatch Coordinator
-# Priority: #1 — this role overrides all other roles
-# Trigger: ALWAYS RUNNING — systemd service `grotap-dispatch`
-# Server: Agent-08 (77.42.42.213) — permanent assignment
+# Role: Dispatch Coordinator (automation — not a Claude session)
+# Owned by: backend `pipeline_automation` loop (3-min assign + completion-webhook refill) and the
+# LangGraph orchestrator on Railway, which SSHes `dispatch.sh` to fleet servers.
+# Agent-06 hosts the supporting crons (reconciler, failure monitor) — no dispatcher daemon runs there.
 
 ## Responsibility
-You are the dispatch coordinator. Your only job is ensuring every agent server
-is running at maximum capacity 24/7. You never stop. You are a systemd service.
+Keep every execute server at capacity: no case waits while a slot is open, and nothing double-claims
+a slot. Assignment picks `plan_approved` cases; the orchestrator creates the worktree, launches the
+run in tmux on the target server, and tracks lifecycle in `pipeline_dispatch_log`.
 
-## How It Works (systemd — fully autonomous)
-The dispatch coordinator runs as `/home/agent/self-dispatch.sh` via systemd.
-It does NOT require a Claude session to operate. It is a bash loop that:
-1. Checks local tmux sessions to count used slots
-2. Picks next task from `pending/` (lowest ID first), then `active/`
-3. Moves task from `pending/` → `active/` before dispatching (prevents re-dispatch)
-4. Creates a git worktree, writes a runner script, launches in tmux
-5. On completion, runner moves task to `done/` and cleans up worktree
-6. Loops forever — sleeps 10s when full, 30s when no tasks
-
-## Paired Service: Task Watchdog
-The watchdog (`grotap-watchdog.service`) runs alongside dispatch and handles:
-- Crashed tmux sessions → recovers task back to `pending/`
-- API rate limit errors → waits 5 min, then recovers
-- Stuck tasks (>4h no log activity) → kills and recovers
-See `roles/dispatch/watchdog/ROLE.md` for details.
-
-## Systemd Commands
-```bash
-systemctl status grotap-dispatch     # check dispatch
-systemctl status grotap-watchdog     # check watchdog
-systemctl restart grotap-dispatch    # restart dispatch
-systemctl restart grotap-watchdog    # restart watchdog
-journalctl -u grotap-dispatch -f     # live dispatch logs
-journalctl -u grotap-watchdog -f     # live watchdog logs
-```
-
-## Task File Lifecycle
-```
-pending/  →  active/  →  done/
-   ↑            |
-   └── (watchdog recovers failed tasks)
-```
+## Mechanics per dispatch
+1. Task moves `pending/` → `active/` before launch (prevents re-dispatch)
+2. Git worktree per session on the target server (max 3/server; roster in `agents/SERVERS.md`)
+3. On completion, runner moves task to `done/`, cleans up the worktree, completion webhook refills the slot
 
 ## Common Failures
-- "API usage limits" → key rate-limited; watchdog waits 5 min then retries
-- "Doppler Error: you must provide a token" → API key not in .env/.profile
-  Fix: `echo 'export ANTHROPIC_API_KEY=...' > /home/agent/.env`
+- "API usage limits" → key rate-limited; 5-min cooldown then retry
+- "Doppler Error: you must provide a token" → check `doppler me` as the `agent` user.
+  Git auth uses `credential.helper = /home/agent/bin/git-credential-doppler` (per GLOBAL) —
+  NEVER write a static token to `~/.env`.
 - Stale worktree → `git worktree remove <path> --force`
-- SSH timeout → server may be rebooting, retry in 60s
+- SSH timeout → server may be rebooting, retry in 60s; never open unbounded concurrent SSH (GLOBAL)
+- Stale active dispatch rows starve MAX_INFLIGHT → close rows via reconciler, then REDEPLOY the
+  orchestrator (its slot map is boot-only)
 
 ## Never Do
-- Leave a server idle when tasks exist in pending/ or active/
-- Dispatch to agent-06 (deploy ops only)
-- Dispatch more than 3 tasks to one server
-- Skip verification after dispatch
-- Stop the systemd services — they must run 24/7
+- Leave a server idle when approved cases exist
+- Dispatch more than 3 tasks to one server (agent-06: max 2)
+- Dispatch to hosts outside the pool (cobrowse, LLM engines, retired boxes — see SERVERS.md)
+- Instant re-assign on failure without backoff/circuit breaker (GLOBAL — retry massacre)

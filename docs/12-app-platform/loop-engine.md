@@ -288,7 +288,7 @@ On migration, **disable the legacy RemoteTrigger routine** `trig_01DJppNaLDUzG5B
 
 ## 10. Frontend
 
-`src/features/loop-engine/` rendered inside **`AppShell`** (Rule 9 — Cobrowse mandatory).
+`src/features/loop-engine/` rendered inside **`AppShell`** (Rule 8 — Cobrowse mandatory).
 `LoopList` table (columns per §1) with **Run now** and **Run next** actions, a run-history
 drawer (`loop_runs`), and a status badge. Use the Inngest realtime pattern (`07-jobs/
 inngest-realtime`) to live-update a loop's status while a run is in progress.
@@ -309,7 +309,7 @@ inngest-realtime`) to live-update a loop's status while a run is in progress.
 7. **Frontend** — `LoopList` in AppShell with Run now / Run next + run history (§10).
 8. **Seed** — create `Sauvie Island Stables Gmail Clean up` loop (§8); **disable legacy
    RemoteTrigger** `trig_01DJppNaLDUzG5Bx5uMNgHtp`.
-9. **Compliance + review** — GitGuardian scan; pass all 4 reviewers (Rule 8) before merge to master.
+9. **Compliance + review** — GitGuardian scan; pass all 4 reviewers (Rule 7) before merge to master.
 
 ---
 

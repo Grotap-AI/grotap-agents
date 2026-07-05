@@ -5,13 +5,13 @@
 ## Module Scope
 The review module contains the four specialized reviewers that evaluate code
 quality, correctness, policy compliance, and performance. All four are part of
-the mandatory 4-reviewer sign-off pipeline (Rule 8).
+the mandatory 4-reviewer sign-off pipeline (Rule 7).
 
 ## Reviewer Responsibilities
 | Role | What It Checks |
 |---|---|
 | Fix Reviewer | Correctness of a bug fix — does it actually solve the problem? |
-| Policy Reviewer | Adherence to platform rules 1–9 and architectural patterns |
+| Policy Reviewer | Adherence to platform Rules 1–8 and architectural patterns |
 | Logic Reviewer | Implementation correctness, edge cases, business logic accuracy |
 | Perf Reviewer | N+1 queries, unbounded loops, render bottlenecks, token waste |
 
@@ -23,15 +23,8 @@ the mandatory 4-reviewer sign-off pipeline (Rule 8).
 - Agents on old branches (far behind master) need cherry-pick to fresh branch
 
 ## Output Standard (all reviewers)
-```
-{ROLE} REVIEW — ticket #{ticket_id}
-Branch: {branch}
-Verdict: PASS | FAIL
-
-Findings:
-- [FAIL] {file}:{line} — {description}
-- [WARN] {file}:{line} — {description}
-```
+Use the Verdict Format Convention in `agents/roles/shared/conventions.md` —
+structured output only, headed `{ROLE} REVIEW — ticket #{ticket_id}` + `Branch: {branch}`.
 
 ## Key References
 - Review scripts: `agents/review-pipeline.sh`, `agents/collect-reviews.sh`

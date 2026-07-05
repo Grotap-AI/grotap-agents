@@ -25,10 +25,9 @@ prolonged undetected downtime in the past.
 | https://agents.grotap.com | 200 OK | 10s |
 | https://agents.grotap.ai | 200 OK | 10s |
 
-### Agent Server SSH Checks
+### Agent Server SSH Checks (roster: `agents/SERVERS.md`)
 | Server | IP | Check |
 |---|---|---|
-| Agent-01 | 5.161.189.143 | SSH port 22 open |
 | Agent-02 | 5.161.74.39 | SSH port 22 open |
 | Agent-03 | 5.161.81.193 | SSH port 22 open |
 | Agent-04 | 178.156.222.220 | SSH port 22 open |
@@ -36,12 +35,7 @@ prolonged undetected downtime in the past.
 | Agent-06 | 5.78.178.81 | localhost (self) |
 
 ### DNS Resolution Checks
-| Domain | Expected Target |
-|---|---|
-| api.grotap.com | Railway (NOT Vercel) |
-| apps.grotap.com | Vercel |
-| agents.grotap.com | Vercel |
-| agents.grotap.ai | cname.vercel-dns.com |
+Resolve each domain and compare to MODULE.md "Expected DNS" (canonical table).
 
 ## Alert Escalation
 - 1 failed check → retry in 30s
@@ -60,7 +54,6 @@ HTTP:
 - agents.grotap.ai: {status} ({response_time}ms)
 
 Agents:
-- agent-01 (5.161.189.143): REACHABLE | UNREACHABLE
 - agent-02 (5.161.74.39): REACHABLE | UNREACHABLE
 - agent-03 (5.161.81.193): REACHABLE | UNREACHABLE
 - agent-04 (178.156.222.220): REACHABLE | UNREACHABLE

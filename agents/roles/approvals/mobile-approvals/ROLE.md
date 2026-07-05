@@ -30,36 +30,6 @@ Decision by: {timestamp or 'awaiting'}
 ```
 
 ## Handoff
-approved  → agent-04 / execute (resume from interrupt)
-rejected  → agent-03 / planner (re-plan)
-expired   → none (escalate to support portal)
-next_server: [per decision]
-next_role: [per decision]
-priority: urgent (approvals block the pipeline)
-
-## Handoff Template
----
-generated_at_commit: {SESSION_COMMIT}
-generated_at_timestamp: {SESSION_TIMESTAMP}
-generated_by_role: mobile-approvals
-generated_by_server: agent-05
-ticket_id: {ticketId}
-
-## Staleness Declaration
-# Receiving agent MUST compare generated_at_commit to SESSION_COMMIT.
-# If they differ: prepend '⚠️ STALE HANDOFF' and re-read MODULE.md + ROLE.md.
-
-## Task Context
-module: approvals
-task_type: approval
-ticket_description: {description}
-
-## Outputs
-decision: approved | rejected | expired
-decided_at: {timestamp or NONE}
-action_requested: {one-line summary}
-
-## Next Role
-next_role: execute | planner | none
-next_server: agent-04 | agent-03 | none
-priority: urgent
+Routes: approved → agent-04 / execute (resume from interrupt) | rejected → agent-03 / planner (re-plan)
+expired → none (escalate to support portal) — priority: urgent (approvals block the pipeline)
+Output fields: see `agents/roles/shared/handoff-schema.md` → mobile-approvals

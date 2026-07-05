@@ -29,34 +29,6 @@ Missing items (in plan, not implemented):
 ```
 
 ## Handoff
-PASS → agent-04 / build-validator
+Routes: PASS → agent-04 / build-validator
 FAIL → agent-03 / planner (re-plan required)
-next_server: [per verdict]
-next_role: [per verdict]
-
-## Handoff Template
----
-generated_at_commit: {SESSION_COMMIT}
-generated_at_timestamp: {SESSION_TIMESTAMP}
-generated_by_role: change-reviewer
-generated_by_server: agent-04
-ticket_id: {ticketId}
-
-## Staleness Declaration
-# Receiving agent MUST compare generated_at_commit to SESSION_COMMIT.
-# If they differ: prepend '⚠️ STALE HANDOFF' and re-read MODULE.md + ROLE.md.
-
-## Task Context
-module: enforcement
-task_type: change-review
-ticket_description: {description}
-
-## Outputs
-verdict: PASS | FAIL
-scope_creep_found: {list or NONE}
-missing_plan_items: {list or NONE}
-
-## Next Role
-next_role: build-validator | planner
-next_server: agent-04 | agent-03
-priority: normal
+Output fields: see `agents/roles/shared/handoff-schema.md` → change-reviewer

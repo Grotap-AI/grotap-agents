@@ -1,42 +1,30 @@
 # Dispatch Module
-# Priority: #1 — dispatch takes precedence over ALL other roles.
-# Assigned to: Agent-08 (77.42.42.213) — two systemd services, never stop.
+# Assignment is owned by the backend continuous loop (every 3 min + completion-webhook refill)
+# and the LangGraph orchestrator on Railway, which SSHes dispatches to the fleet.
+# Agent-06 hosts the supporting monitor/reconciler crons — there is no dispatcher daemon on it.
 
 ## Purpose
-Keep every agent server at maximum capacity 24/7. No server sits idle.
-No task waits in queue while a slot is open. Failed tasks get recovered automatically.
-Agent-08 owns this module permanently.
+Keep every agent server at capacity. No task waits while a slot is open.
+Failed tasks get recovered automatically (reconciler + failure monitor, not left orphaned).
 
-## Roles
-| Role | Service | Script | Purpose |
-|---|---|---|---|
-| Coordinator | `grotap-dispatch` | `/home/agent/self-dispatch.sh` | Pick up tasks, create worktrees, launch in tmux |
-| Watchdog | `grotap-watchdog` | `/home/agent/task-watchdog.sh` | Detect failures, recover tasks back to pending/ |
-
-Both services run 24/7 via systemd with `Restart=always`. They survive reboots.
+## Components
+| Component | Where | Purpose |
+|---|---|---|
+| `pipeline_automation` loop | backend (Railway) | Assigns cases every 3 min; completion webhook refills freed slots |
+| LangGraph orchestrator | Railway | Owns run lifecycle; SSHes `dispatch.sh` to fleet servers |
+| `reconcile_dispatch.py` | agent-06 cron 30m | Closes stale dispatch rows, relabels infra failures (`failed_infra`, no strike) |
+| `pipeline_failure_monitor.py` / `deploy_freshness_watchdog.py` | agent-06 cron 10m/5m | Detect failed runs + stale deploys |
 
 ## Task Lifecycle
-```
-pending/  →  active/  →  done/
-   ↑            |
-   └── watchdog recovers failed tasks
-```
+`pending/ → active/ → done/` — reconciler recovers failed tasks back to pending; API rate-limit
+errors get a 5-min cooldown before re-dispatch. Any auto-retry needs backoff/circuit breaker (GLOBAL).
 
-## Dispatch Order
-1. `agents/tasks/pending/` — lowest ID first
-2. `agents/tasks/active/` — backlog tasks not currently running, lowest ID first
-
-## Tools
+## Tools (platform repo root)
 - `bash agents/dispatch.sh <task.md> <server-ip> <session-name>` — manual dispatch
-- `bash agents/dispatch-execute.sh <task.md> <session-name>` — auto-route
-- `bash agents/install-dispatcher.sh` — install self-dispatch on all servers
+- `bash agents/dispatch-execute.sh <task.md> <session-name>` — auto-route to most free slots
 - `bash agents/server-status.sh` — check slot availability
 
 ## Key Rules
-- Every server supports 3 concurrent tasks (git worktree isolated)
-- Primary executors: agent-01, 04, 07, 08
-- Overflow executors: agent-02, 03, 05 (dispatch when idle)
-- agent-06: deploy ops only, never dispatch execution tasks
-- Watchdog checks every 30s — crashed/stuck/errored tasks auto-recover
-- API rate limit errors trigger 5-min cooldown before re-dispatch
+- Concurrent tasks are git-worktree isolated, max 3 per server
+- Executor pool: agent-04 primary (3 slots); overflow agent-02/03/05 (3 each); agent-06 (2). Roster: `agents/SERVERS.md`.
 - Tasks move pending → active on dispatch, active → done on completion

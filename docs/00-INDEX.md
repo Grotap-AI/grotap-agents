@@ -1,6 +1,6 @@
 # Documentation Index
 
-> Start here: `CLAUDE.md` — stack, rules (9 absolute rules), key patterns. Then `01-platform/platform-summary.md` for platform UX model.
+> Start here: `CLAUDE.md` — stack, rules (8 absolute rules), key patterns. Then `01-platform/platform-summary.md` for platform UX model.
 
 ---
 

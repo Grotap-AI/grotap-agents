@@ -28,35 +28,7 @@ reject malformed tasks, and hand off to triage.
 - `stage` is not `new`
 - Task file is empty or malformed JSON/MD
 
-## Handoff → Triage
-next_role: triage
-next_server: agent-02
-priority: normal (urgent if flags contain `security`)
-
-## Handoff Template
----
-generated_at_commit: {SESSION_COMMIT}
-generated_at_timestamp: {SESSION_TIMESTAMP}
-generated_by_role: intake
-generated_by_server: agent-02
-ticket_id: {ticketId}
-
-## Staleness Declaration
-# Receiving agent MUST compare generated_at_commit to SESSION_COMMIT.
-# If they differ: prepend '⚠️ STALE HANDOFF' and re-read MODULE.md + ROLE.md.
-
-## Task Context
-module: intake
-task_type: intake-validation
-ticket_description: {description}
-
-## Outputs
-stage_set_to: triaged
-flags_detected: {list or NONE}
-validation_result: PASS | REJECT
-rejection_reason: {reason or NONE}
-
-## Next Role
-next_role: triage
-next_server: agent-02
-priority: normal | urgent
+## Handoff
+Routes: PASS → agent-02 / triage (priority urgent if flags contain `security`)
+REJECT → return error to dispatcher with reason
+Output fields: see `agents/roles/shared/handoff-schema.md` → intake

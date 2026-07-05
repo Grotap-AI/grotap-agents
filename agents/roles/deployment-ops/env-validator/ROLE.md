@@ -26,7 +26,7 @@ All of these MUST exist in BOTH dev and prd configs:
 
 ### Deployment
 - VERCEL_TOKEN
-- RAILWAY_TOKEN
+- RAILWAY_API_TOKEN
 
 ### AI / Agents
 - ANTHROPIC_API_KEY
@@ -42,7 +42,6 @@ All of these MUST exist in BOTH dev and prd configs:
 
 ### Security
 - GITGUARDIAN_API_KEY
-- PAGEINDEX_API_KEY
 
 ## Validation Steps
 1. List all secrets in dev: `doppler secrets --project grotap --config dev`

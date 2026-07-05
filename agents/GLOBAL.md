@@ -1,199 +1,132 @@
-# agents/GLOBAL.md — Load order: GLOBAL.md → MODULE.md → ROLE.md → handoff.md
-# Max 200 lines enforced by pre-commit hook.
+# agents/GLOBAL.md — Load order: GLOBAL.md → SERVERS.md → MODULE.md → ROLE.md → handoff.md
+# Max 200 lines enforced by session-init. Dated incident ledgers: agents/LESSONS-ARCHIVE.md (not auto-loaded).
 
 ## Platform
 grotap — multi-tenant AI-powered SaaS. Every feature = discrete app. Tenants subscribe to apps.
-Code: `platform/` | Docs: `docs/` | Tasks: `agents/tasks/`
+Code: `platform/` | Docs: `docs/` | Tasks: `agents/tasks/` | Fleet scripts: platform repo `agents/*.sh`
 
 ## Stack
 | Layer | Tech | Location |
 |---|---|---|
 | Frontend | React + Vercel | `platform/frontend/` |
 | Backend | FastAPI + Railway | `platform/backend/` |
-| Auth | WorkOS JWT | `app/providers/workos.py` |
-| Database | Neon Postgres (db-per-tenant) | control: `green-rice-76766370` |
-| Knowledge | PageIndex (reasoning-based) | `app/providers/pageindex.py` |
+| Auth | WorkOS JWT | `app/providers/workos_provider.py` |
+| Database | Neon Postgres — pooled shards + FORCE RLS (dedicated project = premium) | control: `green-rice-76766370` |
 | Jobs | INNGEST | `platform/agent-worker/` |
 | Agents | LangGraph + LangSmith (TS only) | `platform/agent-worker/` |
-| Storage | Cloudflare R2 → PageIndex | `app/providers/r2.py` |
-| Billing | Stripe metering | `app/providers/stripe.py` |
-| Mobile | Expo MCP | `platform/mobile/` |
-| Cobrowse | Cobrowse.IO | `lib/cobrowse.ts` |
+| Storage | Cloudflare R2 | `app/providers/r2_provider.py` |
+| Billing | Stripe metering | `app/providers/stripe_provider.py` |
+| Mobile | Expo | `platform/mobile/` |
+| Cobrowse | Cobrowse.IO | `frontend/src/lib/cobrowse.ts` |
 | Secret Scan | GitGuardian MCP | compliance-checker node |
-
-## ⚠ Common FAIL Causes — Check Before Committing
-- Unused TS imports → `noUnusedLocals: true` → build error. Remove them.
-- `request.state.tenant_id` → AttributeError → 500. Use `request.state.organization_id`.
-- `RAILWAY_TOKEN` (wrong) — use `RAILWAY_API_TOKEN` for account tokens. Railway env vars are STATIC (frozen at deploy — they never read Doppler at runtime): after ANY secret rotation in Doppler, refresh EVERY Railway service carrying a copy via `railway variables --set` (audit/sync: `platform/scripts/railway_secret_audit.py`; full procedure + intentional per-service overrides that must NOT be "fixed": `platform/docs/SECRET_ROTATION_RUNBOOK.md`).
-- UPDATE missing `session_id` scope from its SELECT → data leak.
-- Status fields without explicit allowlist validation → security hole.
-- `pipeline_cases` tenant column is `org_id` NOT `organization_id`.
-- JSONB: `->>` for text comparison; `->` returns JSONB (type mismatch in WHERE).
-- UNIQUE constraint with COALESCE → invalid Postgres. Use `CREATE UNIQUE INDEX`.
-- `| head -4` in scripts → use `| head -n 4`.
-- **Stay in task scope — do NOT run `npm install`, edit `package.json`/lockfiles, or bump a dependency version unless the task IS explicitly a dependency upgrade.** An unrequested dep bump is an unreviewed platform-wide risk and derails the task (you burn the run touching deps instead of the actual files).
-- **Schema rename/move on an EXISTING tenant → use `ALTER SCHEMA old RENAME TO new` (guarded by `to_regnamespace`), then re-GRANT app_user (USAGE+DML+ALTER DEFAULT PRIVILEGES). NEVER re-`CREATE` the schema — that leaves live data stranded in the old one.** Order rename migration BEFORE the create/alter migrations so existing tenants rename-then-noop and fresh tenants create directly.
-- **Rename/refactor task → before push, `git grep -nE "<old-identifier>"` MUST return zero (minus intended compat shims/redirects), AND `tsc --noEmit` + `py_compile` pass.** Also update the app-catalog slug/name seed (`seed_apps.sql`, `seed_brands_apps.sql`, `control_plane.py`) — a rename that leaves the old slug is not done.
-- **App schema migrations: repo-root `migrations/apps/<slug>/vNNN_*.sql` is canonical, but each file MUST ALSO be copied to `ingestion-worker/migrations/apps/<slug>/`** — appSchemaProvision resolves `__dirname/../../migrations/apps` and the ingestion-worker Dockerfile copies ONLY its own dir; a migration registered in `phase5_app_schema_migrations.sql`/`seed_app_schemas.sql` but absent there = `schema_status='failed'` (ENOENT) on first real subscription. Never `backend/migrations/apps/` either.
-- **RLS tenant-isolation policies MUST use `current_setting('app.current_tenant_id')::uuid`** — NOT `app.tenant_id` or any other name. That is the GUC `tenant_db.py` sets per-connection; a policy keyed on a different GUC silently returns ZERO rows on RLS-enforced (non-owner) tenants while appearing to work on owner-URL tenants. Match the existing tables' policy verbatim.
-- **Frontend + backend built in separate runs → PROVE the wire contract, don't assume it.** Before done: hit the real endpoint and diff field names/shapes/enum casing against the TS types (ScanTap shipped `session_id/device_name/record_id`+nested `data` vs a UI expecting `id/device`+flat rows → every click 500'd on `/scans/undefined`; UI sent `'Reviewed'` vs lowercase DB CHECK → bulk status 100% broken). Map DB rows→UI shape in ONE api layer, never per-page.
-- **Any endpoint that can return unbounded rows MUST paginate (limit/offset + stable ORDER BY tie-breaker) BEFORE it ships.** An unpaginated list endpoint "works" in dev and then returns 58MB/500k rows in prod and crashes the browser tab. Grids: infinite scroll + per-column server-side filters; escape ILIKE metachars (`% _ \`) in every user-supplied pattern.
-- **App slugs: NEVER guess — verify against the `apps` table (`SELECT slug, name FROM apps`) before writing any slug→app mapping, and copy slug facts stated in the task VERBATIM.** The Pipeline app is slug `pipeline` (📋); `agent-pipeline` (⚡) is a DIFFERENT app; `document-upload` displays as "AI Knowledge Base". A release-notes build mapped pipeline→agent-pipeline despite the task stating the trap explicitly — wrong icon + wrong app attribution shipped to review.
-- **Any state machine that marks work FAILED must also release/revert what that work claimed — in the SAME transaction.** Marking a `pipeline_dispatch_log` row failed while leaving its case at `planning` orphaned 32 cases for 2 weeks (auto-assign only selects `plan_approved`, so nothing ever retried them). When you write a failure path, ask: what did the happy path claim (status, slot, lock, row) and who un-claims it on this branch? If the answer is "nobody", the failure is a leak.
-- **Every UI action must call an endpoint that EXISTS (on master or in YOUR branch) — `git grep` the backend router for each path before done.** Two Loop Engine branches shipped New/Edit/Delete/Run buttons against seven endpoints that existed nowhere → every action 404s; both branches were rejected at review. If the task is UI-only and the endpoint is missing, extending the router is in scope — a dead button is not a deliverable.
-- **A DELETE feature covers EVERY delete path, and deletes carry the same org/tenant scope as their SELECTs.** A retention-cascade branch fixed bulk-delete but missed the HI Dismiss single-delete (orphaned rows + leaked R2 objects) and rewrote a deps delete with no org scope (cross-org edge deletion). Grep for every `DELETE FROM <table>`/router delete path touching the entity before calling cascade work done.
-- **Security gates FAIL CLOSED in production when their config is missing.** A virus-scan gate marked uploads 'clean' when `VIRUSTOTAL_API_KEY` was unset; webhook sig-verify returned True when the secret was unset. Dev fallback is fine, but gate it on env: missing key in prd = block + log critical, never silently allow.
-- **Real WorkOS access tokens carry NO `email` claim — our HS256 test JWTs DO.** Any gate keyed on `request.state.user_email` passes Playwright but silently fails for real sessions (AL5 scoping emptied the HI holds list for the owner while /stats counted 49). Middleware now backfills email (cached user_id→email lookup), so `user_email` is reliable — but when you ADD an auth/scoping gate, also probe it with a JWT that OMITS `email` before calling it done.
-- **`tenants.tenant_id` is UUID; `tenant_users.tenant_id` is TEXT — always `str(tenant["tenant_id"])` before passing to queries/helpers.** A webhook reconciliation branch passed the UUID unconverted → asyncpg DataError on EVERY event, swallowed by a blanket except → the whole feature was a silent no-op. And mock tests used string fixtures so they couldn't catch it: fixture types must match the REAL return types of the helpers you mock.
-- **Webhook handlers: verify signature, be idempotent, and return non-2xx on transient failure.** Senders (WorkOS, Stripe) retry only non-2xx; `except Exception: log; return 200` permanently drops the event with no repair sweep. Also assume events arrive out of order and duplicated — a late `updated` after `deleted` must not resurrect a removed row (dedup on event id or guard on status).
-- **A connect flow must request the permissions its CONSUMER needs — trace the whole feature, not your case.** OAuth connect shipped `gmail.readonly` while the executor case (same feature, different branch) trashes/labels — every connected mailbox permanently unable to run the bundle. When a flow is split across cases, verify the handshake artifact (scope, token, schema, enum) against what the downstream case DOES with it.
-- **Global `body` CSS is DARK (`background:#0f0f0f; color:#fff`) — every light-surface element must set its OWN text color, and e2e must assert VISIBILITY, not DOM presence.** ScanTap Inventory Items shipped a `td` style with no `color:` → white text on a white grid; data loaded (200s, 23k rows) but the screen read as "never loads" for weeks, and Playwright passed because rows existed in the DOM. When you build a table/card on a light background, set `color` explicitly (grids use `#374151`), and add a computed-style luminance check to the e2e (see scantap-data-grids.spec.ts "Inventory Items").
-- **"Most recent N" derived from a list endpoint: verify the endpoint's ORDER BY delivers recency — both the sort AND the LIMIT window.** HI recent-answers chips walked `GET /human-intervention/?status=resolved&limit=50` taking the first 5 distinct resolutions, but that endpoint orders priority-then-`created_at ASC` — the walk collected the OLDEST answers, and with >50 resolved rows the recent ones aren't even in the returned page, so client-side sorting can't fix it. Read the producing query before deriving recency; if ordering doesn't match, add an allowlisted order param (e.g. `order=resolved_desc`, with a stable tie-breaker) — never sort a wrongly-windowed page.
-- **Before filtering/querying a 3rd-party system by a key, prove WE emit that key — CURRENT format, CURRENT master.** A LangSmith proxy filtered runs on `metadata.case_id` (orchestrator only sets `thread_id`) → `[]` forever; the fix-forward then matched bare `case_id` while master had moved to `thread_id = case_id:dispatch_id` → `[]` again, invented an undocumented filter DSL form, and passed `project_name` where the API takes `session: [<uuid>]`. Read the producing code on master the day you build, and copy request/response shapes from the provider's current docs (cite the URL in a comment) — never from memory.
-- **Postgres/asyncpg: an error inside an open transaction POISONS it — catching the exception in Python does not recover it.** A cascade helper caught `UndefinedTableError` per child table inside one `conn.transaction()`; the next statement raises `InFailedSQLTransactionError` and the whole delete 500s exactly when a lazily-created table is missing. For optional tables: check `to_regclass('<table>')` first (repo pattern, see c695e06e) or wrap each statement in a nested `async with conn.transaction():` (savepoint).
-- **A stated invariant must be ENFORCED in the write path, not just documented + backfilled.** "Exactly one owner per tenant" shipped as a backfill + docstring while the login role-sync `COALESCE` could demote the owner on next login (reverting the backfill) or mint a second one. Every writer that can violate the invariant must guard it (CASE guard + partial unique index backstop, e.g. `UNIQUE ON (tenant_id) WHERE role='owner'`), and tests must include the violating writer path — a test that codifies the bug is worse than none.
-- **"Private"/visibility features: enumerate EVERY read path that returns the entity before calling it done — `git grep -n "FROM <table>" backend/app/routers/`.** Private apps shipped filtered in one router while the legacy `GET /apps` catalog and `GET /brands/{id}/apps` leaked them platform-wide. And scope visibility to the OWNING TENANT (creator_tenant_id), not the creator user — user-scoping hides a company's private app from the company and follows the creator across tenants.
-- **ONE-TOUCH HUMAN STEPS — owner time is the scarcest resource; a human sent back to a form for a missed field is a FAILED task.** Before any HI hold / instruction that puts a human in a console (GitHub, Doppler, Railway, DNS, WorkOS…): derive the COMPLETE end-state from the consumer's actual code and the verbatim error — every field, permission, scope, repo, setting — then deliver ALL steps in ONE message, state what NOT to touch, and batch every other pending item in that same console into the visit (check open holds first). Verify requirements against reality, not memory: the 7/5 PAT redo happened because instructions said "add workflow scope" (classic-PAT framing) while the real token was fine-grained and needed the Workflows permission explicitly added on the form — one missed dropdown, one extra owner round-trip.
 
 ## ⛔ Absolute Rules — All Agents, No Exceptions
 | # | Rule |
 |---|---|
-| 1 | **DOPPLER ONLY** — No `.env` in CI, no GitHub secrets (except `DOPPLER_SERVICE_TOKEN`). Local: `doppler run -- <cmd>`. CI: `doppler run --` injects all secrets. Update secrets in Doppler (`grotap` prd/dev). NEVER tell human to update GitHub secrets. **NEVER put secret VALUES in chat/prompts/task files/logs/commits — transcripts persist.** When a human must supply a secret, direct them to the Doppler dashboard or a terminal OUTSIDE any AI session; never ask them to paste it to an agent. |
+| 1 | **DOPPLER ONLY** — No `.env` in CI, no GitHub secrets (except `DOPPLER_SERVICE_TOKEN`). Local: `doppler run -- <cmd>`. Update secrets in Doppler (`grotap` prd/dev). NEVER tell a human to update GitHub secrets. **NEVER put secret VALUES in chat/prompts/task files/logs/commits.** Humans supply secrets via the Doppler dashboard or a terminal OUTSIDE any AI session. |
 | 2 | **NO PYTHON FOR AGENTS** — TypeScript/JS only. Python = FastAPI backend only. |
 | 3 | **NO DIRECT 3RD-PARTY CALLS** — All SDK calls via `app/providers/` wrappers. |
-| 4 | **NO SHARED TENANT DATA** — Every DB query scoped to `tenant_id`. No cross-tenant reads. |
-| 5 | **NO SHARED DB SCHEMAS** — Neon database-per-tenant. Never row-level separation. |
+| 4 | **NO CROSS-TENANT DATA** — Every DB query scoped to the tenant. No cross-tenant reads. |
+| 5 | **TENANT ISOLATION VIA RLS** — Default placement is POOLED: tenants share a Neon shard, isolated by FORCE RLS keyed on `current_setting('app.current_tenant_id')::uuid` (set per-connection by `tenant_db.py`). Dedicated Neon project = premium/override path. Never bypass RLS or weaken a policy. |
 | 6 | **NO SKIPPING COMPLIANCE** — GitGuardian MCP + compliance node before every deploy. |
-| 7 | **NO VECTOR EMBEDDINGS** — PageIndex reasoning-based retrieval only. No pgvector. |
-| 8 | **NO MERGE WITHOUT 4-REVIEWER SIGN-OFF** — Build Validator + Logic + Security + Perf = all PASS. Run `./agents/review-pipeline.sh <branch>` then `./agents/collect-reviews.sh --wait <branch>`. |
-| 9 | **AppShell + COBROWSE MANDATORY** — All apps render `AppShell`. Never remove Cobrowse components. Never call Cobrowse SDK directly — use `lib/cobrowse.ts`. |
+| 7 | **NO MERGE WITHOUT 4-REVIEWER SIGN-OFF** — Build Validator + Logic + Security + Perf = all PASS. From platform repo root: `./agents/review-pipeline.sh <branch>` then `./agents/collect-reviews.sh --wait <branch>`. ANY FAIL = branch blocked. |
+| 8 | **AppShell + COBROWSE MANDATORY** — All apps render `AppShell`. Never remove Cobrowse components. SDK only via `lib/cobrowse.ts`. |
+
+## ⚠ Common FAIL Causes — Check Before Committing
+
+### SQL & migrations
+- Control-plane DDL goes ONLY in `backend/db/migrations/control_plane/vNNN_*.sql` — idempotent, one file per txn, FK children after parents. Never inline DDL in `backend/app` (CI guard blocks it); never the retired `backend/migrations/` path. App schemas: repo-root `migrations/apps/<slug>/vNNN_*.sql` AND copy each file to `ingestion-worker/migrations/apps/<slug>/` (its Docker image only ships its own dir; a registered-but-absent file = `schema_status='failed'` on first subscription).
+- Pick the next FREE `vNNN` (grep the dir). Two branches must never both CREATE a table or claim the same number — declare the dependency and let ONE branch own the table's canonical schema.
+- Grep the real migration for schema-qualified table + column names before writing SQL — never invent columns. Need a new column? Ship `ADD COLUMN IF NOT EXISTS` + backfill FIRST. Consuming a sibling case's schema? grep ITS migration for the real names.
+- A migration recorded in prod's `schema_migrations` is FROZEN — fix forward as the next `vNNN`. Any script that executes SQL as "proof" must `assert_not_prod(dsn)` (`backend/scripts/_lib_guard.py`).
+- JSONB binds: `json.dumps(value)` + `$N::jsonb` cast (no codec registered). `->>` for text comparison; `->` returns JSONB.
+- `pipeline_cases` tenant column is `org_id`. `tenants.tenant_id` is UUID but `tenant_users.tenant_id` is TEXT — `str()` before passing. WorkOS ids (`org_01…`, `user_01…`) are TEXT — never UUID columns, never `uuid.UUID()`.
+- UNIQUE with COALESCE is invalid — `CREATE UNIQUE INDEX`. A new unique/invariant index ships WITH its dedupe migration. Enforce invariants in every write path (CASE guard + partial unique index), not just backfill + docstring.
+- Never swallow schema errors (`except: log-and-continue` hides missing columns from every reviewer). asyncpg: an error POISONS the open transaction — `to_regclass('<table>')` checks or nested-transaction savepoints for optional tables.
+- No `SELECT SUM(...) FOR UPDATE` (invalid) — lock the parent row or take an advisory lock. Dynamic UPDATE SET builders: never hardcode a column AND loop it.
+- Schema rename on an existing tenant: `ALTER SCHEMA … RENAME` (guard `to_regnamespace`) + re-GRANT app_user — never re-CREATE. Rotate DB role creds via `ALTER ROLE … WITH PASSWORD` — `DROP ROLE` fails once policies/grants depend on it.
+- RLS policies keyed EXACTLY on `current_setting('app.current_tenant_id')::uuid` — any other GUC name silently returns zero rows on enforced tenants. No tenant-specific seed rows in shared app migrations (they run on EVERY tenant).
+
+### Auth & security
+- `request.state.organization_id` (NOT `tenant_id` → AttributeError → 500).
+- Status fields need explicit allowlist validation. UPDATEs carry the same scope as their SELECT (`session_id`, org). A DELETE feature covers EVERY delete path with the same org/tenant scope — grep every `DELETE FROM <table>` and router delete before done.
+- PUBLIC_PATHS covers ALL non-JWT auth: OAuth callbacks, webhooks, shared-secret internal RPC — TenantAuthMiddleware 401s them otherwise and callers silently mis-default.
+- Security gates FAIL CLOSED in prd: missing key/secret = block + log critical, never silently pass (a virus-scan gate once marked uploads 'clean' with no API key set).
+- Real WorkOS access tokens carry NO `email` claim (test JWTs do). Middleware backfills it, but probe any new email-gated logic with a claim-less JWT before done.
+- `require_company_role` checks the caller's role in their OWN tenant only — money-movement and cross-brand endpoints must verify ownership of the specific resource or gate grotap-admin.
+- Webhooks: verify signature, be idempotent (dedup on event id), return non-2xx on transient failure (2xx = sender never retries), and survive out-of-order/duplicate delivery.
+- A connect/OAuth flow requests the scopes its CONSUMER case needs — trace the whole feature across split cases (scope, token, schema, enum).
+- Rebasing onto a hardened master must preserve auth guards master added; never re-add a provider wrapper that already exists.
+
+### Wiring & contracts
+- Importing/creating ≠ wiring: a new router is dead until `include_router` lands in main.py; an imported helper needs a real call site; every UI action needs an endpoint that EXISTS (grep the router — extend it if the task is "UI-only" and it's missing). Verify referenced modules/pages exist before wiring routes; check master before re-building landed work.
+- Frontend + backend built in separate runs: PROVE the wire contract — hit the real endpoint, diff field names/shapes/enum casing against the TS types. Map DB rows→UI shape in ONE api layer.
+- Filtering a 3rd-party system by a key? Prove WE emit that key, current format, current master; copy request/response shapes from the provider's current docs (cite URL in a comment).
+- "Most recent N" from a list endpoint: verify its ORDER BY delivers recency — both sort AND limit window; add an allowlisted order param if not.
+- Any endpoint that can return unbounded rows paginates BEFORE it ships (limit/offset + stable ORDER BY tie-breaker); grids get server-side filters; escape ILIKE metachars (`% _ \`).
+- App slugs: verify against the `apps` table, copy slug facts from the task VERBATIM. `pipeline` (📋) ≠ `agent-pipeline` (⚡); `document-upload` displays as "AI Knowledge Base".
+
+### Frontend
+- Unused TS imports → `noUnusedLocals` build error.
+- Global `body` CSS is DARK (`#0f0f0f`/white) — every light surface sets its OWN text `color` (grids `#374151`); e2e asserts VISIBILITY (computed-style luminance), not DOM presence.
+- New event domain → NEW BroadcastChannel (existing listeners have bare `onmessage` refetch handlers, no type filter).
+
+### State machines & jobs
+- A failure path releases everything the happy path claimed (status, slot, lock, row) in the SAME transaction — "nobody un-claims it" = a leak that starves the pipeline.
+- Background loops register in `background_loops.py::start_leader_locked_loops()` — never raw `asyncio.create_task` in lifespan (leader lock prevents web+worker double-execution).
+- Never re-enter LangGraph threads paused at the human gate: detect with `snapshot.next?.includes('human_gate')`, NEVER `next.length>0`; re-invoking a live thread re-executes finished work.
+- Billing idempotency keys are deterministic (derive from stable ids like `invoice-{brand_id}-{period}`) — never `uuid4()` per call.
+- Auto-retry on failure needs backoff or a circuit breaker (N fast-fails on one path → pause + alert). Infra-caused failures are `failed_infra`, not `failed` — they don't burn case strikes.
+
+### Build & ship
+- `py_compile` misses import-time crashes — boot-test `python -c "import app.main"` before any backend push. FastAPI 0.115: bodyless status codes (204) need `response_model=None` (a `-> None` annotation asserts at route registration).
+- Actually RUN `tsc --noEmit` + `py_compile` — "it compiles" is a command, not a claim. Grep your diff for committed conflict markers (`^<<<<<<<`).
+- Rename/refactor: `git grep <old-identifier>` returns zero (minus intended shims) AND app-catalog seeds updated (`seed_apps.sql`, `seed_brands_apps.sql`, `control_plane.py`).
+- Stay in scope: no `npm install`, `package.json`/lockfile edits, or dep bumps unless the task IS a dependency upgrade.
+- `railway up` is not done until `railway status --json` shows latestDeployment SUCCESS (healthcheck window ≥ slow boot; a failed healthcheck silently leaves the OLD image live). Use `RAILWAY_API_TOKEN` (not `RAILWAY_TOKEN`). Railway env vars are STATIC — after any Doppler rotation, refresh every service copy (`platform/scripts/railway_secret_audit.py`; runbook: `platform/docs/SECRET_ROTATION_RUNBOOK.md`).
+- `| head -n 4`, never `| head -4`, in scripts.
+- Tests import the production code they verify (no reimplemented formulas, no tautologies); mock fixture types match the REAL helper return types; daemon/polling-loop tests mock `sleep`, cap iterations, and run bounded (`timeout 300 …`) — an unbounded loop test once wedged a whole server. Per-file test isolation must be process-level (pytest-forked), not `sys.modules` juggling.
+- Verification/gate tasks (no code expected) report success without commits — say so in the task file.
+- No unbounded concurrent SSH to one host — pool, serialize, backoff (sshd MaxStartups drops stampedes).
+- Visibility/authz changes cover EVERY read+write path (list, my-apps, subscribe, vote, brands…) in ONE case; scope to the owning TENANT, not the creator user. One owner per hot file. Appending to a shared init hunk: use your OWN `pool.execute` block; don't re-ADD siblings' columns.
+- A fail-closed consumer gate requires closing EVERY producer path of that state in the same change (provision-or-cleanup, not warn-and-continue).
+- **ONE-TOUCH HUMAN STEPS** — owner time is the scarcest resource. Before any HI hold that puts a human in a console: derive the COMPLETE end-state from the consumer's actual code + the verbatim error (every field, permission, scope), deliver ALL steps in ONE message, state what NOT to touch, and batch every other pending item for that console into the visit. Verify against reality, not memory.
 
 ## Key IDs
 - Control plane Neon: `green-rice-76766370`
 - Grotap tenant Neon: `proud-union-74070434` / ID: `c7d02593-955c-4ff4-8117-3b2bb267f518`
 - Railway project: `f9bf333c-f929-413e-a95c-7923e10b5777`
 
-## Agent Servers (dispatch pool = FLEET_HOSTS on the orchestrator — keep in sync)
-| Server | IP | Roles |
-|---|---|---|
-| agent-02 | 5.161.74.39 | Execute (3 slots); Intake, Triage, Security Reviewer |
-| agent-03 | 5.161.81.193 | Execute (3 slots); Planner, Fix/Logic/Policy/Perf Reviewer |
-| agent-04 | 178.156.222.220 | Execute (3 slots); Change Reviewer, Build Validator |
-| agent-05 | 5.161.73.195 | Execute (3 slots); Pipeline Detail, Audit, Mobile |
-| agent-06 | 5.78.178.81 | **Dispatch Coordinator + Deploy Ops** + Execute (2 slots) |
-| agent-01 | 5.161.189.143 | Cobrowse AI agents host — not in dispatch pool |
-| agent-07/09/10 | — | Idle, decommission pending. agent-08 RETIRED 4/29 (was coordinator). Never dispatch to any of these. |
+## Fleet (full roster, hardware, Hetzner accounts: agents/SERVERS.md)
+- Dispatch pool = **agent-02…06** (02–05: Execute ×3 slots + reviewer roles; 06: Deploy Ops + pipeline monitoring + Execute ×2 — its crons must always run: review gate 4h, deploy/health watchdogs, dispatch reconciler, Wasabi backups).
+- **Not in the pool, never dispatch:** `grotap-cobrowse-01` (5.161.189.143 — recycled old agent-01 IP; Cobrowse AI support runner) and the Lane C model engine `LLM-LOCAL-02`. agent-01/07/08 DELETED; agent-09/10/11 cancelled in Hetzner Robot (awaiting wipe).
+- SSH: always `ssh agent-NN` aliases, never raw IP. Key `~/.ssh/grotap_agents`; cobrowse box `User agent`, others `User root`. Max 3 tasks/server via worktrees.
+- Git auth on exec servers: `credential.helper = /home/agent/bin/git-credential-doppler` (fetches `GITHUB_TOKEN` per call). NEVER set a static token in `~/.env`; if git auth fails, check `doppler me` as the `agent` user first.
 
-SSH: always `ssh agent-NN` aliases. Never raw IP. Key: `~/.ssh/grotap_agents`. agent-01: `User agent`. All others: `User root`.
-agent-06: systemd services `grotap-dispatch` + `grotap-watchdog` — both must always run. Max 3 tasks/server via worktrees.
-Git auth on exec servers (02–06): `credential.helper = /home/agent/bin/git-credential-doppler` (fetches `GITHUB_TOKEN` from Doppler per call — survives token rotation; installed 2026-07-03 after the 6/25 rotation silently broke `$GH_PUSH_TOKEN`-based auth fleet-wide for 8 days). NEVER set a static token in `~/.env`; if git auth fails, check `doppler me` works as the `agent` user first.
-
-## Dispatch — CONTINUOUS (changed 2026-07-05; supersedes once-daily noon)
-Backend `pipeline_automation` loop assigns every 3 min + completion-webhook refill; orchestrator
-owns run lifecycle. Manual one-off dispatch when a human asks:
+## Dispatch — CONTINUOUS
+Backend loop assigns every 3 min + completion-webhook refill; the LangGraph orchestrator (Railway)
+owns run lifecycle and SSHes dispatches to the fleet. Manual one-off (from platform repo root):
 ```bash
 bash agents/dispatch.sh <task.md> <server-ip> <session>   # manual
 bash agents/dispatch-execute.sh <task.md> <session>       # auto-route (most free slots)
 ```
 
-## Coding Pilot (CODING_PILOT env flag)
-Open-weight lane (qwen-2.5-coder-32b via OpenRouter) replaces Claude for `simple` tasks when
-`CODING_PILOT=1` on the dispatch server (unset by default — never enable without owner approval).
-Never piloted: P0/P1, medium/complex, or >2/day/server. Gate: after pilot commits, `tsc --noEmit`
-(frontend/agent-worker/orchestrator) + `py_compile` must pass; any fail → reset worktree + automatic
-Claude fallback. Telemetry: pilot → `service=fleet-pilot`; fallback → `meta.pilot_fallback=true`;
-pass rate = fleet-pilot ok ÷ (fleet-pilot + pilot_fallback). Disable: unset or `0`.
-Window: ≤20 cases or 2 weeks; success bar ≥70% gate-pass AND ≥90% cost reduction vs Sonnet.
+## Coding Pilot (CODING_PILOT env flag — default OFF, never enable without owner approval)
+Open-weight lane (qwen-2.5-coder-32b via OpenRouter) replaces Claude for `simple` tasks only; never P0/P1, medium/complex, or >2/day/server. Gate: post-commit `tsc --noEmit` + `py_compile`; any fail → reset worktree + Claude fallback. Window ≤20 cases or 2 weeks; success = ≥70% gate-pass AND ≥90% cost cut vs Sonnet. Detail: platform repo `agents/GLOBAL.md`.
 
 ## Code Review
-`/codex:review` before every commit (mandatory; separate from Rule 8 pipeline), then
-`./agents/review-pipeline.sh <branch> && ./agents/collect-reviews.sh --wait <branch>`.
-ANY reviewer FAIL = branch blocked. No exceptions.
+`/codex:review` before every commit (mandatory; separate from Rule 7 pipeline), then the Rule 7 review pipeline. ANY reviewer FAIL = branch blocked. No exceptions.
 
 ## Deployment
-Backend (Railway) auto-deploys on push to `master` (~2 min); frontend (Vercel) via CI on push to
-`master` (paths `frontend/**`). Agents on Hetzner: push branch → request merge+deploy from coordinator.
+Backend (Railway) auto-deploys on push to `master` (~2 min); frontend (Vercel) via CI on push to `master` (paths `frontend/**`). Agents on Hetzner: push branch → request merge+deploy from coordinator.
 
 ## Git Discipline
 | # | Rule |
 |---|---|
-| 1 | Branch is `master` — not `main`. Always `git pull origin master`. |
-| 2 | Pull before push — `git pull origin master --rebase` before pushing. |
-| 3 | Never `git add -A` or `git add .` — stage specific files only. |
+| 1 | Branch is `master` — not `main`. `git pull origin master --rebase` before pushing. |
+| 2 | Branch from CURRENT master; always push YOUR case branch (stale bases → monster diffs; no branch → unreviewable). |
+| 3 | Never `git add -A` or `git add .` — stage specific files by name, and stage every NEW file you create (verify with `git status`; an uncommitted imported module crashes the backend on startup — #1 cause of broken merges). |
 | 4 | Task NOT done until merged to master and deployed. Pushed ≠ done. Reviewed ≠ done. |
 | 5 | Task files are gitignored — `agents/tasks/pending/active/done/archive/` not tracked. |
 | 6 | Type-check before commit — `cd frontend && npx tsc --noEmit`. Fix errors first. |
-| 7 | **ONE app changed at once = ONE branch, built in sequence.** Do NOT fan a single-app change into many parallel branches — they touch the same files, collide, and create merge churn for zero isolation benefit. Only use separate branches for genuinely independent work (different apps/subsystems). Coupled steps stack on the same branch so each starts from the latest state. |
-| 8 | **Stage every NEW file you create — explicitly, by name — and verify with `git status` before you finish.** A pushed branch that imports/references a module you created but never committed crashes the whole backend on startup (`ModuleNotFoundError`). The runner now runs `git add -A` as a safety net (respecting `.gitignore`), but do NOT rely on it — new files are your responsibility. This is the #1 cause of broken half-merged branches. |
-
-## Review-Sweep Lessons (57-branch gate, 2026-07-04)
-| # | Lesson |
-|---|---|
-| 1 | **Cross-case contracts are exact:** before writing a consumer of a sibling case's schema, `grep` its migration for the REAL column names/types. A webhook UPDATEd invented columns (`stripe_account_id`) while the sibling created `stripe_connect_account_id` — silent no-op forever. Same for shared TS shapes across split cases. |
-| 2 | **Never swallow schema errors.** `try/except: log-and-continue` around DB writes hides missing-column bugs from every reviewer. Let unexpected DB errors surface at ERROR level. |
-| 3 | **Billing idempotency keys are deterministic, never `uuid4()` per call** — a fresh key defeats Stripe retry-safety and double-bills. Derive from stable ids (`account-{brand_id}`, `invoice-{brand_id}-{period}`). |
-| 4 | **Branch from CURRENT master and always push YOUR case branch.** Stale bases turned a 1-file utility into a 54-file diff; 7 coalesced cases pushed no per-case branch, making review/revert impossible. |
-| 5 | **One owner per hot file / one case per enforcement surface.** Two agents built duplicate OAuth in the same router with different secret names; three branches each partially rewrote app-visibility filters, leaving subscribe/vote leaks. Visibility/authz changes must cover EVERY read+write path (list, my-apps, subscribe, request, vote, pricing, brands) in ONE case. |
-| 6 | **Third-party callback endpoints (OAuth, webhooks) go in PUBLIC_PATHS** — the caller has no JWT; shipping the callback without it 401s the whole flow. |
-| 7 | **A new unique/invariant index ships WITH a dedupe migration.** `CREATE UNIQUE INDEX` at startup assumes clean data; promote-only backfills don't clean duplicates and the index throws on boot. |
-| 8 | **Appending to a shared init hunk (control_plane.py initialize etc.)? Use your OWN `pool.execute` block** and don't re-ADD columns a sibling already added — same-anchor appends are the #1 merge-conflict source. |
-| 9 | **Verify referenced modules/pages exist before wiring routes** (a route importing a nonexistent page breaks the whole frontend build), and check master first before re-adding "foundation" work that already landed. |
-
-## Boot-Time Failure Lessons (2026-07-04 outage)
-| # | Lesson |
-|---|---|
-| 1 | **`py_compile` does NOT catch FastAPI import-time crashes.** Before pushing ANY backend change, boot-test the app: `python -c "import app.main"` (dummy env vars for required settings). A router that compiles can still assert during route registration and take down every deploy — e.g. `from __future__ import annotations` + `status_code=204` + `-> None` return annotation asserts "204 must not have a response body" on FastAPI 0.115. With a bodyless status code, pass `response_model=None` explicitly. |
-| 2 | **Orchestrator boot must NEVER re-enter threads paused at an interrupt gate** (`next=['human_gate']`). Those are awaiting a human decision, not crashed — re-running them re-executes finished work and destroys the pause state (8 approved-review cases were marked failed this way). |
-| 3 | **Do not open unbounded concurrent SSH connections to one host.** sshd MaxStartups drops the stampede and every 60s ctrl command times out. Reuse a pooled connection per host, serialize control commands, retry with backoff. |
-| 4 | **Verification/gate-shaped tasks (no code expected) must report success without commits** — "no commits produced" is only a failure for build tasks. Say so explicitly in the task file until the framework supports it. |
-
-## Review-Sweep Lessons (2026-07-04 gates #2–#3)
-| # | Lesson |
-|---|---|
-| 1 | **`SELECT SUM(...) ... FOR UPDATE` is invalid** — Postgres errors "FOR UPDATE is not allowed with aggregate functions", so the endpoint fails 100%. To make read-accrued-then-pay atomic, lock the PARENT row (`SELECT ... FROM brands WHERE id=$1 FOR UPDATE`) or take an advisory lock — never FOR UPDATE an aggregate. (A row lock on existing payouts also does NOT block a concurrent INSERT of a new one.) |
-| 2 | **Dynamic UPDATE SET builders: don't hardcode a column AND loop it.** Seeding the SET list with `status='paid'`/`paid_at=NOW()` then iterating a fields dict that still contains `status` emits `SET status='paid', ..., status=$N` → "multiple assignments to same column". Exclude hardcoded columns from the loop. |
-| 3 | **Importing a helper/component is NOT wiring it — grep for a real call site before "done".** `teardownPreviewByCase` was imported into finalize.ts and never called (containers leaked); an Export button set state but no `<ExportModal>` was ever rendered (dead button). Neither fails typecheck (orchestrator has no `noUnusedLocals`; a set-but-unread modal still compiles), yet the feature ships broken. |
-| 4 | **"Paused at the human gate" detection keys on the interrupt node, not run activity.** Use `snapshot.next?.includes('human_gate')`, NEVER `next.length>0` — the latter is true for EVERY non-terminal run, so an Approve/Resume button fires a second concurrent `invoke(Command({resume}))` on a live thread (re-entry race; see Boot-Time #2). |
-| 5 | **PUBLIC_PATHS covers ALL non-JWT auth, not just OAuth/webhooks.** Any endpoint authed by a shared-secret header (internal RPC like `/telemetry/pilot-rl-check` with `X-Telemetry-Secret`) must be in PUBLIC_PATHS — TenantAuthMiddleware 401s it before the route runs, and a caller that parses the 401 body silently mis-defaults (the pilot rate-limiter became an unconditional kill-switch). |
-| 6 | **Actually RUN `tsc --noEmit`; "it compiles" is not a claim, it's a command.** An Excel-export page shipped 4×TS2352 by casting typed row arrays straight to `Record<string,unknown>[]` — `ReportRow[] as Record<string,unknown>[]` fails because the interface has no string index signature. Either add `[key: string]: unknown` to the row type or cast via `as unknown as Record<string,unknown>[]`, and run the frontend typecheck before submitting. A whole batch push was blocked and the branch reverted for this. |
-| 7 | **Grep the real migration for schema-qualified table + column names before writing ANY SQL — don't invent columns.** A loop-scheduler queried `loops` (real: `loop_engine.loops`), `id` (real: `loop_id`), `cron` (real: `cron_expr`), and a `next_run_at`/`timezone` that don't exist on the table at all — so it was a permanent no-op. If your feature needs a column that isn't there, ship the idempotent `ADD COLUMN IF NOT EXISTS` + backfill migration FIRST, then reference it. (Compounds with "never swallow schema errors" — a blanket `catch {}` hid every one of these as "migration not applied".) |
-| 8 | **Rebasing onto a router master has since HARDENED must preserve its auth guards — never reintroduce an endpoint version missing a `Depends(require_company_role(...))` master already added.** A tenant-users branch built on a stale base would have dropped the admin-only guard on member removal (privilege-escalation regression) and rel_types persistence. Also don't add a parallel provider wrapper for something that exists — `workos_provider.delete_organization_membership()` already did the list-then-delete a new `remove_membership()` duplicated. |
-
-## Review-Sweep Lessons (2026-07-05 gate #4)
-| # | Lesson |
-|---|---|
-| 1 | **Control-plane schema changes go ONLY in `backend/db/migrations/control_plane/vNNN_*.sql` (SCA001).** NEVER add inline DDL to `control_plane.py`/routers — CI guard `backend/scripts/check_no_inline_ddl.py` fails on any `CREATE/ALTER TABLE`, `CREATE INDEX/TYPE/VIEW/SEQUENCE`, `DROP TABLE` in non-allowlisted `backend/app` files. NEVER use the retired `backend/migrations/*.sql` path or `backend/migrate.sh` (not wired to `migration_runner` → tables silently never created in prod). 5 branches built pre-SCA001 (agent_team_templates/purchases, brand_type, ai_support_sessions, tenant_billing) were all rejected for this. Pick the next free `vNNN`, keep it idempotent (`IF NOT EXISTS`/`DO … EXCEPTION duplicate_object`); files apply one-per-txn in filename order, so order FK children after parents. |
-| 2 | **Rebase onto latest master and NEVER commit conflict markers.** A server-connections branch committed literal `<<<<<<< Updated upstream`/`=======`/`>>>>>>> Stashed changes` in `main.py` from a botched `git stash pop` — `py_compile` fails at that line, taking down every deploy, and `git merge-tree` reports "clean" (committed content, not a live conflict → false green). Before submitting: `grep -rn '^<<<<<<<\|^>>>>>>>' ` your diff AND run `python3 -m py_compile` / `tsc --noEmit`. Also dedupe: don't `include_router(x)` that master already registers. |
-| 3 | **Every JSONB bind param needs `json.dumps(...)` + a `$N::jsonb` cast** (no jsonb type-codec is registered). A dual-write ledger passed a raw `dict` as `$6` into a JSONB column — dormant only because callers passed `None`; it breaks the first time a dict is sent. Canonical pattern: `... $6::jsonb ...`, value `json.dumps(meta or {})`. |
-| 4 | **Never DROP/CREATE a DB role to rotate its credentials — `ALTER ROLE x WITH PASSWORD` instead.** Once a role is the target of RLS policies or holds grants/default-privileges, `DROP ROLE` always fails ("some objects depend on it"). `backfill_rls_roles.py --force` was unrunnable on every provisioned tenant for this (CASE-20260705-8C58D1). Grants/policies are idempotently re-applied; only the password needs rotating. |
-| 5 | **Proof/verification scripts that EXECUTE SQL must assert a non-prod target before running.** During SCA003 a "branch-only" proof applied v002 to live prod (harmless only by luck + idempotence; the checksum then froze the file). Use `backend/scripts/_lib_guard.py::assert_not_prod(dsn)` in any script that applies migration files; a file recorded in prod's `schema_migrations` ledger is FROZEN — never edit it, ship the fix as the next `vNNN`. |
-| 6 | **A fail-closed check on the consumer side requires closing EVERY producer path in the same change.** SCA002 made middleware 503 on tenants without `neon_app_database_url` while three provisioning paths could still create such tenants (org auto-provision created them with NO role at all → every new company dead-on-arrival). When you add a "reject invalid state" gate, grep for all writers of that state and make them provision-or-cleanup (delete the orphaned Neon project on failure), not warn-and-continue. |
-
-## Review-Sweep Lessons (2026-07-05 gate #5)
-| # | Lesson |
-|---|---|
-| 1 | **WorkOS `organization_id` is a TEXT string (`org_01...`), NEVER a UUID.** Don't declare it `UUID` in DDL and never `uuid.UUID(org_id)` it — that 500s on every real request (test JWTs may pass a UUID-shaped org, masking it). Same for user ids (`user_01...`). |
-| 2 | **Never piggyback new event types on an existing BroadcastChannel.** Existing listeners use bare `onmessage = () => refetch()` with no type filter, so your event triggers their handler in every window. New event domain → new dedicated channel (e.g. `grotap_cobrowse`, not `grotap_subscriptions`). |
-| 3 | **No tenant-specific seed rows in shared migrations.** A migration under `migrations/apps/<slug>/` runs on EVERY tenant that provisions the app — a hardcoded grotap `tenant_id` INSERT pollutes other tenants' DBs. Seed data goes in an ad-hoc script or a tenant-conditional block. |
-| 4 | **Tests must import the production code they verify — never reimplement the formula in the test file** (drift is then undetectable), and never assert tautologies like `assertEqual(f(x), round(x, n))` where both sides are the same expression. If the logic isn't importable, extract it into a helper first; that refactor IS the task. |
-| 5 | **`require_company_role` checks the caller's role in their OWN tenant only — it never verifies brand/resource ownership.** A brand-scoped endpoint gated by it lets any company admin act on ANY brand_id (a real-money payout endpoint shipped this way). Money-movement and cross-brand endpoints must gate grotap-admin (`_is_grotap_user`) or verify ownership of the specific resource. |
-| 6 | **A new router file is DEAD CODE until `app.include_router(...)` lands in main.py.** Registering it is part of the task; grep main.py for the registration before reporting done (same family as "importing a helper is not wiring it"). |
-
-## Fleet-Outage Lessons (2026-07-05 exit-127 / 3-strike burn-down)
-| # | Lesson |
-|---|---|
-| 1 | **`railway up` is NOT done until the deployment shows SUCCESS.** A failed healthcheck silently leaves the OLD image live (the fixed orchestrator sat unshipped 3.5h while the broken one 3-struck 40+ cases). After any `railway up`: `railway status --json` → latestDeployment.status must be SUCCESS; healthcheck window must cover slow boot work (orchestrator boot-scan ≈60s → timeout 300s). |
-| 2 | **Failure-triggered instant re-assign turns a systemic fault into a retry massacre.** With the completion webhook refilling on every `failed`, one broken dispatch path burned all 3 strikes per case in ~6 min. Any auto-retry on failure needs backoff or a circuit breaker (N fast-fails in a row on one host/path → pause that path, alert). |
-| 3 | **Infra-caused dispatch failures are `failed_infra`, not `failed`** — they must not count toward the 3-strike case kill. When resurrecting: relabel rows, reset case to `plan_approved`, skip decomposed parents. |
-| 4 | **Tests for polling/daemon loops must NEVER execute the real loop** — mock `time.sleep`/HTTP and cap iterations (inject max-iterations or a stop event), and run suites bounded: `timeout 300 python3 -m unittest …`. An unbounded print-cloud loop test leaked to 4.4GB in 12 min on agent-06 (no swap then), drove load to 45, and wedged SSH + status-server — the whole "Machines building Machines" view went dark platform-wide. |
-
-## Review-Sweep Lessons (2026-07-05 gate #6)
-| # | Lesson |
-|---|---|
-| 1 | **In-process `sys.modules` save/restore CANNOT isolate test files that monkeypatch real modules.** A conftest that snapshots `sys.modules` at `pytest_sessionstart` and deletes-new/re-inserts-pristine before each file (via `pytest_pycollect_makemodule` + a module-scope fixture) only restores module MEMBERSHIP — it re-inserts the SAME (already-mutated) pristine module objects and cannot undo attribute-level monkeypatching, nor stub objects a later file captured by reference at import. Measured: such a conftest turned master 11-failed/235-passed into 26-failed/220-passed (+15) — `test_email_provider`/`test_stripe_provider`/`test_auth_upsert` pass ALONE but fail in-suite even WITH it. For true per-file isolation use PROCESS-level (pytest-forked / --forked / subprocess-per-file), not sys.modules juggling. |
-| 2 | **Register new background loops in `background_loops.py::start_leader_locked_loops()`, never a raw `asyncio.create_task(start_x())` in `main.py` lifespan.** Master refactored the lifespan (SCA008): every loop now runs under a Postgres advisory leader lock so web + worker never double-execute it. A branch cut before that refactor re-adds the create_task pattern and STRUCTURALLY conflicts with lifespan — merging it would revert leader-election and risk double-billing/double-runs. Add `("loop_name", start_fn)` to the loops list instead. |
-
-## Review-Sweep Lessons (2026-07-05 gate #7)
-| # | Lesson |
-|---|---|
-| 1 | **Two parallel branches must never both `CREATE TABLE` the same table, nor claim the same `vNNN_` migration number.** Gate #7 caught CASE-BB964E (`v017_agent_team_purchases.sql`, full status set `pending_payment/provisioning/live/suspended/cancelled` + stripe cols) and CASE-0C6700 (`v016_agent_team_purchases.sql`, narrow `live/cancelled/expired`) BOTH creating `agent_team_purchases`. The runner applies files in sorted-filename order with `CREATE TABLE IF NOT EXISTS`, so the *narrower* v016 would win and the superset v017 would silently no-op → BB964E's `pending_payment` INSERT + stripe-column writes 500 at runtime. When a task needs a table another in-flight case is also adding, DECLARE the dependency (build on the other case's branch / reference its migration) instead of re-creating it; if you must add a migration, pick the next FREE version number (grep the dir) and let ONE branch own the table's canonical schema. Gate resolution: keep the superset, drop the duplicate narrow migration. |
+| 7 | ONE app changed at once = ONE branch, built in sequence. Separate branches only for genuinely independent apps/subsystems. |

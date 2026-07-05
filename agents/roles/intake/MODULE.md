@@ -28,5 +28,5 @@ Task files live in: `agents/tasks/{ticket_id}-{slug}.md`
 | Destination | Condition |
 |---|---|
 | agent-03 / planner | Normal flow after triage |
-| agent-03 / policy-reviewer | Task flags contain `security` |
+| agent-02 / security-reviewer | Task flags contain `security` |
 | agent-05 / audit-filters | Task requires audit |

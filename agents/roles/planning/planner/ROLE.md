@@ -34,42 +34,9 @@ New app checklist: [N/A | list items]
 
 Approval gates: [NONE | describe each]
 
-Rules check: all 9 rules satisfied — YES | NO (list violations)
+Rules check: all 8 rules satisfied — YES | NO (list violations)
 ```
 
 ## Handoff
-plan approved        → agent-04 / execute
-needs security review → agent-02 / security-reviewer
-next_server: [per outcome]
-next_role: [per outcome]
-priority: normal
-
-## Handoff Template
----
-generated_at_commit: {SESSION_COMMIT}
-generated_at_timestamp: {SESSION_TIMESTAMP}
-generated_by_role: planner
-generated_by_server: agent-03
-ticket_id: {ticketId}
-
-## Staleness Declaration
-# Receiving agent MUST compare generated_at_commit to SESSION_COMMIT.
-# If they differ: prepend '⚠️ STALE HANDOFF' and re-read MODULE.md + ROLE.md.
-
-## Task Context
-module: planning
-task_type: feature | fix
-ticket_description: {description}
-
-## Outputs
-files_to_create: {list or NONE}
-files_to_modify: {list or NONE}
-db_migrations_required: YES | NO
-new_app_checklist_required: YES | NO
-approval_gates: {list or NONE}
-rules_check: all 9 satisfied — YES | NO
-
-## Next Role
-next_role: execute | security-reviewer
-next_server: agent-04 | agent-02
-priority: normal
+Routes: plan approved → execute | needs security review → security-reviewer
+Output fields: see `agents/roles/shared/handoff-schema.md` → planner

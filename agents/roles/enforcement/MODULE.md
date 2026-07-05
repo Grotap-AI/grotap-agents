@@ -10,7 +10,7 @@ rule-compliant, and builds cleanly. It contains three roles, all on Agent-04.
 | Role | When It Runs | What It Enforces |
 |---|---|---|
 | Change Reviewer | task.type == 'change-review' | Scope of change vs. plan — no scope creep |
-| Rule Enforcer | task.type == 'rule-enforcement' OR flags contain 'rule-violation' | Any of the 9 absolute rules |
+| Rule Enforcer | task.type == 'rule-enforcement' OR flags contain 'rule-violation' | Any of the 8 absolute rules |
 | Build Validator | task.type == 'build' OR task.stage == 'build-validation' | Zero compile errors, zero lint errors |
 
 ## Enforcement Authority
@@ -19,6 +19,6 @@ rule-compliant, and builds cleanly. It contains three roles, all on Agent-04.
 - Build Validator failure means no deployment — period
 
 ## Key References
-- Absolute rules: `agents/GLOBAL.md` rules 1–9
+- Absolute rules: `agents/GLOBAL.md` Rules 1–8
 - TypeScript config: `platform/frontend/tsconfig.json` (`noUnusedLocals: true`)
 - Railway health check: `@router.get("")` AND `@router.get("/")` — Railway hits `/health` not `/health/`

@@ -188,7 +188,7 @@ CREATE TABLE domain_knowledge (
 
 ## Layer 4: Platform Rules DB
 
-One Neon project — ingested from `docs/` platform rules (9 absolute rules, never-do constraints, CLAUDE.md). Agents query this **first** before any task begins.
+One Neon project — ingested from `docs/` platform rules (8 absolute rules, never-do constraints, CLAUDE.md). Agents query this **first** before any task begins.
 
 **Purpose:** Makes platform rules queryable by agents at runtime, not just readable at build time.
 

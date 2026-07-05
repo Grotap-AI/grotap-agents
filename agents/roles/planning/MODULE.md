@@ -10,17 +10,11 @@ No task proceeds to execution without a written plan approved by the planner.
 
 ## What a Plan Must Include
 - List of files to create or modify (with paths)
-- Database migrations required (Neon MCP — never tell user to run SQL)
+- Database migrations required (migration files per conventions.md — never tell user to run SQL)
 - API endpoints to add or change
 - Frontend routes and components affected
-- New app checklist items (if task adds a new app):
-  1. Pages in `frontend/src/pages/`
-  2. Routes in `frontend/src/App.tsx`
-  3. Tile in MODULES array in `AppLibraryPage.tsx`
-  4. DB row in `apps` table (control plane)
-  5. Tenant subscription in `tenant_app_subscriptions`
-  6. DB migration on tenant DB
-  7. Vercel deploy (manual — not auto from git push)
+- New app checklist items (if task adds a new app): see "New App Execution
+  Checklist" in `agents/roles/execution/MODULE.md` — every item must appear in the plan
 - Estimated line count per file (flag if any file > 300 lines)
 
 ## Planning Constraints

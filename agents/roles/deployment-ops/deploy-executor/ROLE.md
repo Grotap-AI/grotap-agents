@@ -37,8 +37,8 @@ railway deployment list --service grotap-backend
 
 ### Railway Agent-Worker
 ```bash
-# Must use service ID — name lookup fails
-railway up --detach --service 18c95d3f-c41a-43e8-a552-c358491856af
+# Must use the service ID — name lookup fails. IDs: MODULE.md "Railway Service IDs".
+railway up --detach --service <grotap-agent-worker-id>
 ```
 
 ## Post-Deploy Verification

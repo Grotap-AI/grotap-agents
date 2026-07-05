@@ -10,11 +10,9 @@ A branch flagged with `security` by triage, or any branch submitted for merge,
 must pass this module before proceeding.
 
 ## What Security Reviewer Checks
-- No secrets, tokens, or credentials in code or comments
-- No direct 3rd-party SDK calls bypassing vendor wrappers (Rule 3)
-- No cross-tenant data access (Rule 4)
-- No shared database schemas (Rule 5)
-- GitGuardian MCP compliance node not bypassed (Rule 6)
+- Verify GLOBAL Rules 1–8 + ⚠ FAIL causes apply to the diff (secrets, wrappers,
+  cross-tenant access, compliance node)
+- Tenant isolation via FORCE RLS + `app.current_tenant_id` GUC; RLS policies never weakened (Rule 5)
 - No `--no-verify` on commits
 - No hardcoded tenant IDs, org IDs, or user IDs
 - SQL injection surface: all queries parameterized
@@ -26,6 +24,6 @@ must pass this module before proceeding.
 - `WARN` — advisory only, does not block merge
 
 ## Key References
-- Rule violations → `agents/GLOBAL.md` rules 1–9
+- Rule violations → `agents/GLOBAL.md` Rules 1–8
 - GitGuardian MCP: `docs/11-devops/gitguardian-mcp.md`
 - Vendor wrapper pattern: `docs/01-platform/vendor-wrapper-pattern.md`

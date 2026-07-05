@@ -137,4 +137,4 @@ Every app built from the template must include:
 - **Use this when:** Building any new app — these patterns are required in every app
 - **Before this:** `app-template-guide.md` for build steps
 - **Related:** `support-portal.md` for the Grotap-side screens that receive live help requests, scheduled appointments, and app enhancement submissions
-- **Cobrowse:** All session initiation must go through `lib/cobrowse.ts` — never call Cobrowse SDK directly (Rule 9)
+- **Cobrowse:** All session initiation must go through `lib/cobrowse.ts` — never call Cobrowse SDK directly (Rule 8)

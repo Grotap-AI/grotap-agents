@@ -15,13 +15,7 @@ to Vercel instead of Railway, causing all backend calls to fail.
 5. SSL certificate expiration on any domain
 
 ## Expected DNS Configuration
-| Record | Type | Target | Notes |
-|---|---|---|---|
-| apps.grotap.com | CNAME | cname.vercel-dns.com | Vercel frontend |
-| api.grotap.com | CNAME | Railway target | Backend API |
-| agents.grotap.com | CNAME | cname.vercel-dns.com | Agents brand frontend |
-| agents.grotap.ai | CNAME | cname.vercel-dns.com | Agents brand (.ai TLD) |
-| *.grotap.com | — | MUST NOT EXIST | Wildcard was removed — never re-add |
+Canonical table: MODULE.md "Expected DNS" — including `*.grotap.com` MUST NOT EXIST.
 
 ## Validation Steps
 1. Resolve each domain via DNS lookup

@@ -3,17 +3,7 @@
 # Load this when a role needs cross-cutting conventions not in GLOBAL.md.
 
 ## Handoff Format Convention
-All handoff files must use this structure (see plan Section 3.1):
-```
-generated_at_commit: {40-char Git SHA}
-generated_at_timestamp: {UTC ISO 8601}
-generated_by_role: {role-name}
-generated_by_server: {agent-XX}
-ticket_id: {id}
-next_role: {role or 'none'}
-next_server: {agent-XX or 'none'}
-priority: normal | urgent | blocked
-```
+Common fields, staleness rule, and per-role output fields: `agents/roles/shared/handoff-schema.md`.
 
 ## Verdict Format Convention
 All reviewer roles must use exactly:

@@ -11,28 +11,22 @@ Nothing is built without a plan. Nothing is deployed without passing the
 4-reviewer pipeline first.
 
 ## Executor Pool
-| Tier | Servers | Behavior |
-|------|---------|----------|
-| Primary | Agent-01, Agent-04, Agent-07 | Always execute. First choice for all execution tasks. 3 slots each. |
-| Primary | Agent-08 | Dispatch Coordinator + Execute. 2 execution slots. |
-| Overflow | Agent-02, Agent-03, Agent-05 | Execute when slots available. Primary roles always take priority. 3 slots each. |
+Executor pool: agent-04 primary (3 slots); overflow agent-02/03/05 (3 each);
+agent-06 (2 slots, 1 reserved for dispatch). Roster: `agents/SERVERS.md`.
 
-Each server supports **3 concurrent tasks** via git worktrees (Agent-08: 2 slots,
-1 reserved for dispatch). Each task gets an isolated working directory at
-`/home/agent/worktrees/<session>/` with its own branch.
-No conflicts between concurrent tasks on the same server.
+Concurrency is per-slot via git worktrees — each task gets an isolated working
+directory at `/home/agent/worktrees/<session>/` with its own branch; no conflicts
+between concurrent tasks on the same server.
 
-Overflow executors follow the exact same checklist, hard stops, and review
-requirements as primary executors. Use `dispatch-execute.sh` to auto-route
-to the server with the most free slots — primaries first, then overflow.
-
-**Total capacity: 20 concurrent execution tasks** (3 primary x 3 + Agent-08 x 2 + 3 overflow x 3).
-Agent-06 is deploy ops only — never executes.
+Execute (overflow) yields to primary roles. Overflow executors follow the exact
+same checklist, hard stops, and review requirements as primary executors. Use
+`dispatch-execute.sh` to auto-route to the server with the most free slots —
+primary first, then overflow.
 
 ## Execution Sequence (always in this order)
 1. Read the approved plan from the task handoff
 2. Implement code changes (files to create/modify per plan)
-3. Run DB migrations via `doppler run -- psql` (never ask user to run SQL; NO Neon MCP)
+3. Run DB migrations via `doppler run -- psql` (never ask user to run SQL — conventions.md DB access)
 4. Verify build compiles and lints clean
 5. Submit branch to 4-reviewer pipeline
 6. Deploy only after all 4 reviewers PASS
@@ -46,18 +40,13 @@ When a task creates a new app, ALL of these must be done or it won't appear:
 5. DB row in `apps` table — `doppler run -- psql "$DATABASE_URL"` (control plane, Neon project `green-rice-76766370`)
 6. Tenant subscription in `tenant_app_subscriptions` — same psql path
 7. DB migration on tenant DB — `doppler run -- psql "$TENANT_DATABASE_URL"` (Neon project `proud-union-74070434`)
-8. Vercel deploy — manual (NOT auto from git push)
+8. Deploy per GLOBAL "Deployment" — confirm the frontend actually shipped (CI runs only on `frontend/**` paths)
 
-## Deployment Commands
-```bash
-# Frontend (Vercel)
-VTOKEN=$(doppler secrets get VERCEL_TOKEN --project grotap --config dev --plain)
-cd platform/frontend && npx vercel --token "$VTOKEN" --prod --yes
-
-# Backend (Railway)
-cd platform/backend && doppler run --project grotap --config dev -- railway up --detach --service grotap-backend
-```
+## Deployment
+See `agents/GLOBAL.md` "Deployment" (push to master → Railway auto-deploy + Vercel CI;
+agents on Hetzner push their branch and request merge+deploy from the coordinator).
+Manual redeploy commands live in `agents/roles/deployment-ops/deploy-executor/ROLE.md`.
 
 ## Key References
 - App template: `docs/12-app-platform/app-template-guide.md`
-- DB access: direct SQL only — see "Database Access Convention" in `agents/roles/shared/conventions.md` (Neon MCP is retired)
+- DB access: direct SQL only — see "Database Access Convention" in `agents/roles/shared/conventions.md`

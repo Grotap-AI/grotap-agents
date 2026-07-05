@@ -27,32 +27,5 @@ and route it to the right server and role.
 - Module assignment recorded
 
 ## Handoff
-next_role: [per routing table]
-next_server: [per routing table]
-priority: normal | urgent
-
-## Handoff Template
----
-generated_at_commit: {SESSION_COMMIT}
-generated_at_timestamp: {SESSION_TIMESTAMP}
-generated_by_role: triage
-generated_by_server: agent-02
-ticket_id: {ticketId}
-
-## Staleness Declaration
-# Receiving agent MUST compare generated_at_commit to SESSION_COMMIT.
-# If they differ: prepend '⚠️ STALE HANDOFF' and re-read MODULE.md + ROLE.md.
-
-## Task Context
-module: intake
-task_type: triage
-ticket_description: {description}
-
-## Outputs
-module_assigned: {module name}
-routing_reason: {one line}
-
-## Next Role
-next_role: {per routing table}
-next_server: {per routing table}
-priority: normal | urgent
+Routes: next_role/next_server per routing table above; priority urgent if security/rule-violation flag
+Output fields: see `agents/roles/shared/handoff-schema.md` → triage

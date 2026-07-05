@@ -119,11 +119,11 @@ platform/app-template/
 6. Run Cobrowse snapshot tests before status→beta
 
 **What agents MUST NOT do:**
-- Modify `AppShell.tsx` (Cobrowse — Rule 9)
+- Modify `AppShell.tsx` (Cobrowse — Rule 8)
 - Modify `lib/cobrowse.ts` (vendor wrapper — Rule 3)
 - Modify `lib/api.ts` (auth interceptor)
 - Call 3rd-party SDKs directly (Rule 3)
-- Skip the 4-reviewer pipeline before merge (Rule 8)
+- Skip the 4-reviewer pipeline before merge (Rule 7)
 
 ---
 

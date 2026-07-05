@@ -36,7 +36,7 @@ Each tenant has one Neon project. Each app they subscribe to gets its own **Post
 | Control Plane | 1 total | App registry, tenant catalog, subscription state, migration tracking |
 | Per-Tenant Ops | 1 per tenant | All app schemas + `tenant_knowledge` AI layer |
 | App Knowledge | 1 per app type | Domain rules, agent prompts, reference docs (pgvector + PageIndex) |
-| Platform Rules | 1 total | 9 absolute rules, never-do constraints — queryable by agents at runtime |
+| Platform Rules | 1 total | 8 absolute rules, never-do constraints — queryable by agents at runtime |
 
 ## Key Convention
 

@@ -6,7 +6,7 @@
 At the start of EVERY session, before any other work:
 
 1. Run `./.claude-session-init.sh` to sync from GitHub and validate MD structure
-2. Read `BOOTSTRAP.md` for the full 5-step initialization protocol
+2. Read `BOOTSTRAP.md` for the full 6-step initialization protocol
 
 Do not skip this on "quick" sessions — there are none.
 
@@ -20,7 +20,7 @@ Do not skip this on "quick" sessions — there are none.
 
 ## Rules
 
-Full rules are in `agents/GLOBAL.md`. The 9 absolute rules are enforced on every task.
+Full rules are in `agents/GLOBAL.md`. The 8 absolute rules are enforced on every task.
 
 ## Default Execution — PIPELINE-FIRST
 

@@ -8,16 +8,8 @@ branch must pass before merge. It coordinates the 4-reviewer sign-off process
 and handles audit filter reviews.
 
 ## The 4-Reviewer Pipeline
-Every feature branch must receive PASS from all four reviewers:
-| Reviewer | Server | Checks |
-|---|---|---|
-| Security Reviewer | Agent-02 | Secrets, tenant isolation, auth bypass |
-| Logic Reviewer | Agent-03 | Correctness, edge cases, business logic |
-| Perf Reviewer | Agent-03 | N+1s, unbounded queries, render bottlenecks |
-| Build Validator | Agent-04 | Zero compile errors, zero lint errors |
-
-Run: `./agents/review-pipeline.sh <branch>`
-Collect: `./agents/collect-reviews.sh --wait <branch>`
+Reviewer set, commands, and blocking semantics: `agents/GLOBAL.md` Rule 7.
+Server/role placement: `agents/SERVERS.md`.
 
 ## Pipeline States
 - `pending` — branch submitted, reviews not yet started
@@ -28,9 +20,8 @@ Collect: `./agents/collect-reviews.sh --wait <branch>`
 
 ## Audit Filter Scope
 Audit filters apply when a task requires compliance or data-access review:
-- Verify DB queries have correct tenant scoping
-- Check INNGEST job payloads contain no cross-tenant data
-- Validate JSONB field access uses correct operators (`->>` not `->` for text)
+- Check INNGEST job payloads contain no PII or cross-tenant data
+- Verify GLOBAL Rules 1–8 + ⚠ FAIL causes apply to the diff (tenant scoping, JSONB operators)
 
 ## Key References
 - Review scripts: `agents/review-pipeline.sh`, `agents/collect-reviews.sh`

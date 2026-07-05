@@ -29,16 +29,11 @@ echo "[2/5] Validating MD file structure..."
 
 REQUIRED_FILES=(
   "agents/GLOBAL.md"
+  "agents/SERVERS.md"
   "agents/registry.md"
   "agents/OWNERS.md"
-  "agents/servers/agent-01.md"
-  "agents/servers/agent-02.md"
-  "agents/servers/agent-03.md"
-  "agents/servers/agent-04.md"
-  "agents/servers/agent-05.md"
-  "agents/servers/agent-06.md"
-  "agents/servers/agent-07.md"
-  "agents/servers/agent-08.md"
+  "agents/roles/shared/handoff-schema.md"
+  "agents/roles/shared/conventions.md"
 )
 
 for f in "${REQUIRED_FILES[@]}"; do
