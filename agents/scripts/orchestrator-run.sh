@@ -423,6 +423,11 @@ fi
 
 # ── Push branch (orchestrator decides on merge later, after human gate) ──────
 repo_lock  # pushes update shared remote-tracking refs — same race as fetch
+# Refresh the lease basis first: ensure_repo fetches ONLY master, so a leftover
+# remote branch from a previous attempt leaves the remote-tracking ref stale or
+# absent and --force-with-lease fails "[rejected] (stale info)" on EVERY retry
+# (BAA42B/F4D19E each burned 3 strikes on this, 2026-07-05).
+git fetch origin "+refs/heads/$BRANCH:refs/remotes/origin/$BRANCH" >> "$LOG" 2>&1 || true
 if ! git push -u origin "$BRANCH" --force-with-lease >> "$LOG" 2>&1; then
   repo_unlock
   emit "failed" "$BRANCH" 1 "git push failed" "Could not push branch" "$TOKENS" "$(build_verify_json 1)"
