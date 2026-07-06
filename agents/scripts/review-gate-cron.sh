@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Daily review gate — runs Claude unattended against the change_review backlog.
-# Installed on agent-06: 0 10 * * *  (2h before the noon dispatch so merges land
-# first and released awaiting_deps children ride the noon window).
+# Review gate — runs Claude unattended against the change_review backlog.
+# Installed on agent-06: */30 * * * *  (every 30 min; empty queue exits in <5s,
+# so the only real cost is when there is actually something to review).
 #
 # Manual run: bash /home/agent/grotap-agents/agents/scripts/review-gate-cron.sh
 set -uo pipefail
