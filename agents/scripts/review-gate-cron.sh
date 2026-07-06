@@ -39,11 +39,13 @@ cd "$AGENTS_REPO"   && git fetch origin -q && git reset --hard origin/master -q
 cd "$PLATFORM_REPO" && git fetch origin --prune -q && git checkout master -q && git reset --hard origin/master -q \
   || { fail_hold "bootstrap failed: could not sync grotap-platform to origin/master"; exit 1; }
 
-# Quick exit when the queue is empty. NB: single quotes — DATABASE_URL must be
+# Quick exit when the queue is empty. Must match the task prompt's queue shape:
+# change_review PLUS awaiting_human cases parked at the orchestrator human gate
+# (latest dispatch row awaiting_review). NB: single quotes — DATABASE_URL must be
 # expanded INSIDE the doppler-injected environment, not by this outer shell.
 QUEUE=$(doppler run --project grotap --config prd -- sh -c \
-  'psql "$DATABASE_URL" -Atc "SELECT count(*) FROM pipeline_cases WHERE status='"'"'change_review'"'"'"' 2>/dev/null || echo "?")
-echo "queue: $QUEUE change_review cases"
+  'psql "$DATABASE_URL" -Atc "SELECT count(*) FROM (SELECT case_id FROM pipeline_cases WHERE status='"'"'change_review'"'"' UNION SELECT c.case_id FROM pipeline_cases c WHERE c.status='"'"'awaiting_human'"'"' AND EXISTS (SELECT 1 FROM pipeline_dispatch_log dl WHERE dl.case_id=c.case_id AND dl.status='"'"'awaiting_review'"'"')) q"' 2>/dev/null || echo "?")
+echo "queue: $QUEUE reviewable cases (change_review + parked awaiting_review)"
 if [ "$QUEUE" = "0" ]; then echo "queue empty — nothing to do"; exit 0; fi
 
 # Run Claude with the standing task. Doppler injects DATABASE_URL etc. for the
@@ -51,6 +53,7 @@ if [ "$QUEUE" = "0" ]; then echo "queue empty — nothing to do"; exit 0; fi
 cd "$PLATFORM_REPO"
 timeout "$TIMEOUT_SECS" doppler run --project grotap --config prd -- \
   claude -p "$(cat "$TASK")" \
+    --model "${CODING_MODEL:-claude-fable-5}" \
     --permission-mode bypassPermissions \
     --max-turns 400
 RC=$?
