@@ -67,6 +67,7 @@ Code: `platform/` | Docs: `docs/` | Tasks: `agents/tasks/` | Fleet scripts: plat
 - "Most recent N" from a list endpoint: verify its ORDER BY delivers recency — both sort AND limit window; add an allowlisted order param if not.
 - Any endpoint that can return unbounded rows paginates BEFORE it ships (limit/offset + stable ORDER BY tie-breaker); grids get server-side filters; escape ILIKE metachars (`% _ \`).
 - App slugs: verify against the `apps` table, copy slug facts from the task VERBATIM. `pipeline` (📋) ≠ `agent-pipeline` (⚡); `document-upload` displays as "AI Knowledge Base".
+- Anthropic Messages API: any request whose messages contain `tool_use`/`tool_result` blocks MUST still pass the `tools` param — a "final answer" fallback that strips tools 400s on tool-bearing transcripts; use `tool_choice={"type":"none"}` instead (found in CASE-20260706-8F1C60).
 
 ### Frontend
 - Unused TS imports → `noUnusedLocals` build error.
@@ -96,6 +97,7 @@ Code: `platform/` | Docs: `docs/` | Tasks: `agents/tasks/` | Fleet scripts: plat
 - Verification/gate tasks (no code expected) report success without commits — say so in the task file.
 - No unbounded concurrent SSH to one host — pool, serialize, backoff (sshd MaxStartups drops stampedes).
 - Visibility/authz changes cover EVERY read+write path (list, my-apps, subscribe, vote, brands…) in ONE case; scope to the owning TENANT, not the creator user. One owner per hot file. Appending to a shared init hunk: use your OWN `pool.execute` block; don't re-ADD siblings' columns.
+- One owner per hot FUNCTION too: two same-batch cases that both rewrite the same function (05572B + 8584FE both rewrote `record_answer_from_hold`) guarantee a structural merge conflict — the second branch is dead on arrival. Coalesce such cases into ONE task before dispatch, or build them in sequence on one shared branch.
 - A fail-closed consumer gate requires closing EVERY producer path of that state in the same change (provision-or-cleanup, not warn-and-continue).
 - **ONE-TOUCH HUMAN STEPS** — owner time is the scarcest resource. Before any HI hold that puts a human in a console: derive the COMPLETE end-state from the consumer's actual code + the verbatim error (every field, permission, scope), deliver ALL steps in ONE message, state what NOT to touch, and batch every other pending item for that console into the visit. Verify against reality, not memory.
 
