@@ -73,6 +73,7 @@ Code: `platform/` | Docs: `docs/` | Tasks: `agents/tasks/` | Fleet scripts: plat
 - Unused TS imports → `noUnusedLocals` build error.
 - Global `body` CSS is DARK (`#0f0f0f`/white) — every light surface sets its OWN text `color` (grids `#374151`); e2e asserts VISIBILITY (computed-style luminance), not DOM presence.
 - New event domain → NEW BroadcastChannel (existing listeners have bare `onmessage` refetch handlers, no type filter).
+- `window.open(url, '_blank', 'noopener…')` returns NULL even when the popup opens — an `if (!popup)` fallback then ALSO navigates the current tab (double-open, opener lost). Internal same-origin popups: plain `window.open(url, '_blank')`.
 
 ### State machines & jobs
 - A failure path releases everything the happy path claimed (status, slot, lock, row) in the SAME transaction — "nobody un-claims it" = a leak that starves the pipeline.
