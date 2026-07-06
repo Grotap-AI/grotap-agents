@@ -43,6 +43,7 @@ Code: `platform/` | Docs: `docs/` | Tasks: `agents/tasks/` | Fleet scripts: plat
 - `pipeline_cases` tenant column is `org_id`. `tenants.tenant_id` is UUID but `tenant_users.tenant_id` is TEXT — `str()` before passing. WorkOS ids (`org_01…`, `user_01…`) are TEXT — never UUID columns, never `uuid.UUID()`.
 - UNIQUE with COALESCE is invalid — `CREATE UNIQUE INDEX`. A new unique/invariant index ships WITH its dedupe migration. Enforce invariants in every write path (CASE guard + partial unique index), not just backfill + docstring.
 - Never swallow schema errors (`except: log-and-continue` hides missing columns from every reviewer). asyncpg: an error POISONS the open transaction — `to_regclass('<table>')` checks or nested-transaction savepoints for optional tables.
+- Never call `.get()` on asyncpg Records from `pool.fetch/fetchrow` — `dict(r)` first, then `.get()` (banned even though asyncpg 0.29 allows it; recurred in 3BA7FB export service).
 - No `SELECT SUM(...) FOR UPDATE` (invalid) — lock the parent row or take an advisory lock. Dynamic UPDATE SET builders: never hardcode a column AND loop it.
 - Schema rename on an existing tenant: `ALTER SCHEMA … RENAME` (guard `to_regnamespace`) + re-GRANT app_user — never re-CREATE. Rotate DB role creds via `ALTER ROLE … WITH PASSWORD` — `DROP ROLE` fails once policies/grants depend on it.
 - RLS policies keyed EXACTLY on `current_setting('app.current_tenant_id')::uuid` — any other GUC name silently returns zero rows on enforced tenants. No tenant-specific seed rows in shared app migrations (they run on EVERY tenant).
@@ -58,7 +59,7 @@ Code: `platform/` | Docs: `docs/` | Tasks: `agents/tasks/` | Fleet scripts: plat
 - Webhooks: verify signature, be idempotent (dedup on event id), return non-2xx on transient failure (2xx = sender never retries), and survive out-of-order/duplicate delivery.
 - A connect/OAuth flow requests the scopes its CONSUMER case needs — trace the whole feature across split cases (scope, token, schema, enum).
 - Rebasing onto a hardened master must preserve auth guards master added; never re-add a provider wrapper that already exists.
-- NEVER pass user-submitted strings to readFile/exec/path APIs — resolve against an allowlisted root, reject absolute paths and `..`, cap read size (a raw `readFile(source_doc)` would have exfiltrated orchestrator secrets into agent context).
+- NEVER pass user-submitted strings to readFile/exec/path APIs — resolve against an allowlisted root, reject absolute paths and `..`, cap read size (a raw `readFile(source_doc)` would have exfiltrated orchestrator secrets into agent context). This includes FastAPI query params flowing into `Path(...)` (print-cloud `download_agent(version=…)`) — allowlist-regex the value first.
 - A key/token FORMAT validator must match what the minting path actually issues — grep the mint endpoint before writing the regex (a `pca_` gate would have 401'd every real `grotap_print_` key; 8BC416).
 
 ### Wiring & contracts
