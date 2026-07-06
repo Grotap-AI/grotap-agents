@@ -59,6 +59,7 @@ Code: `platform/` | Docs: `docs/` | Tasks: `agents/tasks/` | Fleet scripts: plat
 - A connect/OAuth flow requests the scopes its CONSUMER case needs — trace the whole feature across split cases (scope, token, schema, enum).
 - Rebasing onto a hardened master must preserve auth guards master added; never re-add a provider wrapper that already exists.
 - NEVER pass user-submitted strings to readFile/exec/path APIs — resolve against an allowlisted root, reject absolute paths and `..`, cap read size (a raw `readFile(source_doc)` would have exfiltrated orchestrator secrets into agent context).
+- A key/token FORMAT validator must match what the minting path actually issues — grep the mint endpoint before writing the regex (a `pca_` gate would have 401'd every real `grotap_print_` key; 8BC416).
 
 ### Wiring & contracts
 - Importing/creating ≠ wiring: a new router is dead until `include_router` lands in main.py; an imported helper needs a real call site; every UI action needs an endpoint that EXISTS (grep the router — extend it if the task is "UI-only" and it's missing). Verify referenced modules/pages exist before wiring routes; check master before re-building landed work.
@@ -85,6 +86,8 @@ Code: `platform/` | Docs: `docs/` | Tasks: `agents/tasks/` | Fleet scripts: plat
 ### Build & ship
 - `py_compile` misses import-time crashes — boot-test `python -c "import app.main"` before any backend push. FastAPI 0.115: bodyless status codes (204) need `response_model=None` (a `-> None` annotation asserts at route registration).
 - Actually RUN `tsc --noEmit` + `py_compile` — "it compiles" is a command, not a claim. Grep your diff for committed conflict markers (`^<<<<<<<`).
+- A "re-land with integrated fixes" task means the fixes are actually INTEGRATED — diff your branch against the rejected one first; byte-identical code = automatic re-reject (49C9DD re-landed 25423B's readFile hole unchanged).
+- Rebase conflict resolution must PRESERVE master-side surface: after rebasing, `git grep` every symbol/endpoint/response-shape you deleted or renamed — any master consumer still on the old contract = broken merge (2533BA reverted seed-hetzner + renamed db functions while 3 master call sites and ServersPage still used them).
 - Before finalizing, re-diff against CURRENT master: if master already landed your feature or rewrote the region, adapt or report-and-stop — never commit your stale copy of a hot file (a wholesale main.py replacement merged textually "clean" and would have deleted 5 live routers). Verify APIs/exception classes exist in the PINNED lib version (asyncpg has no `PoolAcquisitionError`); Dockerfiles that `npm run build` need devDeps installed first (`npm ci` then prune), not `--omit=dev`.
 - Rename/refactor: `git grep <old-identifier>` returns zero (minus intended shims) AND app-catalog seeds updated (`seed_apps.sql`, `seed_brands_apps.sql`, `control_plane.py`).
 - Stay in scope: no `npm install`, `package.json`/lockfile edits, or dep bumps unless the task IS a dependency upgrade.
