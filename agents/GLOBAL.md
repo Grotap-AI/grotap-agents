@@ -148,3 +148,4 @@ Frontend (Vercel) via CI on push to `master` (paths `frontend/**`). Backend Rail
 | 5 | Task files are gitignored — `agents/tasks/pending/active/done/archive/` not tracked. |
 | 6 | Type-check before commit — `cd frontend && npx tsc --noEmit`. Fix errors first. |
 | 7 | ONE app changed at once = ONE branch, built in sequence. Separate branches only for genuinely independent apps/subsystems. |
+- Rebuilding/re-pushing a branch is a fresh landing attempt: fetch and rebase onto CURRENT master right before your final push, and DROP any hunk master now owns (357E52's 07-06 15:28 rebuild still carried the superseded backend source_doc hunks 10 min after sibling 58A503 merged them — instant re-conflict).
