@@ -12,6 +12,7 @@ Identify your server by IP (`hostname -I`) against the roster in `agents/SERVERS
 Overflow executor: load `roles/execution/MODULE.md` + `roles/execution/execute/ROLE.md`.
 
 ## Server Setup Checklist (new server or after reset — full list in agents/SERVERS.md)
+- Swap: `bash agents/ensure-swap.sh` (this repo; idempotent 4 GiB swap + swappiness). Re-run after ANY hard reset/rebuild — OOM has wedged two boxes. Also runs automatically in grotap-platform `agents/setup-server.sh`.
 - API key in **both**: `/home/agent/.env` AND `/home/agent/.profile` (`export ANTHROPIC_API_KEY=...`)
 - Git safe.directory if root/agent mismatch: `git config --global --add safe.directory /home/agent/grotap-platform`
 - SCP task files (not in git): `scp -r agents/tasks/pending agents/tasks/active agent-06:/home/agent/grotap-platform/agents/tasks/`

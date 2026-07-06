@@ -34,6 +34,6 @@ One active account (**K0281854926**, console.hetzner.cloud). Verified via API 7/
 
 ## New-server onboarding
 1. `ssh -i ~/.ssh/grotap_agents root@<IP>`; add an `agent-NN` alias to `~/.ssh/config`.
-2. `bash agents/ensure-swap.sh` (persistent 4 GiB swap — idempotent; OOM has wedged two boxes).
+2. `bash agents/ensure-swap.sh` (script lives in THIS repo — canonical copy; persistent 4 GiB swap — idempotent; OOM has wedged two boxes). No checkout on the box yet? Run it from your local clone: `ssh agent-NN "bash -s" < agents/ensure-swap.sh`.
 3. Git auth: install `/home/agent/bin/git-credential-doppler` as `credential.helper` (per GLOBAL) — never a static token.
 4. Add to `agents/config.sh` (IP, roles, overflow flag); verify it appears in `./agents/server-status.sh` before dispatching.

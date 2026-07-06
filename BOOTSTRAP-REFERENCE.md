@@ -35,6 +35,7 @@ If SSH fails: check `~/.ssh/config` — Agent-01/08 use `User agent`, all others
 3. **Task files not in git**: `agents/tasks/pending/` and `agents/tasks/active/` are local-only
 4. **SSH from coordinator (agent-08)**: Needs `~/.ssh/grotap_agents` key + `~/.ssh/config`
 5. **Status server**: `node agents/status-server.js` must be running for dashboard
+6. **Swap**: `bash agents/ensure-swap.sh` (this repo — canonical copy) — idempotent 4 GiB swap + vm.swappiness; MUST be re-run after any hard reset/rebuild (OOM has wedged two boxes). Also invoked automatically by grotap-platform `agents/setup-server.sh`.
 
 ## Server SSH Access Matrix
 | Server | `agent` user SSH | `root` user SSH | Notes |
