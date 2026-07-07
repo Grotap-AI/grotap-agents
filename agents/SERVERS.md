@@ -18,6 +18,20 @@ Dispatch assignment is owned by the backend 3-min loop + LangGraph orchestrator 
 - agent cron: `pipeline_failure_monitor.py` 10m · `deploy_freshness_watchdog.py` 5m · **review gate every 4h** (`review-gate-cron.sh`) · reconcile 30m.
 - Deploy Ops roles (trigger → role): merge-to-master → **Deploy Verifier**; verifier FAIL → **Deploy Executor**; before deploy-execute → **Env Validator**; every 5 min → **Health Monitor**; daily / after infra change → **DNS Watchdog**; verifier PASS → **Post-Deploy QA**. Escalate to human when deploy infra itself is broken; hotfix regressions route to agent-04/execute.
 
+## Team 2 — open-model executors (Hetzner project **OpenAgents.grotapai**, token `HETZNER_FARM_API_TOKEN`)
+Provisioned 2026-07-07 for the Team 2 program (cases AA8CFD/F404F8/959C5E). Aider + OpenRouter runtime —
+NO claude CLI on these boxes by design. ⚠ NOT in the Team 1 dispatch pool: do not dispatch until the
+`config.sh` team registry (F404F8 children) merges and `case_data.team=team2` routing is live.
+
+| Server | IP | Hardware / DC | Purpose | Execute slots |
+|---|---|---|---|---|
+| agent-20 | 87.99.148.22 | cpx21, Ashburn (id 148646754) | Team 2 open-model executor | 3 |
+| agent-21 | 5.161.243.18 | cpx21, Ashburn (id 148646760) | Team 2 open-model executor | 3 |
+
+Baseline: Ubuntu 24.04, agent user, node 22, doppler CLI + `git-credential-doppler`, aider (pipx),
+4 GiB swap, `~/grotap-agents` + `~/grotap-platform` clones, `~/worktrees`. Scale Team 2 by adding
+boxes here + the team2 pool in `config.sh` — box CPU is only builds/git, inference is remote (OpenRouter/Lane C).
+
 ## Special hosts — NOT executors, never dispatch, never add to `config.sh` pools
 | Host | IP | Purpose |
 |---|---|---|
