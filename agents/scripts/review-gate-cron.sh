@@ -53,7 +53,6 @@ if [ "$QUEUE" = "0" ]; then echo "queue empty — nothing to do"; exit 0; fi
 cd "$PLATFORM_REPO"
 timeout "$TIMEOUT_SECS" doppler run --project grotap --config prd -- \
   claude -p "$(cat "$TASK")" \
-    --model "${CODING_MODEL:-claude-fable-5}" \
     --permission-mode bypassPermissions \
     --max-turns 400
 RC=$?

@@ -131,6 +131,15 @@ owns run lifecycle and SSHes dispatches to the fleet. Manual one-off (from platf
 bash agents/dispatch.sh <task.md> <server-ip> <session>   # manual
 bash agents/dispatch-execute.sh <task.md> <session>       # auto-route (most free slots)
 ```
+- **API-limit fast-fail signature (lesson 2026-07-07):** every run dying at ~90s with $0 / 0 tokens
+  and no error in the box log (`/home/agent/logs/orchestrator-run.log` shows "Running Claude:" then
+  silence) = the Anthropic Console org hit its **monthly usage limit** (Console → Settings → Limits;
+  distinct from credit exhaustion). Diagnose: `orchestrator_learnings` table holds the per-run diagnose
+  verdicts; reproduce with `sudo -u agent claude -p "Say OK" --output-format json` on any agent box —
+  a 400 "reached your specified API usage limits" confirms. Response: PAUSE `pipeline_automation`
+  (enabled=false) so the dispatcher stops churning cases into failed, file an owner HI hold, relabel
+  failed cases → `plan_approved` only AFTER the limit is raised. Model pins accelerate the burn —
+  revert any burndown pin when its window closes.
 
 ## Coding Pilot (CODING_PILOT env flag — default OFF, never enable without owner approval)
 Open-weight lane (qwen-2.5-coder-32b via OpenRouter) replaces Claude for `simple` tasks only; never P0/P1, medium/complex, or >2/day/server. Gate: post-commit `tsc --noEmit` + `py_compile`; any fail → reset worktree + Claude fallback. Window ≤20 cases or 2 weeks; success = ≥70% gate-pass AND ≥90% cost cut vs Sonnet. Detail: platform repo `agents/GLOBAL.md`.
@@ -140,6 +149,11 @@ Open-weight lane (qwen-2.5-coder-32b via OpenRouter) replaces Claude for `simple
 
 ## Deployment
 Frontend (Vercel) via CI on push to `master` (paths `frontend/**`). Backend Railway GitHub auto-deploy is BROKEN (case RLWAY1) — deploy via `doppler run -- railway up --service grotap-backend --detach` from `backend/`. Orchestrator: GitHub Actions `deploy-railway.yml` runs `railway up` on master pushes touching `orchestrator/**` (tip-commit detection only until CASE-20260705-C29667 lands — multi-commit pushes may silently skip; verify, fall back to manual `railway up`). Agents on Hetzner: push branch → request merge+deploy from coordinator.
+- **Orchestrator redeploy kills in-flight runs (lesson 2026-07-07):** the orchestrator Railway service
+  auto-deploys on master pushes touching `orchestrator/**`, and a redeploy severs every live SSH run on
+  the fleet (runs die silently, dispatch rows go stale). Before ANY master push, check
+  `git diff --name-only origin/master..HEAD -- orchestrator/` — if non-empty, wait for in-flight runs to
+  drain (or pause automation) first.
 
 ## Git Discipline
 | # | Rule |
