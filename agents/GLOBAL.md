@@ -130,6 +130,14 @@ bash agents/dispatch.sh <task.md> <server-ip> <session>   # manual
 bash agents/dispatch-execute.sh <task.md> <session>       # auto-route (most free slots)
 ```
 
+## Agent Teams (dispatch routing — TEAM2-DISPATCH contract, owner-approved 2026-07-07)
+- **team1** — the existing Claude agents (agent-02…06 pool, `orchestrator-run.sh` path). The default team.
+- **team2** — open-model agents (aider via OpenRouter, default qwen-2.5-coder-32b with escalation ladder, `agents/team-run.sh`; pool agent-20/21). Inactive until its pool is provisioned in platform repo `agents/config.sh`.
+- **Routing order:** explicit `case_data.team` on the case > `DEFAULT_TEAM` env (default `team1`). Team registry (server pool, runtime script, model env block, review policy) lives in platform repo `agents/config.sh`.
+- **Switch the default:** set `DEFAULT_TEAM=team2` in the dispatcher env — the single knob for open-model-first cutover. Rollout order: provision agent-20/21 → add to config.sh pool → route a few P3 cases via `case_data.team=team2` → evaluate → widen. Daily cap: `TEAM2_DAILY_CAP` (default 10); `CODING_PILOT=1` survives one release as a back-compat alias for team2 routing.
+- **Fallback team2 → team1:** a team2 run that exhausts its ladder emits `status=failed_open_model` → dispatcher automatically re-queues the SAME task to team1 (the Claude path), tagged `meta.team_fallback=true` in dispatch_log.
+- **Disable routing:** `DEFAULT_TEAM=team1` (or unset) + no `case_data.team` on cases → the team1 path is byte-identical to pre-teams dispatch.
+
 ## Coding Pilot (CODING_PILOT env flag — default OFF, never enable without owner approval)
 Open-weight lane (qwen-2.5-coder-32b via OpenRouter) replaces Claude for `simple` tasks only; never P0/P1, medium/complex, or >2/day/server. Gate: post-commit `tsc --noEmit` + `py_compile`; any fail → reset worktree + Claude fallback. Window ≤20 cases or 2 weeks; success = ≥70% gate-pass AND ≥90% cost cut vs Sonnet. Detail: platform repo `agents/GLOBAL.md`.
 
