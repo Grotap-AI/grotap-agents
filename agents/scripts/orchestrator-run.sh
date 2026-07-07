@@ -274,8 +274,8 @@ JSON
 # Default the heavy coding model to the task's complexity tier; override with
 # CODING_MODEL to pin a single model fleet-wide.
 case "$COMPLEXITY" in
-  complex) MODEL="${CODING_MODEL:-claude-fable-5}" ;;
-  *)       MODEL="${CODING_MODEL:-claude-fable-5}" ;;
+  complex) MODEL="${CODING_MODEL:-claude-opus-4-8}" ;;
+  *)       MODEL="${CODING_MODEL:-claude-sonnet-4-6}" ;;
 esac
 
 # ── Run Claude CLI headless ──────────────────────────────────────────────────
