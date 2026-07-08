@@ -122,6 +122,12 @@ if [ "${1:-}" = "--merge" ]; then
   BRANCH="$(printf '%s' "$PAYLOAD" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("branch",""))')"
   repo_lock  # held until exit — merge mode checkouts/pulls the shared clone directly
   ensure_repo || { echo '{"merged": false, "error": "repo unavailable"}'; exit 1; }
+  # ensure_repo fetches ONLY master, so on any host that didn't execute this
+  # case origin/$BRANCH is missing (or stale) and the merge fails — which the
+  # catch-all below used to misreport as "merge conflict". Fetch the branch
+  # explicitly, force-updating the remote-tracking ref.
+  git fetch origin "+refs/heads/$BRANCH:refs/remotes/origin/$BRANCH" >> "$LOG" 2>&1 \
+    || { echo '{"merged": false, "error": "branch not found on origin"}'; exit 1; }
   log "Merging $BRANCH → master"
   git checkout master --quiet >> "$LOG" 2>&1
   git pull origin master --quiet >> "$LOG" 2>&1
