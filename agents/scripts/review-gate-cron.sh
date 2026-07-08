@@ -34,10 +34,15 @@ fail_hold() {
   }" >/dev/null || true
 }
 
-# Sync both repos to latest master
+# Sync both repos to latest master. One retry after a short backoff: fetch can
+# hit a transient ref-lock race ("cannot lock ref ... but expected ...") when a
+# case branch moves mid-fetch; the next fetch always sees the settled ref.
+sync_platform() {
+  cd "$PLATFORM_REPO" && git fetch origin --prune -q && git checkout master -q && git reset --hard origin/master -q
+}
 cd "$AGENTS_REPO"   && git fetch origin -q && git reset --hard origin/master -q
-cd "$PLATFORM_REPO" && git fetch origin --prune -q && git checkout master -q && git reset --hard origin/master -q \
-  || { fail_hold "bootstrap failed: could not sync grotap-platform to origin/master"; exit 1; }
+sync_platform || { echo "platform sync failed — retrying in 30s"; sleep 30; sync_platform; } \
+  || { fail_hold "bootstrap failed: could not sync grotap-platform to origin/master (after retry)"; exit 1; }
 
 # Quick exit when the queue is empty. Must match the task prompt's queue shape:
 # change_review PLUS awaiting_human cases parked at the orchestrator human gate
