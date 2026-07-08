@@ -35,7 +35,7 @@ boxes here + the team2 pool in `config.sh` — box CPU is only builds/git, infer
 ## Special hosts — NOT executors, never dispatch, never add to `config.sh` pools
 | Host | IP | Purpose |
 |---|---|---|
-| grotap-cobrowse-01 | 5.161.189.143 | Cobrowse AI support runner (headless Chromium + Agent SDK, `cobrowse-runner` systemd). Dedicated Hetzner project `Cobrowse.Grotap.com` (`HETZNER_COBROWSE_API_TOKEN`); scale with `agents/setup-cobrowse-runner.sh`. ⚠ IP recycled from deleted agent-01 — stale host-key warnings: `ssh-keygen -R 5.161.189.143`. SSH `User agent`. |
+| supportagents (ex grotap-cobrowse-01) | 5.161.189.143 | **OpenReplay session-replay server** — `supportagents.grotap.com`, rescaled to cpx51 + wiped 2026-07-07 (OpenReplay Docker stack, projectId 2); replaces Cobrowse.io (runner RETIRED, `setup-cobrowse-runner.sh` obsolete). Still in Hetzner project `Cobrowse.Grotap.com` (`HETZNER_COBROWSE_API_TOKEN`). ⚠ IP recycled twice (agent-01 → cobrowse-01 → this) — stale host-key warnings: `ssh-keygen -R 5.161.189.143`. |
 | LLM-LOCAL-02 (grotap-llm-01) | 62.238.7.84 | Lane C open-model engine — Ollama + `llama3.2:3b`, Caddy TLS at `https://ollama.grotap.com`, wired to prod via `LOCAL_MODEL_BASE_URL`. |
 | GEX44 GPU box | (incoming) | Ordered 7/3 (RTX 4000 Ada 20GB, Hetzner Robot, ETA mid-July) — future primary Lane C engine at `llm-gpu.grotap.com`. HI hold `3adc9488`. |
 
