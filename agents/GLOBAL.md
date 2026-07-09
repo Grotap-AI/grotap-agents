@@ -133,32 +133,9 @@ owns run lifecycle and SSHes dispatches to the fleet. Manual one-off (from platf
 bash agents/dispatch.sh <task.md> <server-ip> <session>   # manual
 bash agents/dispatch-execute.sh <task.md> <session>       # auto-route (most free slots)
 ```
-- **API-limit fast-fail signature (lesson 2026-07-07):** every run dying at ~90s with $0 / 0 tokens
-  and no error in the box log (`/home/agent/logs/orchestrator-run.log` shows "Running Claude:" then
-  silence) = the Anthropic Console org hit its **monthly usage limit** (Console → Settings → Limits;
-  distinct from credit exhaustion). Diagnose: `orchestrator_learnings` table holds the per-run diagnose
-  verdicts; reproduce with `sudo -u agent claude -p "Say OK" --output-format json` on any agent box —
-  a 400 "reached your specified API usage limits" confirms. Response: PAUSE `pipeline_automation`
-  (enabled=false) so the dispatcher stops churning cases into failed, file an owner HI hold, relabel
-  failed cases → `plan_approved` only AFTER the limit is raised. Model pins accelerate the burn —
-  revert any burndown pin when its window closes.
-- **Inode-exhaustion fast-fail signature (lesson 2026-07-08):** runs dying 1–2 min in with an EMPTY
-  branch, no session, and no persisted error = worktree checkout failed at `git worktree add`. Check
-  `df -i` (NOT `df -h` — bytes look free while inodes are 100%); the hogs are stale done-case worktrees
-  under `~/worktrees`, each with a full node_modules. orchestrator-run.sh now GCs worktrees >48h old
-  (>4h in emergency at ≥90% inodes) before every run, but if a box wedges anyway: remove stale
-  worktrees, `git worktree prune`, re-queue the infra victims (plan_approved + clear claims + delete
-  thread_map rows). Failed children block ALL awaiting_deps siblings — the whole pipeline can look
-  dead from two bad boxes.
-- **node_modules symlink sabotage (lesson 2026-07-08):** a runner Claude symlinked its worktree's
-  `frontend/node_modules` to the shared clone's install; the symlink made the dir "exist" so the
-  verify self-heal skipped `npm ci`, and the shared install was stale/broken → every verify failed
-  with TS2307 missing-module errors in UNTOUCHED master files (looked like the agent's code was bad;
-  8FE1EC burned 3 attempts). Rules: (1) agents must NEVER symlink node_modules (or anything) from the
-  shared clone into a worktree — run `npm ci` in the package instead (now also enforced: the runner
-  deletes node_modules symlinks and reinstalls before verifying); (2) when a build-verify failure
-  shows missing-module errors in files the agent didn't touch, suspect the environment before the
-  code — reproduce `npx tsc --noEmit` in the surviving worktree and check what node_modules actually is.
+- **API-limit fast-fail (2026-07-07):** runs dying ~90s with $0 / 0 tokens and no box-log error = Console org MONTHLY usage limit (≠ credit exhaustion). Confirm: `sudo -u agent claude -p "Say OK" --output-format json` → 400 "usage limits". Respond: PAUSE `pipeline_automation`, file owner HI hold, relabel failed → `plan_approved` only AFTER the limit is raised; revert burndown model pins when their window closes. Full recipe: agents/LESSONS-ARCHIVE.md.
+- **Inode-exhaustion fast-fail (2026-07-08):** runs dying 1–2 min in with an EMPTY branch and no persisted error = `git worktree add` failed. Check `df -i` (NOT `df -h` — bytes look free at 100% inodes); hogs = stale `~/worktrees` with full node_modules. orchestrator-run.sh GCs them pre-run; if wedged anyway: remove stale worktrees, `git worktree prune`, re-queue infra victims. Failed children block ALL awaiting_deps siblings — the pipeline can look dead from two bad boxes. Full recipe: agents/LESSONS-ARCHIVE.md.
+- **node_modules symlinks FORBIDDEN (2026-07-08):** never symlink node_modules (or anything) from the shared clone into a worktree — run `npm ci` in the package (runner now deletes symlinks + reinstalls before verify). Missing-module TS2307 errors in UNTOUCHED master files = suspect the ENVIRONMENT, not the code — reproduce `npx tsc --noEmit` in the surviving worktree first. Full story: agents/LESSONS-ARCHIVE.md.
 
 ## Agent Teams (dispatch routing — TEAM2-DISPATCH contract, owner-approved 2026-07-07)
 - **team1** — the existing Claude agents (agent-02…06 pool, `orchestrator-run.sh` path). The default team.
@@ -167,20 +144,14 @@ bash agents/dispatch-execute.sh <task.md> <session>       # auto-route (most fre
 - **Switch the default:** set `DEFAULT_TEAM=team2` in the dispatcher env — the single knob for open-model-first cutover. Rollout order: provision agent-20/21 → add to config.sh pool → route a few P3 cases via `case_data.team=team2` → evaluate → widen. Daily cap: `TEAM2_DAILY_CAP` (default 10); `CODING_PILOT=1` survives one release as a back-compat alias for team2 routing.
 - **Fallback team2 → team1:** a team2 run that exhausts its ladder emits `status=failed_open_model` → dispatcher automatically re-queues the SAME task to team1 (the Claude path), tagged `meta.team_fallback=true` in dispatch_log.
 - **Disable routing:** `DEFAULT_TEAM=team1` (or unset) + no `case_data.team` on cases → the team1 path is byte-identical to pre-teams dispatch.
-
-## Coding Pilot (CODING_PILOT env flag — default OFF, never enable without owner approval)
-Open-weight lane (qwen-2.5-coder-32b via OpenRouter) replaces Claude for `simple` tasks only; never P0/P1, medium/complex, or >2/day/server. Gate: post-commit `tsc --noEmit` + `py_compile`; any fail → reset worktree + Claude fallback. Window ≤20 cases or 2 weeks; success = ≥70% gate-pass AND ≥90% cost cut vs Sonnet. Detail: platform repo `agents/GLOBAL.md`.
+- **Coding Pilot (CODING_PILOT env — default OFF, owner approval required):** legacy open-weight lane, now a back-compat alias for team2 routing. `simple` tasks only; never P0/P1 or >2/day/server; gate = post-commit `tsc --noEmit` + `py_compile`, any fail → reset worktree + Claude fallback. Detail: platform repo `agents/GLOBAL.md` + agents/LESSONS-ARCHIVE.md.
 
 ## Code Review
 `/codex:review` before every commit (mandatory; separate from Rule 7 pipeline), then the Rule 7 review pipeline. ANY reviewer FAIL = branch blocked. No exceptions.
 
 ## Deployment
 Frontend (Vercel) via CI on push to `master` (paths `frontend/**`). Backend Railway GitHub auto-deploy is BROKEN (case RLWAY1) — deploy via `doppler run -- railway up --service grotap-backend --detach` from `backend/`. Orchestrator: GitHub Actions `deploy-railway.yml` runs `railway up` on master pushes touching `orchestrator/**` (tip-commit detection only until CASE-20260705-C29667 lands — multi-commit pushes may silently skip; verify, fall back to manual `railway up`). Agents on Hetzner: push branch → request merge+deploy from coordinator.
-- **Orchestrator redeploy kills in-flight runs (lesson 2026-07-07):** the orchestrator Railway service
-  auto-deploys on master pushes touching `orchestrator/**`, and a redeploy severs every live SSH run on
-  the fleet (runs die silently, dispatch rows go stale). Before ANY master push, check
-  `git diff --name-only origin/master..HEAD -- orchestrator/` — if non-empty, wait for in-flight runs to
-  drain (or pause automation) first.
+- **Orchestrator redeploy kills in-flight fleet runs (2026-07-07):** a redeploy severs every live SSH run (silent deaths, stale dispatch rows). Before ANY master push: `git diff --name-only origin/master..HEAD -- orchestrator/` — non-empty → drain in-flight runs (or pause automation) first. Full story: agents/LESSONS-ARCHIVE.md.
 
 ## Git Discipline
 | # | Rule |
@@ -193,7 +164,6 @@ Frontend (Vercel) via CI on push to `master` (paths `frontend/**`). Backend Rail
 | 6 | Type-check before commit — `cd frontend && npx tsc --noEmit`. Fix errors first. |
 | 7 | ONE app changed at once = ONE branch, built in sequence. Separate branches only for genuinely independent apps/subsystems. |
 - Rebuilding/re-pushing a branch is a fresh landing attempt: fetch and rebase onto CURRENT master right before your final push, and DROP any hunk master now owns (357E52's 07-06 15:28 rebuild still carried the superseded backend source_doc hunks 10 min after sibling 58A503 merged them — instant re-conflict).
-- ORP dual-run: OBSOLETE 2026-07-08 — EA3E8D's Cobrowse rip-out reached master (2d6fe34d), so the dual-send no longer exists to preserve. The constraint transfers: `AI_SUPPORT_ENABLED` must STAY false until an OpenReplay runner driver actually lands on master (ORP3 case 9C3809 reads `done` but shipped ZERO code — `cobrowse-agent-runner/src/index.ts:52-53` still hard-throws; verify the code, never the case status). Still true: `frontend/src/lib/openreplay.ts` is RESERVED for ORP1's tracker wrapper — never create it for plumbing/seams.
 - Duplicate case cuts of the SAME endpoint (663AF1 + D290F7 both built GET /support/turn-credentials): before building, `git log origin/master` + grep the router for the route — if a twin case already landed, ship a superseded marker doc instead of a second implementation (two `@router.get` defs for one path merge silently and shadow each other).
 - Bash test harness under `set -euo pipefail`: a helper function must NOT end with a bare `[[ cond ]] && cmd` — when `cond` is false the `&&`-list returns 1, becomes the function's exit status, and (called as a bare statement) trips `set -e`, aborting the whole script before any assertion runs. Symptom: `rc=1` with ZERO output. Use `if [[ cond ]]; then cmd; fi` or append `return 0`. (CASE-20260706-61647F's `test_frozen_migrations.sh` `run_guard()` ended with `[[ $VERBOSE -eq 1 ]] && printf ...`; default `bash test.sh` ran 0 of 10 tests. The guard it tested was correct — only the harness aborted. When you ship tests, RUN them in the default (no-flag) mode before claiming green.)
 - Dispatch_failure storm 2026-07-09 (E4AC51+1CCDBD): ONE agent-06 sync incident auto-filed as TWO parents → both decomposed → near-duplicate children edited the SAME agents scripts in parallel → first merges won, every later sibling conflicted → 5 deploy holds → circuit breaker stalled the fleet. Rules: (1) before decomposing an auto-filed infra incident, search open cases for the same failure signature (repo + error_type + host) and ATTACH — never file a twin parent; (2) children across ALL active parents touching the same file set must be serialized, not parallel; (3) at the review gate, twin branches of the same fix = merge the best ONE, close the rest superseded — never union-merge two implementations of the same helper. Durable intake-dedup fix: CASE-20260709-541957.
