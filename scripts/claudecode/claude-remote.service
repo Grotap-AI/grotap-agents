@@ -1,0 +1,24 @@
+# claude-remote.service — systemd user unit for Claude Code Remote Control.
+#
+# Template source: scripts/claudecode/claude-remote.service (grotap-agents repo)
+# Installed to:    ~/.config/systemd/user/claude-remote.service  (by provision.sh)
+#
+# Enable:  systemctl --user enable  claude-remote.service   (done by provision.sh)
+# Start:   systemctl --user start   claude-remote.service   (operator action only)
+# Logs:    journalctl --user -u claude-remote.service -f
+[Unit]
+Description=Claude Code Remote Control (grotap session for %u)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/workspace/grotap
+ExecStart=%h/workspace/grotap/scripts/claudecode/claude-remote-wrapper.sh
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target
