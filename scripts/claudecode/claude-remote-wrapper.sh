@@ -64,8 +64,10 @@ _extract_url() {
 # 4. Run claude remote-control.  --continue reconnects an existing session;
 #    fall back to a fresh start if --continue is not recognised or fails.
 #    stdbuf -oL forces line-buffered stdout at every pipeline stage.
+#    stdin gets "y" — the CLI asks "Enable Remote Control? (y/n)" on EVERY
+#    start (not persisted), and under systemd there is no TTY to answer it.
 # --------------------------------------------------------------------------
 (
-    stdbuf -oL claude remote-control --name "grotap-${LABEL}" --continue 2>&1 \
-        || stdbuf -oL claude remote-control --name "grotap-${LABEL}" 2>&1
+    printf 'y\n' | stdbuf -oL claude remote-control --name "grotap-${LABEL}" --continue 2>&1 \
+        || printf 'y\n' | stdbuf -oL claude remote-control --name "grotap-${LABEL}" 2>&1
 ) | stdbuf -oL tee "${LOG_FILE}" | _extract_url
