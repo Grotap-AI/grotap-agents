@@ -141,6 +141,23 @@ bash agents/dispatch-execute.sh <task.md> <session>       # auto-route (most fre
   (enabled=false) so the dispatcher stops churning cases into failed, file an owner HI hold, relabel
   failed cases → `plan_approved` only AFTER the limit is raised. Model pins accelerate the burn —
   revert any burndown pin when its window closes.
+- **Inode-exhaustion fast-fail signature (lesson 2026-07-08):** runs dying 1–2 min in with an EMPTY
+  branch, no session, and no persisted error = worktree checkout failed at `git worktree add`. Check
+  `df -i` (NOT `df -h` — bytes look free while inodes are 100%); the hogs are stale done-case worktrees
+  under `~/worktrees`, each with a full node_modules. orchestrator-run.sh now GCs worktrees >48h old
+  (>4h in emergency at ≥90% inodes) before every run, but if a box wedges anyway: remove stale
+  worktrees, `git worktree prune`, re-queue the infra victims (plan_approved + clear claims + delete
+  thread_map rows). Failed children block ALL awaiting_deps siblings — the whole pipeline can look
+  dead from two bad boxes.
+- **node_modules symlink sabotage (lesson 2026-07-08):** a runner Claude symlinked its worktree's
+  `frontend/node_modules` to the shared clone's install; the symlink made the dir "exist" so the
+  verify self-heal skipped `npm ci`, and the shared install was stale/broken → every verify failed
+  with TS2307 missing-module errors in UNTOUCHED master files (looked like the agent's code was bad;
+  8FE1EC burned 3 attempts). Rules: (1) agents must NEVER symlink node_modules (or anything) from the
+  shared clone into a worktree — run `npm ci` in the package instead (now also enforced: the runner
+  deletes node_modules symlinks and reinstalls before verifying); (2) when a build-verify failure
+  shows missing-module errors in files the agent didn't touch, suspect the environment before the
+  code — reproduce `npx tsc --noEmit` in the surviving worktree and check what node_modules actually is.
 
 ## Agent Teams (dispatch routing — TEAM2-DISPATCH contract, owner-approved 2026-07-07)
 - **team1** — the existing Claude agents (agent-02…06 pool, `orchestrator-run.sh` path). The default team.

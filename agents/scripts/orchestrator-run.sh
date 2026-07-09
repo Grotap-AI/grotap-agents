@@ -172,6 +172,42 @@ log "=== Execute case=$CASE_ID branch=$BRANCH attempt=$ATTEMPT ==="
 repo_lock
 ensure_repo || emit "failed" "$BRANCH" 1 "Platform repo unavailable" "Could not clone/fetch grotap-platform" 0
 
+# Worktree GC + inode guard (fleet incident 2026-07-08: hundreds of stale
+# done-case worktrees, each carrying a node_modules, exhausted inodes on
+# agent-02/03 — `df -h` showed free bytes while `df -i` was 100%, so checkouts
+# died ~2 min in with empty branches and no persisted error). Runs under the
+# repo lock. Age is necessary but NOT sufficient: peers hold the repo lock
+# only around fetch/worktree-add/push, not during execution, so an age-only
+# sweep could race a slow live run. A worktree is treated as dead only if no
+# process still references its case ID on the command line — a live run always
+# has at least the peer's `orchestrator-run.sh <CASE-ID>` process, and its
+# claude/npm children carry the worktree path too.
+wt_dead() { ! pgrep -f "$(basename "$1")" > /dev/null 2>&1; }
+gc_worktree() {
+  if ! wt_dead "$1"; then
+    log "GC skip (live runner): $(basename "$1")"
+    return 0
+  fi
+  log "GC stale worktree: $(basename "$1")"
+  git worktree remove --force "$1" >> "$LOG" 2>&1 && return 0
+  # Destructive fallback (worktree remove can fail on corrupt metadata) only
+  # after re-confirming nothing came alive since the check above.
+  wt_dead "$1" && rm -rf "$1"
+  return 0
+}
+find "$WORKTREE_ROOT" -mindepth 1 -maxdepth 1 -type d -mtime +2 2>/dev/null | while IFS= read -r wt; do
+  gc_worktree "$wt"
+done
+git worktree prune >> "$LOG" 2>&1 || true
+INODE_USE="$(df --output=ipcent "$WORKTREE_ROOT" 2>/dev/null | tail -1 | tr -dc '0-9')"
+if [ -n "$INODE_USE" ] && [ "$INODE_USE" -ge 90 ]; then
+  log "Inodes at ${INODE_USE}% — emergency worktree GC (>4h old)"
+  find "$WORKTREE_ROOT" -mindepth 1 -maxdepth 1 -type d -mmin +240 2>/dev/null | while IFS= read -r wt; do
+    gc_worktree "$wt"
+  done
+  git worktree prune >> "$LOG" 2>&1 || true
+fi
+
 # Fresh worktree per attempt (idempotent: remove a stale one first).
 WT="$WORKTREE_ROOT/${CASE_ID}"
 git worktree remove --force "$WT" >> "$LOG" 2>&1 || true
@@ -223,6 +259,7 @@ $RETRY_BLOCK
 ## Rules
 - Follow the repo CLAUDE.md and agents/GLOBAL.md rules exactly.
 - Make the minimal correct change. Commit your work with git (do NOT push — the runner pushes).
+- Never symlink node_modules (or any path) from the shared ~/grotap-platform clone into this worktree. If a package needs deps, run 'npm ci' inside that package here — the shared install may be stale and a symlink breaks build verification.
 - Before finishing, validate: run 'npx tsc --noEmit' in any frontend/TS package you changed, and 'python3 -m py_compile' on any backend .py file you changed.
 - If you cannot complete the task, explain why clearly."
 
@@ -340,7 +377,16 @@ verify_ts() {
   # Self-heal deps so verification actually runs fleet-wide (node_modules coverage
   # varies per server). npm ci needs the lockfile; an install failure degrades to
   # a skip — never a false task failure.
-  if [ ! -d "${pkg}/node_modules" ]; then
+  # A symlinked node_modules is NOT an install: runners have linked it to the
+  # shared clone's (possibly stale/broken) install mid-run, which made this
+  # existence check pass and verification fail with missing-module errors from
+  # untouched master files (fleet incident 2026-07-08). Same for a dir without
+  # npm's .package-lock.json marker (partial/killed install). Both → reinstall.
+  if [ -L "${pkg}/node_modules" ]; then
+    log "Removing ${pkg}/node_modules symlink (not a real install)..."
+    rm -f "${pkg}/node_modules"
+  fi
+  if [ ! -d "${pkg}/node_modules" ] || [ ! -f "${pkg}/node_modules/.package-lock.json" ]; then
     if [ -f "${pkg}/package-lock.json" ]; then
       log "Installing ${pkg} deps (npm ci)..."
       if ! (cd "$pkg" && timeout 420 npm ci --prefer-offline --no-audit --no-fund >>"$LOG" 2>&1); then
