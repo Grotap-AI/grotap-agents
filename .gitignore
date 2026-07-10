@@ -10,6 +10,9 @@ state/.gh_token
 # Agent-generated state — lives on agent-state branch only
 state/handoffs/
 
+# Nested grotap-platform clone (separate private repo — never track here)
+platform/
+
 # OS
 .DS_Store
 Thumbs.db
