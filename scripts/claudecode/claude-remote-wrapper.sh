@@ -66,8 +66,10 @@ _extract_url() {
 #    stdbuf -oL forces line-buffered stdout at every pipeline stage.
 #    stdin gets "y" — the CLI asks "Enable Remote Control? (y/n)" on EVERY
 #    start (not persisted), and under systemd there is no TTY to answer it.
+#    --dangerously-skip-permissions: browser sessions must not prompt for
+#    tool approval (owner directive 2026-07-09) — same mode as the fleet.
 # --------------------------------------------------------------------------
 (
-    printf 'y\n' | stdbuf -oL claude remote-control --name "grotap-${LABEL}" --continue 2>&1 \
-        || printf 'y\n' | stdbuf -oL claude remote-control --name "grotap-${LABEL}" 2>&1
+    printf 'y\n' | stdbuf -oL claude remote-control --dangerously-skip-permissions --name "grotap-${LABEL}" --continue 2>&1 \
+        || printf 'y\n' | stdbuf -oL claude remote-control --dangerously-skip-permissions --name "grotap-${LABEL}" 2>&1
 ) | stdbuf -oL tee "${LOG_FILE}" | _extract_url
