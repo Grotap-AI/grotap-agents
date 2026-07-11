@@ -29,7 +29,9 @@ esac
 
 # --- Jumpbox seats: sync isolated per-user clones + run session init --------
 # Detection: Linux + ~/.claude-remote (created by provision.sh on the box only).
+JUMPBOX=0
 if [ "$IS_WINDOWS" = 0 ] && [ -d "${HOME:-/nonexistent}/.claude-remote" ] && [ -d "${HOME:-/nonexistent}/workspace/grotap/.git" ]; then
+  JUMPBOX=1
   W="${HOME}/workspace/grotap"
   git -C "$W" pull --ff-only -q 2>/dev/null \
     || say "[bootstrap] WARN: grotap-agents pull failed (offline or diverged) — working from $(git -C "$W" rev-parse --short HEAD 2>/dev/null || echo '?')"
@@ -59,9 +61,19 @@ if   python3 -c 'import asyncpg' >/dev/null 2>&1; then PY=python3
 elif python  -c 'import asyncpg' >/dev/null 2>&1; then PY=python
 fi
 
+# Jumpbox seats + cloud sandboxes hold a CONFIG-SCOPED service token
+# (grotap/claudecode — exposes ONLY DATABASE_URL, resolved from prd). Passing
+# -p/-c flags for a different config errors against a scoped token, so those
+# environments must invoke doppler flagless; operator machines use prd flags.
+if [ "$JUMPBOX" = 1 ] || [ -n "${DOPPLER_TOKEN:-}" ]; then
+  DOP="doppler run --"
+else
+  DOP="doppler run -p grotap -c prd --"
+fi
+
 if command -v doppler >/dev/null 2>&1; then
   if [ -n "$DBPY" ]; then
-    say "[bootstrap] doppler: $(doppler --version 2>/dev/null | head -1) — Neon SQL: doppler run -p grotap -c prd -- ${PY:-python3} $DBPY \"<sql>\""
+    say "[bootstrap] doppler: $(doppler --version 2>/dev/null | head -1) — Neon SQL: $DOP ${PY:-python3} $DBPY \"<sql>\""
   else
     say "[bootstrap] doppler: $(doppler --version 2>/dev/null | head -1)"
   fi
