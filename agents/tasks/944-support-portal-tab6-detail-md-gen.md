@@ -1,3 +1,9 @@
+---
+title: "feat: support portal tab 6 — enhancement detail + spec MD generation (#944)"
+branch: task/944-enhancement-detail
+complexity: complex
+---
+
 You are working on the grotap platform codebase at /home/agent/grotap-platform.
 
 ## Task #944 — Support Portal Tab 6: Enhancement Detail + Spec MD Generation

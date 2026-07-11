@@ -1,3 +1,9 @@
+---
+title: "feat: app earnings reporting endpoint + UI (#946)"
+branch: task/946-earnings-reporting
+complexity: complex
+---
+
 You are working on the grotap platform codebase at /home/agent/grotap-platform.
 
 ## Task #946 — App Earnings Reporting

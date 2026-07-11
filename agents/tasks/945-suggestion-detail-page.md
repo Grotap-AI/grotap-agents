@@ -1,3 +1,9 @@
+---
+title: "feat: app suggestion detail page at /apps/suggest/:id (#945)"
+branch: task/945-suggest-detail
+complexity: medium
+---
+
 You are working on the grotap platform codebase at /home/agent/grotap-platform.
 
 ## Task #945 — App Suggestion Detail Page

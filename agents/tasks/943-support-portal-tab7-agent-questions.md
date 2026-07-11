@@ -1,3 +1,9 @@
+---
+title: "feat: support portal tab 7 — agent questions queue (#943)"
+branch: task/943-agent-questions
+complexity: complex
+---
+
 You are working on the grotap platform codebase at /home/agent/grotap-platform.
 
 ## Task #943 — Support Portal Tab 7: Agent Questions Queue
