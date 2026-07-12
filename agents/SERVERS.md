@@ -32,6 +32,22 @@ Baseline: Ubuntu 24.04, agent user, node 22, doppler CLI + `git-credential-doppl
 4 GiB swap, `~/grotap-agents` + `~/grotap-platform` clones, `~/worktrees`. Scale Team 2 by adding
 boxes here + the team2 pool in `config.sh` — box CPU is only builds/git, inference is remote (OpenRouter/Lane C).
 
+## Team 3 — Grok 4.5 executors (Hetzner project **OpenAgents.grotapai**, token `HETZNER_FARM_API_TOKEN`)
+Provisioned 2026-07-12 for the Grok 4.5 hedge team (cases D15EF4/A5CE1C/A1CD20/6C7435). Aider +
+OpenRouter (`x-ai/grok-4.5`) runtime — NO claude CLI by design. **FSN1 on purpose**: same DC as
+GEX131 (llm-gpu-02) and attached to Cloud Network `team2-llm-lan` (12438415) — the Ashburn team2
+boxes cannot attach (single-zone rule). ⚠ NOT dispatchable until the `config.sh` team3 registry
+(case A5CE1C) merges and pilot cases are tagged `case_data.team=team3`.
+
+| Server | IP | Private IP | Hardware / DC | Purpose | Execute slots |
+|---|---|---|---|---|---|
+| agent-30 | 167.233.59.142 | 10.0.2.1 | cpx22, FSN1 (id 150155427) | Team 3 Grok executor | 3 |
+| agent-31 | 167.233.194.57 | 10.0.2.2 | cpx22, FSN1 (id 150155432) | Team 3 Grok executor | 3 |
+
+Baseline identical to Team 2 (agent user, node 22, doppler + `git-credential-doppler`, aider via
+pipx, 4 GiB swap, both repo clones, `~/worktrees`). Note: cpx21 is not offered in FSN1 — cpx22
+(2c/4GB, €22.99/mo) is the closest; EU premium accepted for GEX131 LAN adjacency.
+
 ## Special hosts — NOT executors, never dispatch, never add to `config.sh` pools
 | Host | IP | Purpose |
 |---|---|---|
