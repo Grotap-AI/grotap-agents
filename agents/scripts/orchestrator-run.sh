@@ -426,9 +426,15 @@ if echo "$CHANGED" | grep -q '^frontend/' && [ -d frontend/node_modules ]; then
   fi
 fi
 
-# Python: compile every changed .py (hard).
+# Python: compile every changed .py (hard). Deleted files can't compile —
+# a task that removes a .py file must not fail verification on its own
+# deletion (7F3D79 burned 3 attempts on this, 2026-07-11).
 while IFS= read -r pyf; do
   [ -z "$pyf" ] && continue
+  if [ ! -f "$pyf" ]; then
+    add_check "py_compile ${pyf}: skipped (deleted)"
+    continue
+  fi
   pyout="$(python3 -m py_compile "$pyf" 2>&1)"
   if [ $? -ne 0 ]; then
     add_check "py_compile ${pyf}: FAIL"
