@@ -48,6 +48,24 @@ Baseline identical to Team 2 (agent user, node 22, doppler + `git-credential-dop
 pipx, 4 GiB swap, both repo clones, `~/worktrees`). Note: cpx21 is not offered in FSN1 — cpx22
 (2c/4GB, €22.99/mo) is the closest; EU premium accepted for GEX131 LAN adjacency.
 
+## Team 4 — GPT-5.6 executors (Hetzner project **OpenAgents.grotapai**, token `HETZNER_FARM_API_TOKEN`)
+Provisioned 2026-07-13 for the GPT-5.6 hedge team (cases B8EF68/FC0208/BA9BC6/8B9BFC —
+`docs/GPT56_SOL_TEAM4_PLAN.md` in grotap-platform). Aider + OpenRouter
+(`openai/gpt-5.6-luna` rung 1, `openai/gpt-5.6-sol` strong) runtime — NO claude CLI by design.
+Ashburn, public-only: inference is OpenRouter-hosted, so no GPU-LAN adjacency (and ash cannot
+join the eu-central `team2-llm-lan` anyway). ⚠ NOT dispatchable until the `config.sh` team4
+registry (case FC0208) merges and pilot cases are tagged `case_data.team=team4`.
+Team 5 note: the Codex CLI runner experiment (case 8B9BFC) SHARES these two boxes by design
+(experiment phase; 3 slots/box, inference remote) — revisit if both teams go live.
+
+| Server | IP | Hardware / DC | Purpose | Execute slots |
+|---|---|---|---|---|
+| agent-40 | 178.156.219.232 | cpx21, Ashburn (id 150671577) | Team 4 GPT-5.6 executor | 3 |
+| agent-41 | 178.156.220.48 | cpx21, Ashburn (id 150671582) | Team 4 GPT-5.6 executor | 3 |
+
+Baseline identical to Team 2/3 (agent user, node 22, doppler + `git-credential-doppler`, aider
+via pipx, 4 GiB swap, docker + `grotap-sandbox:latest`, both repo clones, `~/worktrees`).
+
 ## Special hosts — NOT executors, never dispatch, never add to `config.sh` pools
 | Host | IP | Purpose |
 |---|---|---|
