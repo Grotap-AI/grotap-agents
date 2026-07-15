@@ -104,6 +104,7 @@ bash agents/dispatch.sh <task.md> <server-ip> <session>   # manual
 bash agents/dispatch-execute.sh <task.md> <session>       # auto-route (most free slots)
 ```
 - **Dispatch fast-fail signatures** (API-limit $0/90s deaths · inode exhaustion/EMPTY branch · node_modules symlink sabotage): full triage recipes in platform repo `agents/PIPELINE_TRIAGE.md` § "Dispatch fast-fail signatures" — read them BEFORE decomposing or re-queuing a failed run. node_modules symlinks from the shared clone into a worktree remain FORBIDDEN, no exceptions.
+- **"Approve breakdown:" holds are AUTOPILOT — never a human task (owner rule 2026-07-15).** The answer is always yes; the backend-worker 60s loop auto-approves P2–P4 decomposition holds with the standing answer (`pipeline_autopilot.py`, dual gates `PIPE_AUTO_BREAKDOWN` env + `pipeline_automation.auto_breakdown_enabled` — both LIVE since 2026-07-15). A breakdown hold pending >10 min = the autopilot is broken (worker deploy / env gate / org flag) — fix the loop, don't hand-answer. P0/P1 decompositions still page a human BY DESIGN.
 
 ## Agent Teams (dispatch routing — TEAM2-DISPATCH contract, owner-approved 2026-07-07)
 - **team1** = existing Claude agents (agent-02…06 pool, `orchestrator-run.sh`), the default. **team2** = open-model agents (aider via OpenRouter, default qwen-2.5-coder-32b + escalation ladder, `agents/team-run.sh`, pool agent-20/21; inactive until provisioned in platform repo `agents/config.sh`).
