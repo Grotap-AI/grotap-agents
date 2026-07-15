@@ -26,8 +26,20 @@ mkdir -p "${LOG_DIR}"
 
 # --------------------------------------------------------------------------
 # 1. Update workspace (network / git failures must not abort the session).
+# Sanitize git error output so credential-embedded URLs never reach stdout,
+# the log file, or journald (pattern: https://user:token@host).
 # --------------------------------------------------------------------------
-git -C "${WORKSPACE}" pull --ff-only 2>&1 || true
+_sanitize_url() { printf '%s' "$*" | sed 's|://[^:@/ ]*:[^@]*@|://[REDACTED]@|g; s|://[^:@/ ]*@|://[REDACTED]@|g'; }
+_pull_err="$(mktemp)"
+git -C "${WORKSPACE}" pull --ff-only 2>"${_pull_err}" || \
+  printf '[workspace-sync] %s\n' "$(_sanitize_url "$(cat "${_pull_err}")")" >&2
+rm -f "${_pull_err}"
+unset _pull_err
+_pull_err="$(mktemp)"
+git -C "${WORKSPACE}/platform" pull --ff-only 2>"${_pull_err}" || \
+  printf '[workspace-sync/platform] %s\n' "$(_sanitize_url "$(cat "${_pull_err}")")" >&2
+rm -f "${_pull_err}"
+unset _pull_err
 
 # --------------------------------------------------------------------------
 # 2. Source session init from workspace root (best-effort; errors are noise).
