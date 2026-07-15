@@ -12,6 +12,7 @@
       }
     ]
   },
+  "enableAllProjectMcpServers": true,
   "extraKnownMarketplaces": {
     "openai-codex": {"source": {"source": "github", "repo": "openai/codex-plugin-cc"}},
     "ui-ux-pro-max-skill": {"source": {"source": "github", "repo": "nextlevelbuilder/ui-ux-pro-max-skill"}}
