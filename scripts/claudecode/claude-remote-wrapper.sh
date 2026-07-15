@@ -22,7 +22,24 @@ LOG_DIR="${HOME}/.claude-remote"
 LOG_FILE="${LOG_DIR}/current.log"
 URL_FILE="${LOG_DIR}/url"
 
+# Rapid-exit tracking: persist a counter across restarts; archive wedged state
+# when it reaches RAPID_EXIT_SECS_THRESHOLD consecutive rapid exits.
+RAPID_EXIT_SECS="${RAPID_EXIT_SECS:-30}"
+RAPID_EXIT_FILE="${LOG_DIR}/rapid-exits"
+RESUME_STATE_DIR="${HOME}/.claude/projects/-home-${USER}-workspace-grotap"
+
 mkdir -p "${LOG_DIR}"
+
+# --------------------------------------------------------------------------
+# 0. Seat probe — run once on start (timer fires every 5 min for subsequent
+#    checks).  Best-effort: a missing or broken probe must never abort the
+#    session.  Output goes to journald via the wrapper's stdout/stderr.
+# --------------------------------------------------------------------------
+_PROBE="${HOME}/workspace/grotap/platform/scripts/claudecode/seat-probe.sh"
+if [[ -x "${_PROBE}" ]]; then
+    "${_PROBE}" &
+fi
+unset _PROBE
 
 # --------------------------------------------------------------------------
 # 1. Update workspace (network / git failures must not abort the session).
@@ -73,7 +90,31 @@ _extract_url() {
 }
 
 # --------------------------------------------------------------------------
-# 4. Run claude remote-control.  --continue reconnects an existing session;
+# 4. Rapid-exit detection and wedged-session recovery.
+#    If claude exits in under RAPID_EXIT_SECS seconds, increment the counter
+#    at RAPID_EXIT_FILE; reset to 0 on runs that survive longer.
+#    When the counter is >= 2 at the start of a run: mv the session resume
+#    state dir to a timestamped backup (never rm), log a single WARN line,
+#    reset the counter, and use the fresh-session path (skip --continue).
+# --------------------------------------------------------------------------
+_get_rapid_count() { cat "${RAPID_EXIT_FILE}" 2>/dev/null || printf '0'; }
+
+_rapid_count="$(_get_rapid_count)"
+_use_continue=true
+
+if [[ "${_rapid_count}" -ge 2 ]]; then
+    _backup="${HOME}/.claude/wedged-session-backup-$(date +%Y%m%d-%H%M%S)"
+    if [[ -d "${RESUME_STATE_DIR}" ]]; then
+        mv "${RESUME_STATE_DIR}" "${_backup}"
+    fi
+    printf '[rapid-exit] WARN: %d consecutive rapid exits detected; archived resume state to %s; starting fresh session\n' \
+        "${_rapid_count}" "${_backup}" >&2
+    printf '0\n' >"${RAPID_EXIT_FILE}"
+    _use_continue=false
+fi
+
+# --------------------------------------------------------------------------
+# 5. Run claude remote-control.  --continue reconnects an existing session;
 #    fall back to a fresh start if --continue is not recognised or fails.
 #    stdbuf -oL forces line-buffered stdout at every pipeline stage.
 #    stdin gets "y" — the CLI asks "Enable Remote Control? (y/n)" on EVERY
@@ -81,8 +122,33 @@ _extract_url() {
 #    --permission-mode bypassPermissions: browser sessions must not prompt
 #    for tool approval (owner directive 2026-07-09) — same effect as the
 #    fleet's --dangerously-skip-permissions, which remote-control rejects.
+#
+# PLAYWRIGHT_BROWSERS_PATH: systemd user units do not source /etc/profile.d,
+# so the global playwright.sh profile drop-in is invisible here.  Export
+# explicitly so claude's Playwright E2E tests find the shared /opt/playwright
+# browser install rather than downloading per-seat copies.
 # --------------------------------------------------------------------------
+export PLAYWRIGHT_BROWSERS_PATH=/opt/playwright
+_start_epoch="$(date +%s)"
+_claude_rc=0
+
 (
-    printf 'y\n' | stdbuf -oL claude remote-control --permission-mode bypassPermissions --name "grotap-${LABEL}" --continue 2>&1 \
-        || printf 'y\n' | stdbuf -oL claude remote-control --permission-mode bypassPermissions --name "grotap-${LABEL}" 2>&1
-) | stdbuf -oL tee "${LOG_FILE}" | _extract_url
+    if [[ "${_use_continue}" == "true" ]]; then
+        printf 'y\n' | stdbuf -oL claude remote-control --permission-mode bypassPermissions --name "grotap-${LABEL}" --continue 2>&1 \
+            || printf 'y\n' | stdbuf -oL claude remote-control --permission-mode bypassPermissions --name "grotap-${LABEL}" 2>&1
+    else
+        printf 'y\n' | stdbuf -oL claude remote-control --permission-mode bypassPermissions --name "grotap-${LABEL}" 2>&1
+    fi
+) | stdbuf -oL tee "${LOG_FILE}" | _extract_url || _claude_rc=$?
+
+_end_epoch="$(date +%s)"
+_elapsed=$(( _end_epoch - _start_epoch ))
+if [[ "${_elapsed}" -lt "${RAPID_EXIT_SECS}" ]]; then
+    _prev_count="$(_get_rapid_count)"
+    _new_count=$(( _prev_count + 1 ))
+    printf '%d\n' "${_new_count}" >"${RAPID_EXIT_FILE}"
+else
+    printf '0\n' >"${RAPID_EXIT_FILE}"
+fi
+
+exit "${_claude_rc}"
