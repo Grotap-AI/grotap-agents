@@ -45,14 +45,27 @@ done
 echo "  Structure valid."
 
 # ── 3. CHECK GLOBAL.md SIZE ───────────────────────
+# Budget is BYTES, not lines: GLOBAL.md is cat'd verbatim into every agent prompt,
+# so cost is bytes. The old 200-line cap was set when lines were ~200 chars; by
+# 2026-07-25 they averaged 1,400 and the file had reached 199 KB (~50k tokens per
+# dispatch) while still "passing" nothing. Incident lessons now live in
+# agents/lessons/*.md and are read on demand — see GLOBAL.md § Lessons.
+GLOBAL_MAX_BYTES=${GLOBAL_MAX_BYTES:-40960}
 echo "[3/5] Checking GLOBAL.md size..."
-LINES=$(wc -l < agents/GLOBAL.md)
-if [ "$LINES" -gt 200 ]; then
-  echo "  ERROR: agents/GLOBAL.md has $LINES lines (max 200)."
-  echo "  Reduce GLOBAL.md before starting a session."
+BYTES=$(wc -c < agents/GLOBAL.md)
+if [ "$BYTES" -gt "$GLOBAL_MAX_BYTES" ]; then
+  echo "  ERROR: agents/GLOBAL.md is $BYTES bytes (max $GLOBAL_MAX_BYTES)."
+  echo "  Do NOT raise the cap. Move new lessons into agents/lessons/<surface>.md"
+  echo "  and generalize duplicates. See GLOBAL.md § Lessons."
   exit 1
 fi
-echo "  GLOBAL.md: $LINES lines (OK)"
+
+if [ ! -d agents/lessons ]; then
+  echo "  ERROR: agents/lessons/ is missing — GLOBAL.md § Lessons points at it."
+  exit 1
+fi
+LESSON_FILES=$(ls agents/lessons/*.md 2>/dev/null | wc -l)
+echo "  GLOBAL.md: $BYTES/$GLOBAL_MAX_BYTES bytes, $LESSON_FILES lesson files (OK)"
 
 # ── 4. EXPORT SESSION VARS ────────────────────────
 echo "[4/5] Exporting session variables..."
