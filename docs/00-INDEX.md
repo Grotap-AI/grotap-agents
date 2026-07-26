@@ -118,11 +118,11 @@
 ## 12 — App Platform (App Store Model)
 | File | Topic |
 |---|---|
-| [app-store-model](./12-app-platform/app-store-model.md) | **Full DB schema, API spec, WorkOS Features integration** |
+| [app-store-model](./12-app-platform/app-store-model.md) | **Full DB schema, API spec, app access gate** |
 | [app-lifecycle](./12-app-platform/app-lifecycle.md) | App states: building → beta → active → deprecated |
 | [app-template-guide](./12-app-platform/app-template-guide.md) | **Step-by-step agent build instructions** |
 | [app-ux-patterns](./12-app-platform/app-ux-patterns.md) | **Universal app UX: left sidebar, Back to Apps, Help menu** |
-| [app-revenue-model](./12-app-platform/app-revenue-model.md) | 80/20 creator split, WorkOS Features, Stripe per-app |
+| [app-revenue-model](./12-app-platform/app-revenue-model.md) | 80/20 creator split, subscription access gate, Stripe per-app |
 | [app-suggestions](./12-app-platform/app-suggestions.md) | Community voting → ready-to-build → two-team agent pipeline |
 | [support-portal](./12-app-platform/support-portal.md) | grotap support: data views, live help, agent questions, new app requests |
 | [cobrowse-snapshot-testing](./12-app-platform/cobrowse-snapshot-testing.md) | **Agent-driven live video QA on Neon branch snapshots** |

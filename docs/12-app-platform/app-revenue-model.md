@@ -23,26 +23,37 @@ grotap operates as a two-sided app marketplace:
 
 ## Per-App Billing Architecture
 
-### App Access Gate: WorkOS Features
+### App Access Gate: `tenant_app_subscriptions`
 
-Each app has a corresponding **WorkOS Feature** with slug = `apps.slug`.
+Access is gated by the control-plane **`tenant_app_subscriptions`** row — that row IS the
+entitlement. There is no WorkOS feature grant (see the note at the end of this section).
 
 ```
 User subscribes to "invoice-processor" app
     → POST /app-registry/apps/{id}/subscribe
-    → workos_provider.enable_feature(org_id, "invoice-processor")
-    → Feature appears in JWT claims for all users in that org
-    → Frontend reads JWT features → shows app in My Apps
+    → tenant_app_subscriptions upsert (status='active')
+    → GET /app-registry/apps/my JOINs that row → app appears in My Apps
 ```
 
 ```
 User cancels "invoice-processor" app
     → DELETE /app-registry/apps/{id}/subscribe
-    → workos_provider.disable_feature(org_id, "invoice-processor")
-    → Feature removed from JWT → app disappears from My Apps
+    → tenant_app_subscriptions.status='cancelled'
+    → the /apps/my JOIN no longer matches → app disappears from My Apps
 ```
 
-**grotap.com users**: bypass feature check entirely — see all apps.
+Per-user visibility within a subscribed tenant is a second table,
+`tenant_user_app_visibility`. **grotap.com users** bypass the visibility filter and see all apps.
+
+> **No WorkOS Features (corrected 2026-07-26).** Earlier revisions of this doc described a
+> WorkOS Feature per app slug carried in JWT claims. That was never real: WorkOS exposes no
+> feature-flag API (the SDK client offers only `audit_logs`, `directory_sync`, `events`, `fga`,
+> `mfa`, `organizations`, `passwordless`, `portal`, `sso`, `user_management`, `webhooks`), the
+> `enable_feature` / `disable_feature` / `get_active_features` provider methods raised
+> `AttributeError` on every call into a swallowed warning, and nothing — no middleware, no JWT
+> claim, no frontend code — ever read a grant. The methods and their call sites were deleted.
+> The `apps.workos_feature_id` column survives as a slug alias only. If per-app entitlements
+> ever need to live in WorkOS, build it on `fga` **and add a real read path**.
 
 ### Per-App Stripe Pricing
 

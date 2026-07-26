@@ -28,7 +28,7 @@ CREATE TABLE apps (
     is_internal BOOLEAN DEFAULT false,        -- grotap.com users only
     creator_tenant_id UUID REFERENCES tenants(tenant_id), -- null = Grotap built-in
     creator_revenue_pct INTEGER DEFAULT 80,   -- 0 for Grotap apps
-    workos_feature_id TEXT,                   -- WorkOS Feature slug
+    workos_feature_id TEXT,                   -- legacy slug alias; NOT an access gate (see "App Access Gate")
     stripe_price_id TEXT,                     -- null if free
     version TEXT DEFAULT '1.0.0',
     screenshots JSONB DEFAULT '[]',           -- R2 keys
@@ -186,9 +186,8 @@ Returns only apps the current tenant is subscribed to (or all for grotap users).
 ### `POST /app-registry/register` *(agent-use)*
 Agents call this after building a new app. Accepts `app.manifest.json` body.
 1. Validate manifest fields
-2. Insert into `apps` table
-3. Create WorkOS Feature
-4. Create Stripe Price (if paid)
+2. Insert into `apps` table (`workos_feature_id` defaults to the slug — an alias, not a gate)
+3. Create Stripe Price (if paid)
 
 ### `GET /app-suggestions`
 Paginated list of suggestions, sorted by vote_count DESC.
@@ -213,31 +212,18 @@ Body: `{target_org_id}`. Returns new JWT scoped to target org. Used for testing 
 
 ---
 
-## WorkOS Feature Integration
+## App Access Gate
 
-```python
-# providers/workos_provider.py additions
-def enable_feature(org_id: str, feature_slug: str):
-    """Enable a WorkOS Feature for an org on app subscribe"""
-    workos.features.create_feature_grant(
-        organization_id=org_id,
-        feature_key=feature_slug
-    )
+Access is gated by the `tenant_app_subscriptions` row, not by WorkOS. `GET /app-registry/apps/my`
+inner-JOINs `tenant_app_subscriptions` on `status='active'`, so subscribing/cancelling that row is
+what makes an app appear or disappear in My Apps. `tenant_user_app_visibility` narrows it per user.
 
-def disable_feature(org_id: str, feature_slug: str):
-    """Disable a WorkOS Feature for an org on app cancel"""
-    workos.features.delete_feature_grant(
-        organization_id=org_id,
-        feature_key=feature_slug
-    )
-
-def get_active_features(org_id: str) -> list[str]:
-    """Get list of active feature slugs for JWT claims"""
-    grants = workos.features.list_feature_grants(organization_id=org_id)
-    return [g.feature_key for g in grants.data]
-```
-
-Frontend reads active features from JWT → renders only subscribed app cards in My Apps.
+> **This section previously specified a WorkOS Features integration** (`enable_feature` /
+> `disable_feature` / `get_active_features` backed by `workos.features.*`, with active features
+> carried in JWT claims). **It was never real** — WorkOS ships no feature-flag API, so the
+> implemented methods raised `AttributeError` on every call, and no code ever read the grants.
+> Deleted 2026-07-26. Build on WorkOS `fga` if per-app entitlements ever need to move out of the
+> control plane — and only alongside a read path that actually enforces them.
 
 ---
 

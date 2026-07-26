@@ -62,7 +62,7 @@ grotap is a **platform of apps**, not a single ERP. Think of it like an app stor
 ### Buy Apps (`/apps/buy`)
 - Apps the tenant does NOT yet have
 - Category tabs: All | Finance | Legal | HR | Operations | Platform | Infrastructure
-- Subscribe button → WorkOS Feature enabled → app appears in My Apps
+- Subscribe button → `tenant_app_subscriptions` row active → app appears in My Apps
 
 ### Beta Apps (`/apps/beta`)
 - Apps in beta testing (free during beta)

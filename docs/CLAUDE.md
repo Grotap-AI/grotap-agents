@@ -16,7 +16,7 @@ Frontend apps.grotap.com (Vercel) · Backend api.grotap.com (Railway) · Marketi
 ## App Platform
 Every feature = discrete app in `apps` control-plane table.
 - **New app**: clone `platform/app-template/`, build in `src/features/`, POST `/app-registry/register`
-- **Access**: WorkOS Feature per app slug — enable/disable on subscribe/cancel
+- **Access**: the `tenant_app_subscriptions` row IS the gate (+ `tenant_user_app_visibility` per user). NOT WorkOS — it has no feature-flag API
 - **Revenue**: Grotap 20%, creator 80% → `app_earnings` table
 - **Internal**: `is_internal=true` → visible only to `@grotap.com` users
 - **All apps**: must use `AppShell` (Rule 8 in GLOBAL.md)
