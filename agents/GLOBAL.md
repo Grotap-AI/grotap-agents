@@ -144,14 +144,14 @@ you Read on demand.
 
 | File | Read it when |
 |---|---|
-| `lessons/decomposition-gate.md` (34) | you are DECOMPOSING a case into subtasks, REVIEWING a branch, or running the MERGE GATE. Also read it before you fan any work out in parallel. |
-| `lessons/sql-migrations.md` (26) | your diff touches any `*.sql`, `backend/db/migrations/`, `migrations/apps/`, a tenant/control-plane pool, RLS, or you are writing/reading SQL from Python. |
-| `lessons/wiring-contracts.md` (20) | you add or consume an endpoint, event, payload field, storage key, config key, or any contract another case/component depends on. |
-| `lessons/build-ship.md` (12) | you add or change tests, change a function/handler signature, rename a module, touch app startup, or the suite/CI is red. |
-| `lessons/frontend.md` (8) | your diff touches `frontend/`, `mobile/`, React/TS components, routes, or an enum/slug the UI renders. |
-| `lessons/auth-security.md` (6) | your diff touches auth middleware, secrets, tokens, allow-lists, bypass flags, or a fail-closed gate. |
-| `lessons/state-jobs.md` (5) | your diff touches a status transition, webhook/event handler, idempotency guard, background loop, or a two-sided protocol. |
-| `lessons/fleet-ops.md` (7) | your diff touches dispatch, the orchestrator, team routing, a runbook, a fleet box, or case lifecycle state. |
+| `lessons/decomposition-gate.md` | you are DECOMPOSING a case into subtasks, REVIEWING a branch, or running the MERGE GATE. Also read it before you fan any work out in parallel. |
+| `lessons/sql-migrations.md` | your diff touches any `*.sql`, `backend/db/migrations/`, `migrations/apps/`, a tenant/control-plane pool, RLS, or you are writing/reading SQL from Python. |
+| `lessons/wiring-contracts.md` | you add or consume an endpoint, event, payload field, storage key, config key, or any contract another case/component depends on. |
+| `lessons/build-ship.md` | you add or change tests, change a function/handler signature, rename a module, touch app startup, or the suite/CI is red. |
+| `lessons/frontend.md` | your diff touches `frontend/`, `mobile/`, React/TS components, routes, or an enum/slug the UI renders. |
+| `lessons/auth-security.md` | your diff touches auth middleware, secrets, tokens, allow-lists, bypass flags, or a fail-closed gate. |
+| `lessons/state-jobs.md` | your diff touches a status transition, webhook/event handler, idempotency guard, background loop, or a two-sided protocol. |
+| `lessons/fleet-ops.md` | your diff touches dispatch, the orchestrator, team routing, a runbook, a fleet box, or case lifecycle state. |
 
 **Appending a new lesson:** it goes in the matching `lessons/*.md`, NEVER in this file.
 This file is the constitution (rules + always-on FAIL causes) and is byte-capped by
