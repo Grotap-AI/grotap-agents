@@ -42,6 +42,11 @@ function Have ([string]$exe) {
 
 # ---------------------------------------------------------------- preflight --
 Say "Preflight"
+# Do this FIRST, before any Have() check: a shell opened as a tab in an
+# already-running Windows Terminal / VS Code inherits that parent's stale
+# environment rather than the registry, so previously-installed tools look
+# absent and we would reinstall (or wrongly report) them.
+Refresh-Path
 if (-not (Test-Path (Join-Path $PSScriptRoot "python-requirements.txt"))) {
   Failed "run this from the cloned repo: $Root\scripts\newpc\setup.ps1"
   exit 1
