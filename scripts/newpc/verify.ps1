@@ -8,6 +8,14 @@
 [CmdletBinding()]
 param([string]$Root = "C:\1Claude")
 
+# Re-read PATH from the registry before checking anything. A shell opened as a
+# tab in a Windows Terminal / VS Code that was ALREADY RUNNING before an install
+# inherits the parent process's environment, not the registry -- so every tool
+# reports MISSING even though it is installed and on the real PATH. Closing the
+# tab does not help; only quitting the host app or rebooting does. Without this
+# line the report is about the shell, not the machine.
+$env:Path = [Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [Environment]::GetEnvironmentVariable("Path","User")
+
 $pass = 0; $fail = 0; $warn = 0
 
 function Chk ([string]$label, [scriptblock]$test, [string]$expected = "") {
