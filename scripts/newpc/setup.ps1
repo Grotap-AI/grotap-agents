@@ -147,6 +147,23 @@ foreach ($r in $repos) {
   }
 }
 
+# Per-repo commit identity. These live in .git/config, which is NOT part of a
+# clone -- without this every repo inherits the global identity (or none, and
+# git refuses to commit). The two repos use DIFFERENT identities on purpose:
+# agents commits are attributed to Grotap1, platform commits to Platform Build.
+$identities = @(
+  @{ Path = $Root;                             Name = "Grotap1";        Email = "noreply@grotap.com" },
+  @{ Path = (Join-Path $Root "platform");      Name = "Platform Build"; Email = "build@grotap.com"   },
+  @{ Path = (Join-Path $Root "grotap-landing"); Name = "Platform Build"; Email = "info@grotap.com"    }
+)
+foreach ($i in $identities) {
+  if (Test-Path (Join-Path $i.Path ".git")) {
+    git -C $i.Path config user.name  $i.Name
+    git -C $i.Path config user.email $i.Email
+    Ok "identity $($i.Name) <$($i.Email)> -> $($i.Path)"
+  }
+}
+
 # --------------------------------------------- 6. user-level Claude config --
 Say "6/8 User-level Claude Code config (~/.claude)"
 $claudeHome = Join-Path $env:USERPROFILE ".claude"
