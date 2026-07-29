@@ -67,14 +67,27 @@ if ($SkipWinget) {
       @{ Id = "Gyan.FFmpeg";              Name = "ffmpeg (marketing / video)" },
       @{ Id = "Microsoft.OpenJDK.17";     Name = "Microsoft OpenJDK 17" }
     )
+    # --source winget is MANDATORY, not tidiness. On a box where the msstore
+    # source has a bad cert, plain 'winget install' aborts every package with
+    # 0x8A15005E / exit -1978335138 ("server certificate did not match"), even
+    # though the package was found in the winget source. Pinning the source
+    # skips msstore entirely and needs no elevation.
+    # -1978335189 = 0x8A15002B (already installed, no applicable upgrade) = success.
+    $okCodes = @(0, -1978335189)
     foreach ($p in $pkgs) {
       $installed = winget list --id $p.Id --exact --disable-interactivity 2>$null | Select-String -Pattern ([regex]::Escape($p.Id))
       if ($installed) {
         Ok "$($p.Name) -- already installed"
       } else {
         Info "installing $($p.Name) ..."
-        winget install --id $p.Id --exact --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
-        if ($LASTEXITCODE -eq 0) { Ok $p.Name } else { Failed "$($p.Name) (winget exit $LASTEXITCODE) -- may need an elevated shell" }
+        winget install --id $p.Id --exact --source winget --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
+        if ($okCodes -contains $LASTEXITCODE) {
+          Ok $p.Name
+        } elseif ($LASTEXITCODE -eq -1978335138) {
+          Failed "$($p.Name) -- winget source cert failure (0x8A15005E). Run 'winget source reset --force' in an ELEVATED shell, then re-run this script."
+        } else {
+          Failed "$($p.Name) (winget exit $LASTEXITCODE) -- try an elevated shell"
+        }
       }
     }
     Refresh-Path
