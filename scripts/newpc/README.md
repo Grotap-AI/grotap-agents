@@ -68,7 +68,26 @@ It performs eight phases:
 | 7 | Plugins | marketplaces registered; codex + code-simplifier at project scope, ui-ux-pro-max at user scope (disabled) |
 | 8 | Android | **skipped unless `-WithAndroid`** — see below |
 
-Useful switches: `-SkipWinget`, `-SkipPython`, `-SkipPlaywright`, `-WithAndroid`, `-Root <path>`.
+Useful switches: `-SkipWinget`, `-SkipPython`, `-SkipPlaywright`, `-WithAndroid`, `-Root <path>`,
+`-GitName` / `-GitEmail`.
+
+### Standing this up for someone else
+
+This script is also how a *second person* gets a working box. In that case the machine must use
+**their own** credentials throughout — pass their commit identity:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\newpc\setup.ps1 -GitName "Their Name" -GitEmail "them@example.com"
+```
+
+Without `-GitName`/`-GitEmail` the script sets no identity and warns, rather than defaulting to
+someone else's — silently misattributing commits is worse than a clear error.
+
+**Never copy to another person's machine**: `~/.ssh/grotap_agents` (fleet private key — generate them
+their own keypair and add the public half to `authorized_keys`), `~/.codex/auth.json` (a live OpenAI
+API key), or `~/.claude/.credentials.json`. Each person authenticates their own GitHub, Claude,
+Doppler, OpenAI, Railway and Vercel accounts. The memory export is the exception — it is project
+knowledge with no credentials in it, so sharing it is what makes their box useful on day one.
 
 ## Stage 2 — restore memory
 

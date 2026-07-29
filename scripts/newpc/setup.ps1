@@ -16,7 +16,9 @@ param(
   [switch]$SkipWinget,          # skip the system package phase
   [switch]$SkipPython,          # skip pip install (slow)
   [switch]$SkipPlaywright,      # skip browser download (~500 MB)
-  [switch]$WithAndroid          # ALSO build C:\1Claude\androidtools (~1 GB, Scan M APK builds)
+  [switch]$WithAndroid,         # ALSO build C:\1Claude\androidtools (~1 GB, Scan M APK builds)
+  [string]$GitName,             # commit identity for all three repos -- REQUIRED to set any
+  [string]$GitEmail             #   e.g. -GitName "Mike G" -GitEmail "mike@example.com"
 )
 
 $ErrorActionPreference = "Continue"
@@ -165,21 +167,23 @@ foreach ($r in $repos) {
   }
 }
 
-# Per-repo commit identity. These live in .git/config, which is NOT part of a
-# clone -- without this every repo inherits the global identity (or none, and
-# git refuses to commit). The two repos use DIFFERENT identities on purpose:
-# agents commits are attributed to Grotap1, platform commits to Platform Build.
-$identities = @(
-  @{ Path = $Root;                             Name = "Grotap1";        Email = "noreply@grotap.com" },
-  @{ Path = (Join-Path $Root "platform");      Name = "Platform Build"; Email = "build@grotap.com"   },
-  @{ Path = (Join-Path $Root "grotap-landing"); Name = "Platform Build"; Email = "info@grotap.com"    }
-)
-foreach ($i in $identities) {
-  if (Test-Path (Join-Path $i.Path ".git")) {
-    git -C $i.Path config user.name  $i.Name
-    git -C $i.Path config user.email $i.Email
-    Ok "identity $($i.Name) <$($i.Email)> -> $($i.Path)"
+# Per-repo commit identity. .git/config is NOT part of a clone, so without this
+# git refuses to commit at all. But NEVER default to the original owner's
+# identity: this script is used to stand up machines for OTHER PEOPLE, and
+# silently stamping someone else's name on their commits destroys attribution
+# and is a pain to unpick after the fact. Require it explicitly.
+if ($GitName -and $GitEmail) {
+  foreach ($p in @($Root, (Join-Path $Root "platform"), (Join-Path $Root "grotap-landing"))) {
+    if (Test-Path (Join-Path $p ".git")) {
+      git -C $p config user.name  $GitName
+      git -C $p config user.email $GitEmail
+      Ok "identity $GitName <$GitEmail> -> $p"
+    }
   }
+} else {
+  Warned "commit identity NOT set (no -GitName/-GitEmail). git will refuse to commit until you set it:"
+  Info   "  git -C $Root config user.name  ""Your Name"""
+  Info   "  git -C $Root config user.email ""you@example.com""   (repeat for platform + grotap-landing)"
 }
 
 # --------------------------------------------- 6. user-level Claude config --
