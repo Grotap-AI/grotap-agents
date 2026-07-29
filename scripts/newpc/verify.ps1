@@ -49,6 +49,26 @@ Chk "vercel"     { (vercel --version) }                     "50."
 Chk "eas"        { (eas --version) }                        "18."
 Write-Host "  [--]   ripgrep                    bundled with Claude Code (no standalone install on the source box)" -ForegroundColor DarkGray
 
+Sect "Git Bash (Claude Code needs it for the Bash tool AND the SessionStart hook)"
+$bashGuess = @(
+  $env:CLAUDE_CODE_GIT_BASH_PATH,
+  (Join-Path $env:ProgramFiles "Git\bin\bash.exe"),
+  (Join-Path ${env:ProgramFiles(x86)} "Git\bin\bash.exe"),
+  (Join-Path $env:LOCALAPPDATA "Programs\Git\bin\bash.exe")
+) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+if ($bashGuess) {
+  Write-Host ("  [ok]   {0,-26} {1}" -f "bash.exe", $bashGuess) -ForegroundColor Green; $pass++
+  $cfg = Join-Path $env:USERPROFILE ".claude\settings.json"
+  $pinned = ""
+  if (Test-Path $cfg) {
+    try { $pinned = (Get-Content $cfg -Raw | ConvertFrom-Json).env.CLAUDE_CODE_GIT_BASH_PATH } catch { $pinned = "" }
+  }
+  if ($pinned) { Write-Host ("  [ok]   {0,-26} {1}" -f "pinned in settings.json", $pinned) -ForegroundColor Green; $pass++ }
+  else         { Write-Host ("  [warn] {0,-26} not pinned -- re-run setup.ps1 if Claude Code cannot find bash" -f "settings.json env") -ForegroundColor Yellow; $warn++ }
+} else {
+  Write-Host "  [FAIL] bash.exe not found -- install Git for Windows (winget install --id Git.Git --source winget)" -ForegroundColor Red; $fail++
+}
+
 Sect "Repos (all three must sit under $Root)"
 Path1 (Join-Path $Root ".git")                    "grotap-agents"
 Path1 (Join-Path $Root "platform\.git")           "grotap-platform"

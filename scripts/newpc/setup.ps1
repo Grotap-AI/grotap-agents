@@ -185,6 +185,33 @@ if (Test-Path $stDst) {
 }
 $body = Get-Content $stSrc -Raw
 $body = $body.Replace("__CLAUDE_HOME__", $claudeHome.Replace("\", "\\"))
+
+# Claude Code needs Git Bash for its Bash tool, and it does not always find it
+# on its own -- it then refuses to start with "set CLAUDE_CODE_GIT_BASH_PATH".
+# Our SessionStart hook is bash -c '...', so PowerShell fallback is not enough.
+# Pin the path whenever we can actually locate bash.exe.
+$bashCandidates = @(
+  (Join-Path $env:ProgramFiles "Git\bin\bash.exe"),
+  (Join-Path ${env:ProgramFiles(x86)} "Git\bin\bash.exe"),
+  (Join-Path $env:LOCALAPPDATA "Programs\Git\bin\bash.exe")
+)
+$gitCmd = Get-Command git -ErrorAction SilentlyContinue
+if ($gitCmd) {
+  # <gitroot>\cmd\git.exe -> <gitroot>\bin\bash.exe
+  $gitRoot = Split-Path (Split-Path $gitCmd.Source -Parent) -Parent
+  $bashCandidates += (Join-Path $gitRoot "bin\bash.exe")
+}
+$bashPath = $bashCandidates | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+
+if ($bashPath) {
+  $obj = $body | ConvertFrom-Json
+  $obj | Add-Member -NotePropertyName "env" -NotePropertyValue ([pscustomobject]@{ CLAUDE_CODE_GIT_BASH_PATH = $bashPath }) -Force
+  $body = $obj | ConvertTo-Json -Depth 10
+  Ok "Git Bash pinned: $bashPath"
+} else {
+  Warned "bash.exe not found -- Claude Code may refuse to start. Install Git for Windows, then re-run this script."
+}
+
 Set-Content -Path $stDst -Value $body -Encoding utf8
 Ok "settings.json (model=opus, light, fullscreen, bell hook, statusline, marketplaces)"
 
