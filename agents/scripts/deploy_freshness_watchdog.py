@@ -39,8 +39,21 @@ def now_utc() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+# CASE-20260730-9B4988. This runs every 5 minutes against the SHARED clone that
+# the review gate (the merge path) and the */10 reconciler also write to, and
+# until now it took no lock at all — while those two each took a different one.
+# Its `git fetch` was therefore the most frequent loser and instigator of:
+#   error: cannot lock ref 'refs/remotes/origin/master': is at X but expected Y
+# 34 of those in deploy-watchdog.log as of 2026-07-30. Every git call now goes
+# through the one shared per-clone lock.
+GIT_LOCK = "/usr/local/bin/grotap-git-lock"
+
+
 def git(*args: str) -> str:
-    out = subprocess.run(["git", "-C", REPO, *args], capture_output=True, text=True, timeout=120)
+    cmd = ["git", "-C", REPO, *args]
+    if os.access(GIT_LOCK, os.X_OK):
+        cmd = [GIT_LOCK, REPO, *cmd]
+    out = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
     if out.returncode != 0:
         raise RuntimeError(f"git {' '.join(args)}: {out.stderr.strip()[:300]}")
     return out.stdout.strip()

@@ -1,0 +1,57 @@
+#!/bin/bash
+# grotap-git-lock — serialize EVERY git operation on a shared fleet clone.
+#
+# CASE-20260730-9B4988.
+#
+# agent-06 runs at least six jobs that mutate refs in /home/agent/grotap-platform,
+# on 5/10/15-minute periods, under THREE DIFFERENT locks plus one writer with no
+# lock at all:
+#
+#   deploy_freshness_watchdog.py   */5   git fetch           NO LOCK
+#   reconcile_dispatch cron        */10  git pull            /tmp/grotap-reconcile.lock
+#   review gate                    */15  git fetch + reset   ~/.review-gate.lock
+#   expense / release-notes / agb  daily git pull / fetch    NO LOCK
+#
+# Periods that share a factor collide on a fixed cadence — */5 and */15 meet
+# three times an hour, */10 and */15 every 30 minutes. git reports the loser as:
+#
+#   error: cannot lock ref 'refs/remotes/origin/master': is at X but expected Y
+#
+# Counted in the live logs on 2026-07-30: 34 in deploy-watchdog.log,
+# 84 in grotap-reconcile.log, 6 in review-gate.log.
+#
+# Three different locks are the same as no lock. This is THE lock: one per
+# clone, mode 0666 so root-run crons and the `agent` user contend on the same
+# file, so every writer serializes against every other writer.
+#
+# Usage:  grotap-git-lock <repo-path> <command> [args...]
+#
+# Hold the lock across a whole sequence rather than per-command, otherwise a
+# peer interleaves between your fetch and your reset:
+#
+#   grotap-git-lock /home/agent/grotap-platform bash -c '
+#       cd /home/agent/grotap-platform && git fetch origin master && git reset --hard origin/master'
+#
+# Env: GROTAP_GIT_LOCK_WAIT — seconds to wait for the lock (default 180).
+#      Exits 1 without running the command if the wait expires.
+set -uo pipefail
+
+REPO="${1:?usage: grotap-git-lock <repo-path> <command> [args...]}"
+shift
+[ $# -gt 0 ] || { echo "grotap-git-lock: no command given" >&2; exit 2; }
+
+# Key the lock on the RESOLVED path so a symlink to a clone cannot end up with
+# a second, independent lock guarding the same .git.
+REAL="$(readlink -f "$REPO" 2>/dev/null || printf '%s' "$REPO")"
+KEY="$(printf '%s' "$REAL" | tr -c 'A-Za-z0-9' '_')"
+LOCK="/run/lock/grotap-git.${KEY}.lock"
+
+# /run/lock is tmpfs and 1777, so this survives no reboot and needs no package.
+# Create 0666 on first use; the -e guard stops a concurrent starter from
+# re-truncating a lock someone already holds.
+if [ ! -e "$LOCK" ]; then
+  ( umask 000; : > "$LOCK" ) 2>/dev/null || true
+  chmod 0666 "$LOCK" 2>/dev/null || true
+fi
+
+exec flock -w "${GROTAP_GIT_LOCK_WAIT:-180}" "$LOCK" "$@"
