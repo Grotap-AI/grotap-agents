@@ -1,0 +1,39 @@
+# .gitattributes — line-ending policy for grotap-agents.
+#
+# Why this exists: this repo is written to concurrently from Windows (local Claude
+# sessions) and Linux (the fleet boxes, agent-02..06). With no policy, a Windows
+# session commits a file with CRLF and a Linux session commits it back with LF, so
+# every edit rewrites EVERY line. agents/lessons/wiring-contracts.md was committed
+# CRLF while its seven sibling lesson files were LF: a two-line append then showed
+# up as 45 insertions / 42 deletions, and any concurrent edit conflicted on the
+# whole file instead of on one hunk. The lesson files take ~80 commits a week from
+# three identities, so that is a conflict on nearly every collision.
+#
+# Deliberately NO `* text=auto`: it guesses text-vs-binary from the first 8000
+# bytes and normalizes anything it guesses wrong, which is how a committed PDF got
+# corrupted in grotap-platform. Extensions are listed explicitly instead — a file
+# type not named here is left completely alone.
+
+*.md      text eol=lf
+*.sh      text eol=lf
+*.py      text eol=lf
+*.js      text eol=lf
+*.json    text eol=lf
+*.html    text eol=lf
+*.txt     text eol=lf
+*.service text eol=lf
+
+# PowerShell is Windows-only tooling: stored LF in the index like everything else,
+# but checked out CRLF so it stays conventional for the machine that runs it.
+*.ps1     text eol=crlf
+
+# Tracked files with no extension or a bare dotfile name — the globs above match on
+# basename, so `*.sh`/`*.json` already cover `.claude-session-init.sh` and `.mcp.json`,
+# but these need naming outright. `grotap-git-lock` matters most: it is an
+# extensionless bash script with a shebang that runs on the Linux fleet boxes, and a
+# CRLF copy of it fails with `bad interpreter: /bin/bash^M`.
+grotap-git-lock text eol=lf
+CODEOWNERS      text eol=lf
+.gitignore      text eol=lf
+.gitattributes  text eol=lf
+.gitkeep        text eol=lf
