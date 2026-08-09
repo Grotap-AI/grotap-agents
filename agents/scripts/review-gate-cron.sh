@@ -168,11 +168,13 @@ sync_with_retry "$PLATFORM_REPO" "grotap-platform" || exit 1
 
 # Quick exit when the queue is empty. Must match the task prompt's queue shape:
 # change_review PLUS awaiting_human cases parked at the orchestrator human gate
-# (latest dispatch row awaiting_review). NB: single quotes — DATABASE_URL must be
-# expanded INSIDE the doppler-injected environment, not by this outer shell.
-QUEUE=$(doppler run --project grotap --config prd -- sh -c \
-  'psql "$DATABASE_URL" -Atc "SELECT count(*) FROM (SELECT case_id FROM pipeline_cases WHERE status='"'"'change_review'"'"' UNION SELECT c.case_id FROM pipeline_cases c WHERE c.status='"'"'awaiting_human'"'"' AND EXISTS (SELECT 1 FROM pipeline_dispatch_log dl WHERE dl.case_id=c.case_id AND dl.status='"'"'awaiting_review'"'"')) q"' 2>/dev/null || echo "?")
+# (latest dispatch row awaiting_review). db.py prints a header row then the value;
+# tail -1 extracts the count.
+QUEUE=$(cd "$PLATFORM_REPO" && doppler run --project grotap --config prd -- \
+  python3 scripts/db.py "SELECT count(*) FROM (SELECT case_id FROM pipeline_cases WHERE status='change_review' UNION SELECT c.case_id FROM pipeline_cases c WHERE c.status='awaiting_human' AND EXISTS (SELECT 1 FROM pipeline_dispatch_log dl WHERE dl.case_id=c.case_id AND dl.status='awaiting_review')) q" \
+  2>/dev/null | tail -1 || echo "?")
 echo "queue: $QUEUE reviewable cases (change_review + parked awaiting_review)"
+[[ "$QUEUE" =~ ^[0-9]+$ ]] || { echo "FATAL: QUEUE is non-numeric ('$QUEUE') — accessor broken"; exit 1; }
 if [ "$QUEUE" = "0" ]; then echo "queue empty — nothing to do"; exit 0; fi
 
 # Run Claude with the standing task. Doppler injects DATABASE_URL etc. for the
