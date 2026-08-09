@@ -21,7 +21,13 @@ set -uo pipefail
 
 AGENT_HOME="/home/agent"
 AGENTS_REPO="${AGENTS_REPO:-$AGENT_HOME/grotap-agents}"
-PLATFORM_REPO="${PLATFORM_REPO:-/var/cache/review-gate-clone}"
+# Dedicated clone, deliberately NOT the shared $AGENT_HOME/grotap-platform tree
+# (this script hard-resets it, which is how a peer's in-flight work gets swept).
+# Must be AGENT-WRITABLE: the unit runs User=agent and /var/cache is root-owned
+# drwxr-xr-x, so the previous /var/cache/review-gate-clone default could never be
+# created here — the clone below failed permission-denied and exited 1, taking the
+# whole gate down. See CASE-20260809-GATECLONE.
+PLATFORM_REPO="${PLATFORM_REPO:-$AGENT_HOME/.cache/review-gate-clone}"
 LOCK="${LOCK:-$AGENT_HOME/.review-gate.lock}"
 LOG="${LOG:-$AGENT_HOME/logs/review-gate.log}"
 TASK="${TASK:-$AGENTS_REPO/agents/scripts/review-gate-task.md}"
