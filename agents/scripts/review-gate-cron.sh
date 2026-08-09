@@ -20,16 +20,16 @@
 set -uo pipefail
 
 AGENT_HOME="/home/agent"
-AGENTS_REPO="$AGENT_HOME/grotap-agents"
-PLATFORM_REPO="$AGENT_HOME/grotap-platform"
-LOCK="$AGENT_HOME/.review-gate.lock"
-LOG="$AGENT_HOME/logs/review-gate.log"
-TASK="$AGENTS_REPO/agents/scripts/review-gate-task.md"
+AGENTS_REPO="${AGENTS_REPO:-$AGENT_HOME/grotap-agents}"
+PLATFORM_REPO="${PLATFORM_REPO:-/var/cache/review-gate-clone}"
+LOCK="${LOCK:-$AGENT_HOME/.review-gate.lock}"
+LOG="${LOG:-$AGENT_HOME/logs/review-gate.log}"
+TASK="${TASK:-$AGENTS_REPO/agents/scripts/review-gate-task.md}"
 TIMEOUT_SECS=7200   # 2h hard cap
 
 mkdir -p "$AGENT_HOME/logs"
 exec >>"$LOG" 2>&1
-echo "=== review-gate run $(date -u +%FT%TZ) ==="
+echo "=== review-gate run $(date -u +%FT%TZ) agents=$AGENTS_REPO platform=$PLATFORM_REPO ==="
 
 # Single-flight lock (stale after 3h)
 if [ -e "$LOCK" ] && [ "$(( $(date +%s) - $(stat -c %Y "$LOCK") ))" -lt 10800 ]; then
@@ -162,6 +162,24 @@ GIT STDERR:
 $(tail -c 2000 "$STDERR_FILE")"
   return 1
 }
+
+# ── dedicated platform clone bootstrap ────────────────────────────────────────
+# If PLATFORM_REPO does not yet exist, clone it now. Explicit exit-status
+# checking — || true would silently continue against a missing tree and the
+# subsequent sync_with_retry would then fail with a confusing "No such file"
+# rather than a clear clone error.
+mkdir -p "$(dirname "$PLATFORM_REPO")"
+if [ ! -d "$PLATFORM_REPO/.git" ]; then
+  echo "bootstrapping dedicated platform checkout → $PLATFORM_REPO"
+  if ! git clone https://github.com/Grotap-AI/grotap-platform.git "$PLATFORM_REPO" 2>>"$STDERR_FILE"; then
+    fail_hold "bootstrap: git clone to $PLATFORM_REPO failed.
+
+GIT STDERR:
+$(tail -c 2000 "$STDERR_FILE")"
+    exit 1
+  fi
+  echo "clone complete"
+fi
 
 sync_with_retry "$AGENTS_REPO"   "grotap-agents"   || exit 1
 sync_with_retry "$PLATFORM_REPO" "grotap-platform" || exit 1
