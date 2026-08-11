@@ -169,11 +169,21 @@ $(tail -c 2000 "$STDERR_FILE")"
   return 1
 }
 
+# ORDERING INVARIANT (CASE-20260809-GATECLONE, item 3): the grotap-agents
+# self-update MUST run before any step that can `exit 1`. It is the only step
+# that can repair THIS script — a bad value pushed to grotap-agents is
+# recoverable only if the sync that pulls the fix runs first. d1bbcfc put the
+# platform-clone bootstrap (which exits 1 on a bad/unwritable PLATFORM_REPO)
+# ahead of this sync, turning a one-line bad default into an unrecoverable
+# self-lock: the box exited 1 at the clone before it could ever pull the fix.
+# Keep the agents sync FIRST; everything below is repairable by pushing.
+sync_with_retry "$AGENTS_REPO"   "grotap-agents"   || exit 1
+
 # ── dedicated platform clone bootstrap ────────────────────────────────────────
-# If PLATFORM_REPO does not yet exist, clone it now. Explicit exit-status
-# checking — || true would silently continue against a missing tree and the
-# subsequent sync_with_retry would then fail with a confusing "No such file"
-# rather than a clear clone error.
+# If PLATFORM_REPO does not yet exist, clone it now — BELOW the agents sync (see
+# invariant above). Explicit exit-status checking — || true would silently
+# continue against a missing tree and the subsequent sync_with_retry would then
+# fail with a confusing "No such file" rather than a clear clone error.
 mkdir -p "$(dirname "$PLATFORM_REPO")"
 if [ ! -d "$PLATFORM_REPO/.git" ]; then
   echo "bootstrapping dedicated platform checkout → $PLATFORM_REPO"
@@ -187,7 +197,6 @@ $(tail -c 2000 "$STDERR_FILE")"
   echo "clone complete"
 fi
 
-sync_with_retry "$AGENTS_REPO"   "grotap-agents"   || exit 1
 sync_with_retry "$PLATFORM_REPO" "grotap-platform" || exit 1
 
 # Quick exit when the queue is empty. Must match the task prompt's queue shape:
