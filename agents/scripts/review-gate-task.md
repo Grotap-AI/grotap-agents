@@ -58,11 +58,18 @@ cd frontend && npm install --silent && npx tsc --noEmit && cd ..
 - **Do NOT apply SQL migration files to live DBs.** List every new `backend/migrations/*.sql`
   from merged branches in the summary hold — the backend's idempotent startup DDL covers the
   mirrored ones; a human/Claude session applies the rest.
-- New lessons (recurring agent mistakes) → append one-liners to `agents/GLOBAL.md` in the
-  grotap-agents repo and push it.
-- File ONE summary hold (POST https://api.grotap.com/human-intervention/ — no auth needed):
-  `task_id=review-gate-<date>`, `category=manual_verification`, priority normal,
-  description = merged N / fix-cases M / skipped K (+why) / migrations to apply / gates status.
+- New lessons (recurring agent mistakes) → append ONE line to the matching
+  `agents/lessons/<surface>.md` (grep it first and generalize an existing line if the root cause
+  is already there). NEVER `agents/GLOBAL.md` — it is byte-capped and shipped verbatim to every
+  agent on every dispatch.
+- **Run summary goes to stdout, NOT to the HI board.** Always print merged N / fix-cases M /
+  skipped K (+why) / migrations / gate status — the cron log is the record.
+  File a hold ONLY when the run leaves something a human must DECIDE or DO, and then only for
+  that item, with the summary as its description:
+  · a new `backend/migrations/*.sql` a human must apply · orchestrator redeploy required
+  · a gate failed / push rejected twice · a branch skipped for a reason the gate cannot resolve.
+  A clean run files NOTHING. (2026-08-13: 14 of 120 pending holds were gate receipts carrying no
+  decision — a log posted to the board is noise that buries the real items.)
 
 ## Hard limits
 - Never force-push. Never push if any gate fails. Never touch branches outside case-*.
