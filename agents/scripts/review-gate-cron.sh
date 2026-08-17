@@ -20,16 +20,22 @@
 set -uo pipefail
 
 AGENT_HOME="/home/agent"
-AGENTS_REPO="$AGENT_HOME/grotap-agents"
-PLATFORM_REPO="$AGENT_HOME/grotap-platform"
-LOCK="$AGENT_HOME/.review-gate.lock"
-LOG="$AGENT_HOME/logs/review-gate.log"
-TASK="$AGENTS_REPO/agents/scripts/review-gate-task.md"
+AGENTS_REPO="${AGENTS_REPO:-$AGENT_HOME/grotap-agents}"
+# Dedicated clone, deliberately NOT the shared $AGENT_HOME/grotap-platform tree
+# (this script hard-resets it, which is how a peer's in-flight work gets swept).
+# Must be AGENT-WRITABLE: the unit runs User=agent and /var/cache is root-owned
+# drwxr-xr-x, so the previous /var/cache/review-gate-clone default could never be
+# created here — the clone below failed permission-denied and exited 1, taking the
+# whole gate down. See CASE-20260809-GATECLONE.
+PLATFORM_REPO="${PLATFORM_REPO:-$AGENT_HOME/.cache/review-gate-clone}"
+LOCK="${LOCK:-$AGENT_HOME/.review-gate.lock}"
+LOG="${LOG:-$AGENT_HOME/logs/review-gate.log}"
+TASK="${TASK:-$AGENTS_REPO/agents/scripts/review-gate-task.md}"
 TIMEOUT_SECS=7200   # 2h hard cap
 
 mkdir -p "$AGENT_HOME/logs"
 exec >>"$LOG" 2>&1
-echo "=== review-gate run $(date -u +%FT%TZ) ==="
+echo "=== review-gate run $(date -u +%FT%TZ) agents=$AGENTS_REPO platform=$PLATFORM_REPO ==="
 
 # Single-flight lock (stale after 3h)
 if [ -e "$LOCK" ] && [ "$(( $(date +%s) - $(stat -c %Y "$LOCK") ))" -lt 10800 ]; then
@@ -163,16 +169,45 @@ $(tail -c 2000 "$STDERR_FILE")"
   return 1
 }
 
+# ORDERING INVARIANT (CASE-20260809-GATECLONE, item 3): the grotap-agents
+# self-update MUST run before any step that can `exit 1`. It is the only step
+# that can repair THIS script — a bad value pushed to grotap-agents is
+# recoverable only if the sync that pulls the fix runs first. d1bbcfc put the
+# platform-clone bootstrap (which exits 1 on a bad/unwritable PLATFORM_REPO)
+# ahead of this sync, turning a one-line bad default into an unrecoverable
+# self-lock: the box exited 1 at the clone before it could ever pull the fix.
+# Keep the agents sync FIRST; everything below is repairable by pushing.
 sync_with_retry "$AGENTS_REPO"   "grotap-agents"   || exit 1
+
+# ── dedicated platform clone bootstrap ────────────────────────────────────────
+# If PLATFORM_REPO does not yet exist, clone it now — BELOW the agents sync (see
+# invariant above). Explicit exit-status checking — || true would silently
+# continue against a missing tree and the subsequent sync_with_retry would then
+# fail with a confusing "No such file" rather than a clear clone error.
+mkdir -p "$(dirname "$PLATFORM_REPO")"
+if [ ! -d "$PLATFORM_REPO/.git" ]; then
+  echo "bootstrapping dedicated platform checkout → $PLATFORM_REPO"
+  if ! git clone https://github.com/Grotap-AI/grotap-platform.git "$PLATFORM_REPO" 2>>"$STDERR_FILE"; then
+    fail_hold "bootstrap: git clone to $PLATFORM_REPO failed.
+
+GIT STDERR:
+$(tail -c 2000 "$STDERR_FILE")"
+    exit 1
+  fi
+  echo "clone complete"
+fi
+
 sync_with_retry "$PLATFORM_REPO" "grotap-platform" || exit 1
 
 # Quick exit when the queue is empty. Must match the task prompt's queue shape:
 # change_review PLUS awaiting_human cases parked at the orchestrator human gate
-# (latest dispatch row awaiting_review). NB: single quotes — DATABASE_URL must be
-# expanded INSIDE the doppler-injected environment, not by this outer shell.
-QUEUE=$(doppler run --project grotap --config prd -- sh -c \
-  'psql "$DATABASE_URL" -Atc "SELECT count(*) FROM (SELECT case_id FROM pipeline_cases WHERE status='"'"'change_review'"'"' UNION SELECT c.case_id FROM pipeline_cases c WHERE c.status='"'"'awaiting_human'"'"' AND EXISTS (SELECT 1 FROM pipeline_dispatch_log dl WHERE dl.case_id=c.case_id AND dl.status='"'"'awaiting_review'"'"')) q"' 2>/dev/null || echo "?")
+# (latest dispatch row awaiting_review). db.py prints a header row then the value;
+# tail -1 extracts the count.
+QUEUE=$(cd "$PLATFORM_REPO" && doppler run --project grotap --config prd -- \
+  python3 scripts/db.py "SELECT count(*) FROM (SELECT case_id FROM pipeline_cases WHERE status='change_review' UNION SELECT c.case_id FROM pipeline_cases c WHERE c.status='awaiting_human' AND EXISTS (SELECT 1 FROM pipeline_dispatch_log dl WHERE dl.case_id=c.case_id AND dl.status='awaiting_review')) q" \
+  2>/dev/null | tail -1 || echo "?")
 echo "queue: $QUEUE reviewable cases (change_review + parked awaiting_review)"
+[[ "$QUEUE" =~ ^[0-9]+$ ]] || { echo "FATAL: QUEUE is non-numeric ('$QUEUE') — accessor broken"; exit 1; }
 if [ "$QUEUE" = "0" ]; then echo "queue empty — nothing to do"; exit 0; fi
 
 # Run Claude with the standing task. Doppler injects DATABASE_URL etc. for the
