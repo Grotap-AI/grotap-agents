@@ -7,7 +7,7 @@ Code: `platform/` | Docs: `docs/` | Tasks: `agents/tasks/` | Fleet scripts: plat
 
 ## Stack
 Frontend React+Vercel `platform/frontend/` · Backend FastAPI+Railway `platform/backend/` · Auth WorkOS JWT · DB Neon Postgres (pooled shards + FORCE RLS; dedicated project = premium; control `green-rice-76766370`) · Jobs INNGEST + Agents LangGraph/LangSmith (TS only) `platform/agent-worker/`
-· Storage Cloudflare R2 · Billing Stripe metering (all 3rd-party via `app/providers/*`) · Mobile Expo `platform/mobile/` · Cobrowse `lib/cobrowse.ts` · Secret scan GitGuardian MCP
+· Storage Cloudflare R2 · Billing Stripe metering (all 3rd-party via `app/providers/*`) · Mobile Expo `platform/mobile/` · Session replay self-hosted OpenReplay `lib/openreplay.ts` · Secret scan GitGuardian MCP
 
 ## ⛔ Absolute Rules — All Agents, No Exceptions
 | # | Rule |
@@ -19,7 +19,7 @@ Frontend React+Vercel `platform/frontend/` · Backend FastAPI+Railway `platform/
 | 5 | **TENANT ISOLATION VIA RLS** — Default placement is POOLED: tenants share a Neon shard, isolated by FORCE RLS keyed on `current_setting('app.current_tenant_id')::uuid` (set per-connection by `tenant_db.py`). Dedicated Neon project = premium/override path. Never bypass RLS or weaken a policy. |
 | 6 | **NO SKIPPING COMPLIANCE** — GitGuardian MCP + compliance node before every deploy. |
 | 7 | **NO MERGE WITHOUT 4-REVIEWER SIGN-OFF** — Build Validator + Logic + Security + Perf = all PASS. From platform repo root: `./agents/review-pipeline.sh <branch>` then `./agents/collect-reviews.sh --wait <branch>`. ANY FAIL = branch blocked. |
-| 8 | **AppShell + COBROWSE MANDATORY** — All apps render `AppShell`. Never remove Cobrowse components. SDK only via `lib/cobrowse.ts`. |
+| 8 | **AppShell MANDATORY** — All apps render `AppShell`. Session replay/support = self-hosted OpenReplay, SDK only via `lib/openreplay.ts`. **Cobrowse.io is REMOVED (July 2026) — never add, restore or propose it.** |
 
 ## ⚠ Common FAIL Causes — Check Before Committing
 
@@ -45,7 +45,7 @@ Frontend React+Vercel `platform/frontend/` · Backend FastAPI+Railway `platform/
 ### Wiring & contracts
 - Importing/creating ≠ wiring: a new router is dead until `include_router` lands in main.py; an imported helper needs a real call site; every UI action needs an endpoint that EXISTS (grep the router — extend it if the task is "UI-only" and it's missing). Verify referenced modules/pages exist before wiring routes; check master before re-building landed work.
 - Frontend + backend built in separate runs: PROVE the wire contract — hit the real endpoint, diff field names/shapes/enum casing against the TS types; map DB rows→UI in ONE api layer. A frontend-only branch consuming a NEW endpoint silently 404s if the backend isn't on master — grep master backend for the route and land the backend sibling FIRST; a case marked `done` may never have merged (`git branch -r --contains`).
-- 3rd-party integrations: prove WE emit the key you filter by (current format, current master); probe the REAL artifact's export shape (2-min headless `typeof`/constructability check) before coding against it — never trust docs-memory or in-repo "precedent" unexercised, and surface `err.message` in SDK-init catches (CobrowseViewerPopout). A contract SPIKE must include ONE live end-to-end proof that every remote call it depends on SETTLES (resolve or reject) — `ctx.setTool()` was type-correct yet never acked (0/24); cosmetic calls are best-effort with a deadline, never a hard gate (61c63fc0).
+- 3rd-party integrations: prove WE emit the key you filter by (current format, current master); probe the REAL artifact's export shape (2-min headless `typeof`/constructability check) before coding against it — never trust docs-memory or in-repo "precedent" unexercised, and surface `err.message` in SDK-init catches. A contract SPIKE must include ONE live end-to-end proof that every remote call it depends on SETTLES (resolve or reject) — `ctx.setTool()` was type-correct yet never acked (0/24); cosmetic calls are best-effort with a deadline, never a hard gate (61c63fc0).
 - A JSON contract quoted verbatim in the task prompt is LAW: emit EVERY contract key with the EXACT names (additive extras fine; renames/omissions are defects — `key_facts` vs contract `notable_facts` left the Leads dossier viewer half-empty, CASE-20260714-9F95A6). Reviewers: diff the emitted keys against the prompt's contract before approving.
 - Config VALUES quoted in the task (URLs, repo slugs, schema shapes mirroring a verified environment) are LAW the same way — copy them byte-exact, never reconstruct from memory; and a "verify" step must assert the VALUES (grep exact strings, parse + type-check shapes), not just syntax/`json.load` — syntax-only checks passed three hallucinated values into master (JSP-1, CASE-20260715-2F8C3D).
 - "Most recent N": verify ORDER BY delivers recency (sort AND limit window). Unbounded endpoints paginate BEFORE ship (limit/offset + stable tie-breaker); grids get server-side filters; escape ILIKE metachars (`% _ \`).
@@ -93,8 +93,8 @@ Frontend React+Vercel `platform/frontend/` · Backend FastAPI+Railway `platform/
 
 ## Fleet (full roster, hardware, Hetzner accounts: agents/SERVERS.md)
 - Dispatch pool = **agent-02…06** (02–05: Execute ×3 slots + reviewer roles; 06: Deploy Ops + pipeline monitoring + Execute ×2 — its crons must always run: review gate 4h, deploy/health watchdogs, dispatch reconciler, Wasabi backups).
-- **Not in the pool, never dispatch:** `grotap-cobrowse-01` (5.161.189.143 — recycled old agent-01 IP; Cobrowse AI support runner) and the Lane C model engine `LLM-LOCAL-02`. agent-01/07/08 DELETED; agent-09/10/11 cancelled in Hetzner Robot (awaiting wipe).
-- SSH: always `ssh agent-NN` aliases, never raw IP. Key `~/.ssh/grotap_agents`; cobrowse box `User agent`, others `User root`. Max 3 tasks/server via worktrees.
+- **Not in the pool, never dispatch:** `grotap-cobrowse-01` (5.161.189.143 — recycled old agent-01 IP; OpenReplay AI support runner) and the Lane C model engine `LLM-LOCAL-02`. agent-01/07/08 DELETED; agent-09/10/11 cancelled in Hetzner Robot (awaiting wipe).
+- SSH: always `ssh agent-NN` aliases, never raw IP. Key `~/.ssh/grotap_agents`; support-runner box (`grotap-cobrowse-01`, legacy name) `User agent`, others `User root`. Max 3 tasks/server via worktrees.
 - Git auth on exec servers: `credential.helper = /home/agent/bin/git-credential-doppler` (fetches `GITHUB_TOKEN` per call). NEVER set a static token in `~/.env`; if git auth fails, check `doppler me` as the `agent` user first.
 - No unbounded concurrent SSH to one host — pool, serialize, backoff (sshd MaxStartups drops stampedes).
 
