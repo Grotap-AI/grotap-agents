@@ -1,10 +1,13 @@
 {
-  "model": "opus",
+  "model": "opus[1m]",
   "theme": "light",
   "tui": "fullscreen",
   "autoUpdatesChannel": "latest",
   "skipDangerousModePermissionPrompt": true,
   "voiceEnabled": true,
+  "awaySummaryEnabled": false,
+  "inputNeededNotifEnabled": true,
+  "agentPushNotifEnabled": true,
   "hooks": {
     "Notification": [
       {
@@ -34,9 +37,16 @@
         "source": "github",
         "repo": "nextlevelbuilder/ui-ux-pro-max-skill"
       }
+    },
+    "caveman": {
+      "source": {
+        "source": "github",
+        "repo": "JuliusBrussee/caveman"
+      }
     }
   },
   "enabledPlugins": {
-    "ui-ux-pro-max@ui-ux-pro-max-skill": false
+    "ui-ux-pro-max@ui-ux-pro-max-skill": false,
+    "caveman@caveman": true
   }
 }

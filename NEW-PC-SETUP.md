@@ -5,8 +5,11 @@
 > This file is the prose inventory — what is installed here and *why* — kept for when you need to
 > understand or audit the setup rather than reproduce it.
 
-Captured from `AALLISON` on 2026-07-29. Windows 11, shell = **Git Bash** (MINGW64) + PowerShell 5.1.
-Versions below are what is running here; pin to these unless you have a reason to move.
+Captured from `DESKTOP1` on 2026-07-29, re-captured 2026-09-04. Windows 11 Home (build 26200),
+local account `DESKTOP1\aallison` — **not** a Microsoft account. Shell = **Git Bash** (MINGW64) +
+PowerShell 5.1. Versions below are what is running here; pin to these unless you have a reason to move.
+
+Building the owner's field laptop? [`scripts/newpc/ROOF-LAPTOP.md`](scripts/newpc/ROOF-LAPTOP.md).
 
 ---
 
@@ -25,15 +28,26 @@ Versions below are what is running here; pin to these unless you have a reason t
 **ripgrep**: do *not* install it. Claude Code ships its own and puts it on the Bash tool's PATH;
 there is no standalone `rg` on this box (it is absent from a plain PowerShell prompt).
 
-Not installed here and not needed: psql, docker, pnpm/yarn/bun, uv, poetry, make/gcc.
-(SQL is run through `scripts/db.py`, never psql — see `platform/CLAUDE.md`.)
+Also here as of 2026-09-04, and installed by `setup.ps1` unless you pass `-SkipApps`:
+**Terraform** 1.14.6 (Hetzner fleet), **Google Cloud SDK** 575.0.0, **Google Chrome** (the
+`chrome-devtools` MCP drives it, and every OAuth login needs it), **Bitwarden**, **Google Drive**,
+**ShareX**, **Chrome Remote Desktop**.
+
+Not needed: psql, pnpm/yarn/bun, uv, poetry, make/gcc. (SQL is run through `scripts/db.py`, never
+psql — see `platform/CLAUDE.md`.)
+
+**Docker Desktop** 4.88.1 *is* on this desktop but is deliberately left out of the rebuild — it
+wants WSL2, ~4 GB and an always-on VM, and nothing in the standard workflow needs it. Install it
+by hand if a task actually calls for it.
 
 ---
 
 ## 2. Claude Code + global npm packages
 
 ```bash
-npm i -g @anthropic-ai/claude-code   # 2.1.220 here (auto-updates, channel "latest")
+npm i -g @anthropic-ai/claude-code   # 2.1.260 here (auto-updates, channel "latest")
+                                     # NOTE: this box is actually the NATIVE install,
+                                     # irm https://claude.ai/install.ps1 | iex  -- use that
 npm i -g @openai/codex@0.118.0       # Codex CLI — required by the /codex:* review gate
 npm i -g @railway/cli@4.30.5
 npm i -g vercel@50.25.6
@@ -109,7 +123,7 @@ reason the clone path must be exactly `C:\1Claude`.
 
 ```json
 {
-  "model": "opus",
+  "model": "opus[1m]",
   "theme": "light",
   "tui": "fullscreen",
   "autoUpdatesChannel": "latest",
@@ -126,14 +140,27 @@ reason the clone path must be exactly `C:\1Claude`.
   },
   "extraKnownMarketplaces": {
     "openai-codex":        { "source": { "source": "github", "repo": "openai/codex-plugin-cc" } },
-    "ui-ux-pro-max-skill": { "source": { "source": "github", "repo": "nextlevelbuilder/ui-ux-pro-max-skill" } }
+    "ui-ux-pro-max-skill": { "source": { "source": "github", "repo": "nextlevelbuilder/ui-ux-pro-max-skill" } },
+    "caveman":             { "source": { "source": "github", "repo": "JuliusBrussee/caveman" } }
   },
-  "enabledPlugins": { "ui-ux-pro-max@ui-ux-pro-max-skill": false }
+  "enabledPlugins": {
+    "ui-ux-pro-max@ui-ux-pro-max-skill": false,
+    "caveman@caveman": true
+  },
+  "awaySummaryEnabled": false,
+  "inputNeededNotifEnabled": true,
+  "agentPushNotifEnabled": true
 }
 ```
 
-⚠ Fix the statusline path to the new username, and note `~/.claude/skills/neon-postgres` — the
-Neon skill is user-scoped here; re-add it on the new box (`/plugin` or copy the folder).
+⚠ Fix the statusline path to the new username — it is an absolute path in a hook, so a wrong
+username makes the statusline go silently blank with no error. `verify.ps1` now checks that the
+path actually resolves.
+
+`~/.claude/skills/neon-postgres` is user-scoped and hand-placed (here it is a symlink into
+`~/.agents/skills/`, where the caveman installer also drops its own skills). A copy of it is
+committed at `scripts/newpc/claude-user/skills/neon-postgres/` and `setup.ps1` copies it in —
+symlinks need admin or Developer Mode on Windows, and Claude Code reads either form.
 
 ---
 
@@ -146,6 +173,7 @@ Neon skill is user-scoped here; re-add it on the new box (`/plugin` or copy the 
 | `codex@openai-codex` | 1.0.2 | project → `C:\1Claude\platform` |
 | `code-simplifier@claude-plugins-official` | 1.0.0 | project → `C:\1Claude\platform` |
 | `ui-ux-pro-max@ui-ux-pro-max-skill` | 2.5.0 | user (installed, **disabled** at user level; the platform repo carries its own copy in `platform/.claude/skills/ui-ux-pro-max`) |
+| `caveman@caveman` | pinned `a0109974` here | user, **enabled** — supplies the response-compression SessionStart hook, the cavecrew agents and the `caveman-*` skills (which it drops into `~/.agents/skills/`). A fresh box installs upstream HEAD instead; see the caveman note in `scripts/newpc/ROOF-LAPTOP.md` |
 
 **MCP servers** — checked into `C:\1Claude\.mcp.json`, so they arrive with the clone. Nothing to
 install; `playwright` pulls itself via `npx -y @playwright/mcp@latest` on first use:
@@ -155,6 +183,15 @@ install; `playwright` pulls itself via `npx -y @playwright/mcp@latest` on first 
     "docs-langchain": { "type": "http",  "url": "https://docs.langchain.com/mcp" },
     "playwright":     { "type": "stdio", "command": "npx", "args": ["-y", "@playwright/mcp@latest"] } } }
 ```
+
+One MCP server is **user**-scoped and therefore does *not* arrive with the clone — it lives in
+`~/.claude.json`, which is machine-local state we never copy. `setup.ps1` re-adds it:
+
+```powershell
+claude mcp add --scope user chrome-devtools -- npx -y chrome-devtools-mcp@latest --browserUrl http://127.0.0.1:9222
+```
+
+It attaches to a Chrome started with `--remote-debugging-port=9222`.
 
 Gmail / Google Calendar / Google Drive MCP connectors are **claude.ai account-side**, not local —
 they follow the login, nothing to install.

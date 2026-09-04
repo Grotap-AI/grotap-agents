@@ -1,9 +1,14 @@
 # New PC — runbook
 
 Rebuild this exact Claude Code workstation on a fresh Windows 11 box.
-Captured from the working machine on **2026-07-29**. Everything except the logins is automated.
+Captured from `DESKTOP1` on **2026-07-29**, re-captured and re-verified **2026-09-04**.
+Everything except the logins is automated.
 
 **Total hands-on time: ~10 minutes of typing, ~40 minutes of waiting.**
+
+> Building the owner's **field laptop**? Use [`ROOF-LAPTOP.md`](ROOF-LAPTOP.md) instead — same
+> scripts, but it covers the Windows-Home local-account first-run, the laptop power/encryption
+> settings, and the switches for that build (`-WithSideRepos -WithAndroid`).
 
 ---
 
@@ -59,17 +64,20 @@ It performs eight phases:
 
 | # | Phase | What lands |
 |---|---|---|
-| 1 | System packages (winget) | Node LTS, Python **3.12** (not 3.13/3.14), Doppler, ffmpeg, OpenJDK 17 |
+| 1 | System packages (winget) | Node LTS, Python **3.12** (not 3.13/3.14), Doppler, ffmpeg, OpenJDK 17 — plus the workstation apps (Chrome, Bitwarden, Google Drive, ShareX, Terraform, gcloud, Chrome Remote Desktop) unless `-SkipApps` |
 | 2 | Global npm | codex 0.118.0, railway 4.30.5, vercel 50.25.6, eas-cli 18.1.0, playwright-cli, uipro-cli |
 | 3 | Playwright browsers | chromium/firefox/webkit — every screenshot + E2E task needs these |
-| 4 | Python | exact 113-package freeze of the working box (`python-requirements.txt`) |
-| 5 | Repos | `grotap-platform` → `C:\1Claude\platform`, `grotap-landing` |
-| 6 | Claude config | `~/.claude/settings.json` + `statusline.js` (backs up anything already there) |
-| 7 | Plugins | marketplaces registered; codex + code-simplifier at project scope, ui-ux-pro-max at user scope (disabled) |
+| 4 | Python | exact 114-package freeze of the working box (`python-requirements.txt`) |
+| 5 | Repos | `grotap-platform` → `C:\1Claude\platform`, `grotap-landing`; **plus** `C:\2Claude`, `C:\7ClaudeMarketingAgents`, `C:\8Claude` with `-WithSideRepos` |
+| 6 | Claude config | `~/.claude/settings.json` + `statusline.js` (backs up anything already there), the `gh` git credential helper, the `neon-postgres` user skill, the `chrome-devtools` user-scope MCP server |
+| 7 | Plugins | marketplaces registered; codex + code-simplifier at project scope, ui-ux-pro-max at user scope (disabled), caveman at user scope (enabled) |
 | 8 | Android | **skipped unless `-WithAndroid`** — see below |
 
-Useful switches: `-SkipWinget`, `-SkipPython`, `-SkipPlaywright`, `-WithAndroid`, `-Root <path>`,
-`-GitName` / `-GitEmail`.
+Useful switches: `-SkipWinget`, `-SkipApps`, `-SkipPython`, `-SkipPlaywright`, `-WithAndroid`,
+`-WithSideRepos`, `-Root <path>`, `-GitName` / `-GitEmail`.
+
+`-WithSideRepos` is **opt-in on purpose**: `C:\2Claude` is corporate/legal and must not land on
+someone else's machine just because they ran this script.
 
 ### Standing this up for someone else
 
@@ -172,11 +180,13 @@ plugin (which needs a compiled `.js` beside the `.ts`).
 | File | Purpose |
 |---|---|
 | `setup.ps1` | the installer — stage 1 |
-| `verify.ps1` | read-only parity check — stage 4 |
+| `verify.ps1` | read-only parity check — stage 4 (`-WithSideRepos`, `-WithAndroid` to check those too) |
 | `memory-migrate.ps1` | `-Export` on the old PC, `-Import` on the new one |
-| `python-requirements.txt` | exact 113-package freeze |
+| `python-requirements.txt` | exact 114-package freeze |
 | `claude-user/settings.json` | `~/.claude/settings.json` template (`__CLAUDE_HOME__` is substituted) |
 | `claude-user/statusline.js` | context-budget statusline |
+| `claude-user/skills/neon-postgres/` | the one user-scoped skill that is hand-placed, not plugin-installed |
+| `ROOF-LAPTOP.md` | the owner's field-laptop build (side repos + Android, no Docker/RFID) |
 
 A prose inventory of the source machine — every version, why each tool is there — is in
 [`../../NEW-PC-SETUP.md`](../../NEW-PC-SETUP.md).

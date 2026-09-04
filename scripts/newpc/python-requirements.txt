@@ -1,3 +1,15 @@
+﻿# Exact Python package freeze of the reference workstation (DESKTOP1).
+# Regenerated 2026-09-04 for the roof-laptop build.
+#
+#   python -m pip install -r C:\1Claude\scripts\newpc\python-requirements.txt
+#
+# Python 3.12.10 (per-user, %LOCALAPPDATA%\Programs\Python\Python312). Do NOT use 3.13/3.14 --
+# several native deps (asyncpg, psycopg2-binary, opencv, pywin32) have no wheels there.
+#
+# This is the DEV freeze, deliberately ahead of platform/backend/requirements.txt (the deploy
+# pins). Installing the backend file alone would downgrade anthropic and miss everything the
+# scripts/ tooling needs: report generation, device serial, packaging, Google APIs.
+
 aiohappyeyeballs==2.7.1
 aiohttp==3.14.1
 aiosignal==1.4.0
@@ -27,10 +39,10 @@ fastapi==0.115.0
 frozenlist==1.8.0
 google-api-core==2.31.0
 google-api-python-client==2.198.0
+googleapis-common-protos==1.75.0
 google-auth==2.55.1
 google-auth-httplib2==0.4.0
 google-auth-oauthlib==1.4.0
-googleapis-common-protos==1.75.0
 greenlet==3.5.3
 h11==0.16.0
 httpcore==1.0.9
@@ -57,15 +69,15 @@ pefile==2024.8.26
 pillow==12.1.1
 pluggy==1.6.0
 propcache==0.5.2
-proto-plus==1.28.0
 protobuf==7.35.1
+proto-plus==1.28.0
 psycopg2-binary==2.9.9
-pyasn1==0.6.3
 pyasn1_modules==0.4.2
+pyasn1==0.6.3
 pycparser==3.0
+pydantic_core==2.20.1
 pydantic==2.8.2
 pydantic-settings==2.5.2
-pydantic_core==2.20.1
 pyflakes==3.4.0
 Pygments==2.20.0
 pyinstaller==6.21.0
@@ -100,13 +112,14 @@ SQLAlchemy==2.0.35
 starlette==0.38.6
 stripe==11.4.1
 tabulate==0.10.0
-typing-inspection==0.4.2
 typing_extensions==4.15.0
+typing-inspection==0.4.2
 tzdata==2026.2
 uritemplate==4.2.0
 urllib3==2.6.3
 uvicorn==0.30.6
 watchfiles==1.2.0
+websocket-client==1.9.0
 websockets==16.0
 workos==5.0.0
 xlrd==2.0.1

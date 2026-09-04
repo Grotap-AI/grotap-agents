@@ -16,8 +16,12 @@ param(
   [switch]$SkipWinget,          # skip the system package phase
   [switch]$SkipPython,          # skip pip install (slow)
   [switch]$SkipPlaywright,      # skip browser download (~500 MB)
+  [switch]$SkipApps,            # skip the workstation apps (Chrome, Bitwarden, Drive, ShareX,
+                                #   terraform, gcloud, Chrome Remote Desktop) -- toolchain only
   [switch]$WithAndroid,         # ALSO build C:\1Claude\androidtools (~1 GB, Scan M APK builds)
-  [string]$GitName,             # commit identity for all three repos -- REQUIRED to set any
+  [switch]$WithSideRepos,       # ALSO clone C:\2Claude, C:\7ClaudeMarketingAgents, C:\8Claude
+                                #   (owner's own second machine only -- 2Claude is corporate/legal)
+  [string]$GitName,             # commit identity for every repo -- REQUIRED to set any
   [string]$GitEmail             #   e.g. -GitName "Mike G" -GitEmail "mike@example.com"
 )
 
@@ -74,6 +78,20 @@ if ($SkipWinget) {
       @{ Id = "Gyan.FFmpeg";              Name = "ffmpeg (marketing / video)" },
       @{ Id = "Microsoft.OpenJDK.17";     Name = "Microsoft OpenJDK 17" }
     )
+    # Workstation apps -- also on the source box, and each one is load-bearing for
+    # some task rather than decoration. Skippable with -SkipApps if you only want
+    # the toolchain.
+    if (-not $SkipApps) {
+      $pkgs += @(
+        @{ Id = "Google.Chrome";               Name = "Google Chrome (the chrome-devtools MCP drives THIS, and OAuth logins need it)" },
+        @{ Id = "Bitwarden.Bitwarden";         Name = "Bitwarden (every login below comes out of here)" },
+        @{ Id = "Google.GoogleDrive";          Name = "Google Drive (report/ledger delivery, memory-export handoff)" },
+        @{ Id = "ShareX.ShareX";               Name = "ShareX (screenshots; source box also has paid Snagit -- install that yourself)" },
+        @{ Id = "Hashicorp.Terraform";         Name = "Terraform (Hetzner fleet infra)" },
+        @{ Id = "Google.CloudSDK";             Name = "Google Cloud SDK (gcloud)" },
+        @{ Id = "Google.ChromeRemoteDesktop";  Name = "Chrome Remote Desktop (reach the desktop from the field)" }
+      )
+    }
     # --source winget is MANDATORY, not tidiness. On a box where the msstore
     # source has a bad cert, plain 'winget install' aborts every package with
     # 0x8A15005E / exit -1978335138 ("server certificate did not match"), even
@@ -167,13 +185,39 @@ foreach ($r in $repos) {
   }
 }
 
+# The other three top-level Claude folders. Each is its own repo and its own secret
+# boundary (see the grotap-folder-map memory), which is why they are siblings of
+# $Root and not subfolders. Opt-in: 2Claude is corporate/legal and must not land on
+# someone else's machine just because they ran this script.
+$sideRepos = @(
+  @{ Slug = "Grotap1/qsbs-stacking-plan";       Path = "C:\2Claude";                 Note = "corporate/legal -- C-Corp, QSBS, trusts" },
+  @{ Slug = "Grotap1/grotap-marketing-agents";  Path = "C:\7ClaudeMarketingAgents";  Note = "marketing -- Ayrshare, Doppler grotap-marketing" },
+  @{ Slug = "Grotap1/grotap-expense-ledger";    Path = "C:\8Claude";                 Note = "back-office/finance -- ledgers, billing, inventory" }
+)
+if ($WithSideRepos) {
+  foreach ($r in $sideRepos) {
+    if (Test-Path (Join-Path $r.Path ".git")) {
+      Ok "$($r.Slug) already at $($r.Path)"
+    } else {
+      Info "cloning $($r.Slug) -> $($r.Path) ($($r.Note))"
+      if (Have "gh") { gh repo clone $r.Slug $r.Path } else { git clone "https://github.com/$($r.Slug).git" $r.Path }
+      if (Test-Path (Join-Path $r.Path ".git")) { Ok $r.Slug } else { Failed "clone $($r.Slug) -- is 'gh auth login' done?" }
+    }
+  }
+} else {
+  Say "5b/8 Side folders (2Claude / 7ClaudeMarketingAgents / 8Claude) -- SKIPPED"
+  Info "Pass -WithSideRepos to clone them. Owner's own machines only."
+}
+
 # Per-repo commit identity. .git/config is NOT part of a clone, so without this
 # git refuses to commit at all. But NEVER default to the original owner's
 # identity: this script is used to stand up machines for OTHER PEOPLE, and
 # silently stamping someone else's name on their commits destroys attribution
 # and is a pain to unpick after the fact. Require it explicitly.
 if ($GitName -and $GitEmail) {
-  foreach ($p in @($Root, (Join-Path $Root "platform"), (Join-Path $Root "grotap-landing"))) {
+  $identityPaths = @($Root, (Join-Path $Root "platform"), (Join-Path $Root "grotap-landing"))
+  if ($WithSideRepos) { $identityPaths += ($sideRepos | ForEach-Object { $_.Path }) }
+  foreach ($p in $identityPaths) {
     if (Test-Path (Join-Path $p ".git")) {
       git -C $p config user.name  $GitName
       git -C $p config user.email $GitEmail
@@ -184,6 +228,55 @@ if ($GitName -and $GitEmail) {
   Warned "commit identity NOT set (no -GitName/-GitEmail). git will refuse to commit until you set it:"
   Info   "  git -C $Root config user.name  ""Your Name"""
   Info   "  git -C $Root config user.email ""you@example.com""   (repeat for platform + grotap-landing)"
+}
+
+# Git credential helper -> gh. Without it, git on Windows falls back to the
+# wincredman store, which a non-interactive session cannot reach at all
+# ("fatal: Unable to persist credentials with the 'wincredman' credential store").
+#
+# This CANNOT be set with 'git config' from PowerShell 5.1: the value contains
+# embedded double quotes, PS 5.1 re-splits them, and git reports "wrong number of
+# arguments, should be 2". It also cannot be written unescaped -- git's own config
+# parser treats a bare " as a value delimiter and strips it, after which every
+# fetch dies with "C:/Program: No such file or directory". The inner quotes must be
+# backslash-escaped inside the outer quotes. Write the block to ~/.gitconfig by hand.
+$ghExe = ""
+$ghCmd = Get-Command gh -ErrorAction SilentlyContinue
+if ($ghCmd) { $ghExe = $ghCmd.Source.Replace("\", "/") }
+if ($ghExe) {
+  $gitCfg  = Join-Path $env:USERPROFILE ".gitconfig"
+  $existing = ""
+  if (Test-Path $gitCfg) { $existing = (Get-Content $gitCfg -Raw) }
+  if ($existing -match "gh\.exe.{0,4} auth git-credential") {
+    Ok "git credential helper -> gh (already configured)"
+  } else {
+    if (Test-Path $gitCfg) { Copy-Item $gitCfg "$gitCfg.bak-$(Get-Date -Format yyyyMMdd-HHmmss)" -Force }
+
+    # Preferred: let gh write it. It shells out itself, so PS 5.1 never sees the
+    # quotes, and it produces exactly the form the source box has. Needs gh to be
+    # authenticated already -- which stage 0 does before this script runs.
+    gh auth setup-git 2>$null
+
+    $got = (git config --global --get-all credential.https://github.com.helper | Where-Object { $_ } | Select-Object -Last 1)
+    if ($got -notmatch "auth git-credential") {
+      # Fallback: write the block ourselves, with the inner quotes escaped. Verified
+      # 2026-09-04 to survive git's config parser and come back out intact.
+      Warned "gh auth setup-git did not take (not logged in yet?) -- writing the block by hand"
+      $block = @(
+        "",
+        "[credential ""https://github.com""]",
+        ("`thelper = " + '"!\"' + $ghExe + '\" auth git-credential"'),
+        "[credential ""https://gist.github.com""]",
+        ("`thelper = " + '"!\"' + $ghExe + '\" auth git-credential"')
+      )
+      Add-Content -Path $gitCfg -Value $block -Encoding utf8
+      $got = (git config --global --get-all credential.https://github.com.helper | Where-Object { $_ } | Select-Object -Last 1)
+    }
+    if ($got -match "auth git-credential") { Ok "git credential helper -> gh ($got)" }
+    else { Failed "git credential helper not set -- run 'gh auth login' then 'gh auth setup-git'" }
+  }
+} else {
+  Warned "gh not on PATH -- git credential helper not configured. Re-run after installing GitHub CLI."
 }
 
 # --------------------------------------------- 6. user-level Claude config --
@@ -235,7 +328,42 @@ if ($bashPath) {
 }
 
 Set-Content -Path $stDst -Value $body -Encoding utf8
-Ok "settings.json (model=opus, light, fullscreen, bell hook, statusline, marketplaces)"
+Ok "settings.json (model=opus[1m], light, fullscreen, bell hook, statusline, marketplaces)"
+
+# User-scoped skills. On the source box ~/.claude/skills/neon-postgres is a symlink
+# into ~/.agents/skills/ (where the caveman installer also drops its own skills).
+# Symlinks need admin or Developer Mode on Windows, so copy the folder instead --
+# Claude Code reads either. The caveman-* skills in ~/.agents come back with the
+# plugin in phase 7; only neon-postgres is hand-placed and would otherwise be lost.
+$skSrc = Join-Path $PSScriptRoot "claude-user\skills"
+if (Test-Path $skSrc) {
+  $skDst = Join-Path $claudeHome "skills"
+  if (-not (Test-Path $skDst)) { New-Item -ItemType Directory -Path $skDst -Force | Out-Null }
+  foreach ($s in (Get-ChildItem $skSrc -Directory)) {
+    $t = Join-Path $skDst $s.Name
+    if (Test-Path (Join-Path $t "SKILL.md")) { Ok "skill $($s.Name) already present" }
+    else {
+      Copy-Item $s.FullName $skDst -Recurse -Force
+      Ok "skill $($s.Name)"
+    }
+  }
+}
+
+# User-scoped MCP server. Project MCP servers arrive with the clone via .mcp.json,
+# but chrome-devtools is registered at USER scope on the source box (it lives in
+# ~/.claude.json, which is machine-local state we do not copy). Re-add it here.
+# --browserUrl points at Chrome started with --remote-debugging-port=9222.
+if (Have "claude") {
+  $mcpList = (claude mcp list 2>$null | Out-String)
+  if ($mcpList -match "chrome-devtools") {
+    Ok "MCP chrome-devtools already registered"
+  } else {
+    claude mcp add --scope user chrome-devtools -- npx -y chrome-devtools-mcp@latest --browserUrl http://127.0.0.1:9222
+    if ($LASTEXITCODE -eq 0) { Ok "MCP chrome-devtools (user scope)" } else { Failed "claude mcp add chrome-devtools" }
+  }
+} else {
+  Warned "claude not on PATH -- chrome-devtools MCP not registered. Re-run this script after Claude Code installs."
+}
 
 # ------------------------------------------------------------ 7. plugins ----
 Say "7/8 Plugins"
@@ -244,7 +372,8 @@ if (-not (Have "claude")) {
 } else {
   claude plugin marketplace add openai/codex-plugin-cc
   claude plugin marketplace add nextlevelbuilder/ui-ux-pro-max-skill
-  Ok "marketplaces registered (openai-codex, ui-ux-pro-max-skill)"
+  claude plugin marketplace add JuliusBrussee/caveman
+  Ok "marketplaces registered (openai-codex, ui-ux-pro-max-skill, caveman)"
 
   # codex + code-simplifier are PROJECT-scoped to the platform repo on the source box
   $platform = Join-Path $Root "platform"
@@ -262,6 +391,27 @@ if (-not (Have "claude")) {
   # carries its own copy at platform/.claude/skills/ui-ux-pro-max).
   claude plugin install ui-ux-pro-max@ui-ux-pro-max-skill --scope user
   Ok "ui-ux-pro-max installed at user scope (kept disabled by settings.json)"
+
+  # caveman: user scope and ENABLED on the source box (settings.json turns it on).
+  # It supplies the response-compression SessionStart hook plus the cavecrew agents
+  # and caveman-* skills, which it installs into ~/.agents/skills/.
+  #
+  # HISTORY, so nobody reintroduces the workaround: on CLI 2.1.236 (Aug 2026) this
+  # install died with "Validation errors: agents: Invalid input" because upstream's
+  # manifest carried an 'agents' key the CLI rejected, and the fix was to hand-place
+  # a pinned cache dir because 'plugin install' silently refreshes the marketplace
+  # clone to HEAD first, undoing any pin. RE-TESTED 2026-09-04 on CLI 2.1.260 in a
+  # throwaway CLAUDE_CONFIG_DIR: upstream HEAD (367fdb7f) no longer has that key and
+  # a plain install succeeds. Both versions' SessionStart hook was run directly and
+  # both emit the same 'level: full' ruleset. So: plain install, no pin.
+  # (The source box is still pinned at a0109974, 543 commits behind. Harmless, but
+  # it means the desktop and a fresh box are not byte-identical on this one plugin.)
+  claude plugin install caveman@caveman --scope user
+  if ($LASTEXITCODE -eq 0) {
+    Ok "caveman installed at user scope (enabled by settings.json)"
+  } else {
+    Failed "caveman install -- if it says 'agents: Invalid input' the upstream manifest regressed; pin to a0109974ea3258a14aadaef1ed1f8ff2837d30d5"
+  }
 }
 
 # ------------------------------------------------------------ 8. android ----
