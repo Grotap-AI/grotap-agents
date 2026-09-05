@@ -7,7 +7,7 @@ Everything except the logins is automated.
 **Total hands-on time: ~10 minutes of typing, ~40 minutes of waiting.**
 
 > Building the owner's **field laptop**? Use [`ROOF-LAPTOP.md`](ROOF-LAPTOP.md) instead — same
-> scripts, but it covers the Windows-Home local-account first-run, the laptop power/encryption
+> scripts, but it covers the Windows-Home local-account first-run, the laptop power
 > settings, and the switches for that build (`-WithSideRepos -WithAndroid`).
 
 ---

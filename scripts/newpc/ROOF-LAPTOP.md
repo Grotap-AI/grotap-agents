@@ -45,15 +45,7 @@ This machine leaves the building carrying live credentials (Doppler token, `gh` 
 API key, Claude session) **and** the `2Claude` corporate/legal repo. Treat it accordingly.
 
 ```powershell
-# 1. Is the disk encrypted? Windows 11 Home has "Device Encryption", not full BitLocker,
-#    and only when the hardware supports it. Check, do not assume:
-Get-BitLockerVolume -MountPoint C: | Select-Object VolumeStatus, ProtectionStatus
-#    Blank / "FullyDecrypted" means the disk is PLAINTEXT. Turn it on:
-#      Settings > Privacy & security > Device encryption
-#    If that page does not exist, the hardware cannot do it -- then decide deliberately
-#    whether 2Claude belongs on this machine at all.
-
-# 2. Lock quickly when it is closed and unattended on a roof.
+# Lock quickly when it is closed and unattended on a roof.
 powercfg /change monitor-timeout-ac 15
 powercfg /change monitor-timeout-dc 5
 powercfg /change standby-timeout-dc 15
