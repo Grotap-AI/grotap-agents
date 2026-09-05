@@ -132,3 +132,4 @@
 |---|---|
 | [apps/rfid-pipe](./12-app-platform/apps/rfid-pipe.md) | RFID Pipe app spec: batch templates, scan review, dashboard, setup |
 | [loop-engine](./12-app-platform/loop-engine.md) | **Loop Engine app spec: per-tenant automation console — loops/bundles, Gmail Cleanup bundle, Inngest scheduler, per-account OAuth** |
+| [apps/print-cloud-print-quality](./12-app-platform/apps/print-cloud-print-quality.md) | **Print Cloud print quality: darkness/speed ranges per language, the test pattern, symptom → fix table, the `{LC}` command-error fault** |
