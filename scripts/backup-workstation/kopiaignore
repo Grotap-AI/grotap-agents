@@ -1,0 +1,212 @@
+# Exclude patterns for the workstation backup (Kopia, gitignore-style syntax).
+#
+# Applied by install-backup.ps1 as POLICY rules (kopia policy set --add-ignore), not by
+# dropping .kopiaignore files into the user's tree -- the source directories are git repos
+# and we do not want a stray ignore file showing up as untracked in every one of them.
+#
+# Blank lines and lines starting with # are skipped by the installer.
+#
+# Three reasons a path appears here. Keep them straight, because they have different fixes:
+#   REBUILDABLE - a cache or a downloadable artifact. Excluding it costs nothing.
+#   UNSAFE      - a file that cannot be captured consistently by a file-level backup.
+#   SECRET      - a live credential we deliberately refuse to ship to a third-party host.
+#
+# Measured on DESKTOP1, 2026-09-06: these patterns take ~54 GB raw down to ~2.6 GB.
+
+# ---------------------------------------------------------------------------
+# UNSAFE -- virtual disk images
+#
+# VSS snapshots the host NTFS volume. It does NOT quiesce the ext4 filesystem inside a
+# VHDX, so what gets captured is a byte copy of a live disk mid-write with a torn journal.
+# It may mount on restore; it may not; you find out at the worst moment. WSL distros belong
+# in `wsl --export` tarballs (quiesced, and a fine Kopia target). Docker images come from
+# registries, and named volumes from `docker run --rm -v <vol>:/v alpine tar -cf - /v`.
+# Measured: 5.23 GB in three files.
+# ---------------------------------------------------------------------------
+AppData/Local/wsl/
+AppData/Local/Docker/wsl/
+AppData/Local/Docker/log/
+*.vhdx
+*.vhd
+*.vmdk
+
+# ---------------------------------------------------------------------------
+# SECRET -- live credentials, deliberately not backed up
+#
+# Every item here is rotatable in minutes, so excluding it loses nothing recoverable while
+# removing a standing risk: an encrypted repository on someone else's disk that decrypts to
+# production access if the passphrase ever leaks.
+#
+# .claude/projects is on this list for a reason discovered rather than assumed: on
+# 2026-09-06 two separate agent transcripts in that directory were found to contain live
+# API keys in plaintext, written there by ordinary tool output. Conversation transcripts
+# accumulate secrets as a matter of course. It is also 764 MB and grows without bound.
+# ---------------------------------------------------------------------------
+.doppler/
+.ssh/
+.codex/auth.json
+.hi_token
+.hi_url
+.claude/projects/
+.chrome-debug-*/
+
+# NOTE on the line above: excluding .claude/projects/ also excludes the memory/ directory
+# inside each project slug -- which is Claude's accumulated "don't re-do this" record, is
+# not in git, and per scripts/newpc/README.md cannot be reinstalled. That would be the
+# worst possible thing to lose here. backup-run.ps1 therefore adds every
+# .claude/projects/*/memory directory back as its OWN snapshot source; ignore rules apply
+# while traversing down from a source root, so a source inside an ignored path is still
+# captured. If you edit either half of this, edit both.
+
+# ---------------------------------------------------------------------------
+# REBUILDABLE -- package and dependency caches
+# ---------------------------------------------------------------------------
+AppData/Local/npm-cache/
+AppData/Local/pip/
+AppData/Local/node-gyp/
+AppData/Local/Microsoft/WinGet/
+AppData/Local/Package Cache/
+AppData/Roaming/npm/
+AppData/Local/Yarn/
+AppData/Local/pnpm-store/
+AppData/Local/go-build/
+AppData/Local/Cargo/
+.gradle/
+.m2/repository/
+.nuget/packages/
+.cache/huggingface/
+.cache/puppeteer/
+.cache/ms-playwright/
+node_modules/
+
+# ---------------------------------------------------------------------------
+# REBUILDABLE -- downloaded binaries, browsers, models, app payloads
+#
+# The Claude entries are the single largest win in the tree: vm_bundles alone is 9.07 GB
+# in nine files, and .local/share/claude/versions holds four copies of a 208 MB binary.
+# ---------------------------------------------------------------------------
+AppData/Local/ms-playwright/
+AppData/Local/ms-playwright-mcp/
+AppData/Local/Programs/
+AppData/Local/Google/Cloud SDK/
+AppData/Local/Android/
+AppData/Local/Packages/Claude_*/LocalCache/Roaming/Claude/vm_bundles/
+AppData/Local/Packages/Claude_*/LocalCache/Roaming/Claude/claude-code/
+AppData/Local/Packages/Claude_*/LocalCache/Roaming/Claude/claude-code-vm/
+AppData/Local/claude-cli-nodejs/
+AppData/Local/GitHub CLI/
+.local/bin/claude.exe
+.local/share/claude/versions/
+.claude/image-cache/
+.claude/cache/
+.claude/plugins/repos/
+
+# ---------------------------------------------------------------------------
+# REBUILDABLE -- temp, crash dumps, logs
+#
+# Snagit's CrashDumps is 1.94 GB in TWO files. Codex's logs_1.sqlite is a single 356 MB
+# file rewritten constantly, which is the worst possible shape for a dedup backup: it
+# re-uploads most of itself every run and none of it is worth keeping.
+# ---------------------------------------------------------------------------
+AppData/Local/Temp/
+AppData/Local/CrashDumps/
+AppData/Local/TechSmith/Snagit/CrashDumps/
+AppData/Local/TechSmith/Updater/
+AppData/Local/bitwarden-updater/
+AppData/Local/D3DSCache/
+AppData/Local/NVIDIA/
+.codex/logs_*.sqlite
+.codex/tmp/
+.railway-err.txt
+CrashDumps/
+Crashpad/
+Crash Reports/
+*.dmp
+*.mdmp
+*.etl
+
+# ---------------------------------------------------------------------------
+# REBUILDABLE -- Squirrel-style versioned app installs
+# WisprFlow keeps three complete copies of itself plus the .nupkg payloads.
+# ---------------------------------------------------------------------------
+AppData/Local/WisprFlow/
+AppData/Roaming/Wispr Flow/
+AppData/Local/SquirrelTemp/
+packages/*.nupkg
+
+# ---------------------------------------------------------------------------
+# REBUILDABLE -- Windows shell, search and widget caches
+# ---------------------------------------------------------------------------
+AppData/Local/Microsoft/Windows/
+AppData/Local/Microsoft/Office/
+AppData/Local/Packages/MSTeams_*/
+AppData/Local/Packages/MicrosoftWindows.Client.CBS_*/
+AppData/Local/Packages/MicrosoftWindows.Client.WebExperience_*/
+AppData/Local/Google/DriveFS/
+AppData/Local/Comms/UnistoreDB/
+AppData/Local/ConnectedDevicesPlatform/
+thumbcache_*.db
+IconCache.db
+
+# ---------------------------------------------------------------------------
+# REBUILDABLE -- Chromium-family caches (Chrome, Edge, and every Electron app)
+#
+# What is KEPT, per profile: Login Data, Login Data For Account, Web Data, Cookies,
+# Preferences, Secure Preferences, Bookmarks, History, Favicons, Local Extension Settings,
+# Extension State, Storage/ext, and User Data/Local State.
+#
+# Be aware of what keeping them actually buys. Those files are DPAPI- and App-Bound-
+# Encryption-protected: they restore byte-identical and completely non-functional on any
+# other machine or SID. They are worth keeping for a same-machine rollback and worth
+# nothing for the move to the cloud desktop. Browser sessions do not survive that move --
+# Bitwarden plus `gh auth login` is the real recovery path. Do not let their presence in
+# the snapshot create a false sense of recoverability.
+#
+# `Extensions/` drops extension CODE (re-downloaded from the Web Store). Extension DATA
+# survives via Local Extension Settings / Extension State / Storage/ext. Check
+# chrome://extensions for anything sideloaded before trusting that split.
+# ---------------------------------------------------------------------------
+AppData/Local/Google/Chrome/User Data/OptGuideOnDeviceModel/
+AppData/Local/Google/Chrome/User Data/OptGuideOnDeviceClassifierModel/
+AppData/Local/Google/Chrome/User Data/optimization_guide_model_store/
+AppData/Local/Google/Chrome/User Data/component_crx_cache/
+AppData/Local/Google/Chrome/User Data/screen_ai/
+AppData/Local/Google/Chrome/User Data/Safe Browsing/
+AppData/Local/Google/Chrome/User Data/Snapshots/
+AppData/Local/Google/Chrome/User Data/*/Storage/default/
+AppData/Local/Microsoft/Edge/User Data/*/Storage/default/
+Cache/
+Cache_Data/
+Code Cache/
+GPUCache/
+GrShaderCache/
+ShaderCache/
+DawnCache/
+DawnGraphiteCache/
+DawnWebGPUCache/
+Service Worker/
+CacheStorage/
+ScriptCache/
+IndexedDB/
+File System/
+blob_storage/
+Shared Dictionary/
+Session Storage/
+Extensions/
+Extension Rules/
+Extension Scripts/
+Subresource Filter/
+Download Service/
+Platform Notifications/
+Site Characteristics Database/
+BudgetDatabase/
+WidevineCdm/
+MediaFoundationWidevineCdm/
+optimization_guide_hint_cache_store/
+
+# ---------------------------------------------------------------------------
+# Junk
+# ---------------------------------------------------------------------------
+desktop.ini
+*.tmp
+~$*
