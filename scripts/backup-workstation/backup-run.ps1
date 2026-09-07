@@ -158,8 +158,23 @@ try {
     }
   }
 } catch { }
-Say "volume shadow copy (from policy): $vssMode"
-if ($vssMode -eq "policy" -or $vssMode -eq "never") {
+# kopia's --json emits this as an integer enum, not the word the CLI accepts. Map it, or
+# the guard below compares an int against a string, never matches, and the warning that
+# exists to catch "VSS silently off" can never fire -- which is the one case it is for.
+# Mapping confirmed against 0.23.1: `policy show` printed "when-available" for JSON value 2.
+$vssLabel = $vssMode
+$vssOn = $false
+switch ("$vssMode") {
+  "0" { $vssLabel = "inherit (not set)"; $vssOn = $false }
+  "1" { $vssLabel = "never";             $vssOn = $false }
+  "2" { $vssLabel = "when-available";    $vssOn = $true  }
+  "3" { $vssLabel = "always";            $vssOn = $true  }
+  "when-available" { $vssOn = $true }
+  "always"         { $vssOn = $true }
+  default          { $vssOn = $false }
+}
+Say "volume shadow copy (from policy): $vssLabel"
+if (-not $vssOn) {
   Say "WARNING: VSS is not enabled in policy. Files locked by a logged-in session -- AppData,"
   Say "         NTUSER.DAT -- will be SKIPPED, and a backup that skips them looks identical"
   Say "         to one that works. Re-run install-backup.ps1 to set it."
