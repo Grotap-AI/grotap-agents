@@ -42,6 +42,7 @@ key that can reach the backup.
 | `install-backup.ps1` | One-time (idempotent) setup: ACLs the state dir, caches the passphrase, applies ignore + retention policy, registers the scheduled task. **Needs an elevated shell.** |
 | `backup-run.ps1` | The task body. Also safe to run by hand. |
 | `verify-restore.ps1` | Restores a sample and diffs it against live. Run it monthly. |
+| `browse-backup.ps1` | Opens the backup for **reading** -- see [Browsing the backup](#browsing-the-backup). Needs no elevation and touches nothing the backup task owns. |
 | `kopiaignore` | The exclude patterns, with a comment per block explaining *why*. |
 
 ---
@@ -84,6 +85,68 @@ argument on the way to the server: the repository was physically created at
 mangled it identically so it appeared to work, while the same command from PowerShell
 failed with `repository not initialized in the provided storage`. A relative path is passed
 through untouched by both shells.
+
+## Browsing the backup
+
+`browse-backup.ps1` opens the repository read-only and serves Kopia's own web UI on
+loopback, so any snapshot can be opened in a browser and any file or folder downloaded
+from it. It runs on **any** machine with a Doppler login that can read `grotap/prd` -- the
+SSH key, the endpoint and the passphrase all come from there -- and it installs the Kopia
+CLI with winget if it is missing.
+
+```powershell
+# the default: connect, list, open the UI in the default browser
+powershell -ExecutionPolicy Bypass -File .\browse-backup.ps1
+
+.\browse-backup.ps1 -ListOnly     # print the snapshots to the console, nothing else
+.\browse-backup.ps1 -Mount        # mount as R:\ for Explorer instead (needs admin)
+```
+
+There is a desktop shortcut for the default path, **Desktop Backup (cloud)**, created
+2026-09-08 on the roof laptop `GrotapInfoAA2`. It runs the same script; keep the console
+window it opens, because closing it stops the server. Recreate it anywhere with:
+
+```powershell
+$w = New-Object -ComObject WScript.Shell
+$l = $w.CreateShortcut("$env:USERPROFILE\Desktop\Desktop Backup (cloud).lnk")
+$l.TargetPath = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
+$l.Arguments  = '-NoLogo -NoProfile -ExecutionPolicy Bypass -File "C:\1Claude\scripts\backup-workstation\browse-backup.ps1"'
+$l.WorkingDirectory = "C:\1Claude\scripts\backup-workstation"
+$l.IconLocation = "$env:SystemRoot\System32\shell32.dll,7"
+$l.Save()
+```
+
+Its state (its own `repository.config`, the SSH key, `known_hosts`) lives under
+`%LOCALAPPDATA%\Grotap\backup-browse`, **not** the SYSTEM-only
+`C:\ProgramData\Grotap\backup` the scheduled task uses, so browsing from the backed-up
+machine cannot disturb the task. The config is marked `--read-only`.
+
+### Four things that made this harder than it looks (all proven 2026-09-08)
+
+- **`ssh-keyscan` cannot read this box's host key.** OpenSSH_for_Windows 9.5p2 aborts with
+  `choose_kex: unsupported KEX method sntrup761x25519-sha512@openssh.com` and prints
+  nothing, which reads as an unreachable host. A plain `ssh` connect negotiates fine and
+  writes the key itself; its authentication failure afterwards is irrelevant.
+- **Pin every host key type, not one.** The box offers ed25519, rsa and ecdsa-nistp521.
+  kopia (Go `x/crypto/ssh`) leaves `HostKeyAlgorithms` nil and Go's default order puts
+  ed25519 **last**, so it negotiates ecdsa-nistp521 against an ed25519-only `known_hosts`
+  and fails with nothing but `knownhosts: key mismatch`. Probe each type into its own
+  file: several types for one host in one file makes ssh cry REMOTE HOST IDENTIFICATION
+  HAS CHANGED and refuse to add.
+- **kopia looks the host up without the port.** `ssh` only ever writes `[host]:23` for a
+  non-default port; kopia asks for bare `host` (`unable to getHostKey: <host>`). Write
+  both forms.
+- **The UI filters snapshots by the client's own identity**, so from any machine that is
+  not DESKTOP1 it opens on an empty list. kopia 0.23 has no `--override-hostname` on
+  `repository connect`; fix it afterwards with
+  `kopia repository set-client --username=aallison --hostname=desktop1`.
+
+Also: winget installs Kopia as a **portable** package -- the exe lands under
+`%LOCALAPPDATA%\Microsoft\WinGet\Packages\Kopia.KopiaCLI_*\kopia-<ver>-windows-x64\`
+and only a freshly started shell sees it on `PATH`, so a just-installed kopia is invisible
+to `Get-Command` in the installing process.
+
+---
 
 ## Restoring
 
