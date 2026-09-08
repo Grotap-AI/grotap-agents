@@ -15,7 +15,7 @@ Do not skip this on "quick" sessions — there are none.
 | Repo | Purpose | Local Path |
 |---|---|---|
 | `grotap-agents` | Agent bootstrap architecture | `C:\1Claude\` |
-| `grotap-platform-docs` | Platform documentation (remote only, last push 2026-07-05; NOT cloned — working docs live in `C:Claude\docs\` inside this repo) | — |
+| `grotap-platform-docs` | Platform documentation (remote only, last push 2026-07-05; NOT cloned — working docs live in `C:\1Claude\docs\` inside this repo) | — |
 | `grotap-platform` | Application code | `C:\1Claude\platform\` |
 
 ## Rules
