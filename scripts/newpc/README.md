@@ -175,6 +175,50 @@ plugin (which needs a compiled `.js` beside the `.ts`).
 
 ---
 
+## Reaching DESKTOP1 by RDP
+
+The tailnet is how you get a screen on the workstation from anywhere; the LAN is not
+involved. As of 2026-09-08 the tailnet holds two nodes: `desktop1` (`100.99.158.19`) and
+the roof laptop `grotapinfoaa2` (`100.120.182.126`).
+
+**On the machine you want to reach** (once, elevated) — this is the half that is easy to
+forget, because a closed 3389 looks identical to a broken tunnel:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File C:\1Claude\scripts\newpc\enable-rdp-tailscale.ps1
+```
+
+It turns RDP on, sets the service to Automatic, disables the stock "any source" firewall
+rules and allows 3389 from `100.64.0.0/10` only. It refuses to run on Windows Home, which
+cannot host an RDP session at all.
+
+**On the machine you are sitting at:** join the tailnet, then double-click
+`desktop1-rdp.rdp` (a copy lives on the owner's desktop as
+*DESKTOP1 (RDP over Tailscale)*).
+
+```powershell
+winget install --id Tailscale.Tailscale --exact --silent
+$key = (doppler secrets get TAILSCALE_AUTHKEY --plain -p grotap -c prd).Trim()
+& "C:\Program Files\Tailscale\tailscale.exe" up --authkey $key --accept-routes --unattended `
+    --hostname=<this-machine> --accept-dns=false
+```
+
+`--accept-routes` is worth the keystrokes: DESKTOP1 advertises `192.168.25.0/24` (printer,
+CS463 reader, tablets) and `192.168.86.0/24`, so a node that accepts routes can reach that
+hardware directly. The `TAILSCALE_AUTHKEY` in Doppler is reusable and expires
+**2026-12-05**.
+
+Two things that make RDP look broken when it is not:
+
+- **`tailscale ping` says `via DERP(sea)`.** The session works but every keystroke pays a
+  relay round trip (~840 ms measured 2026-09-08). It usually turns direct after a minute;
+  if it never does, both ends are behind hard NAT and a subnet router or Tailscale funnel
+  is the answer, not more RDP tuning.
+- **Node key expiry.** A node whose key expires is a machine you cannot reach. Disable key
+  expiry for DESKTOP1 and for any always-on node in the Tailscale admin console.
+
+---
+
 ## Files here
 
 | File | Purpose |
@@ -187,6 +231,9 @@ plugin (which needs a compiled `.js` beside the `.ts`).
 | `claude-user/statusline.js` | context-budget statusline |
 | `claude-user/skills/neon-postgres/` | the one user-scoped skill that is hand-placed, not plugin-installed |
 | `ROOF-LAPTOP.md` | the owner's field-laptop build (side repos + Android, no Docker/RFID) |
+| `CLOUD-DESKTOP.md` | the Hetzner cloud desktop build (RDP over Tailscale). **Not built yet** — no such server exists in the Hetzner project as of 2026-09-08 |
+| `enable-rdp-tailscale.ps1` | run ON a machine to let it accept RDP from the tailnet only — see below |
+| `desktop1-rdp.rdp` | double-click on any tailnet node to RDP into DESKTOP1 (`100.99.158.19`) |
 
 A prose inventory of the source machine — every version, why each tool is there — is in
 [`../../NEW-PC-SETUP.md`](../../NEW-PC-SETUP.md).
