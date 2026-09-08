@@ -16,3 +16,19 @@ platform/
 # OS
 .DS_Store
 Thumbs.db
+
+# python bytecode
+__pycache__/
+# nested repos and platform worktrees living beside this checkout
+grotap-landing/
+public-reports/
+reports/
+platform-worktrees/
+platform-scale/
+lt-run/
+wt-*/
+# owner document archive and local tool caches
+DocsforClaude/
+androidtools/
+apk-out/
+.browser-*/
