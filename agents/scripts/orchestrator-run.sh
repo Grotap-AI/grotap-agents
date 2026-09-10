@@ -108,6 +108,18 @@ HELPER
 # ── Ensure platform repo exists and is current ───────────────────────────────
 ensure_repo() {
   ensure_git_auth
+  # Self-sync the bootstrap repo: the orchestrator SSH path runs this file straight from
+  # ~/grotap-agents and never executes dispatch.sh's bootstrap sync, so runner fixes never
+  # reached agent-03 (clone stale since 2026-07-12; CASE-20260910-571311 re-hit the
+  # already-fixed stale-lease bug). git swaps the file by rename, so the running bash keeps
+  # the old inode; the NEXT run gets the update. Local-only commits are parked on a
+  # backup branch, never discarded.
+  if git -C "$HOME/grotap-agents" fetch origin +refs/heads/master:refs/remotes/origin/master -q >> "$LOG" 2>&1; then
+    if [ -n "$(git -C "$HOME/grotap-agents" log --oneline origin/master..HEAD 2>/dev/null)" ]; then
+      git -C "$HOME/grotap-agents" branch -f "backup/local-$(date -u +%Y%m%d-%H%M%S)" HEAD >> "$LOG" 2>&1 || true
+    fi
+    git -C "$HOME/grotap-agents" reset --hard origin/master -q >> "$LOG" 2>&1 || true
+  fi
   if [ ! -d "$PLATFORM_DIR/.git" ]; then
     log "Cloning grotap-platform..."
     git clone https://github.com/Grotap-AI/grotap-platform.git "$PLATFORM_DIR" >> "$LOG" 2>&1
