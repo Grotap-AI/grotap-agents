@@ -47,6 +47,13 @@ if [ "$IS_WINDOWS" = 0 ] && [ -d "${HOME:-/nonexistent}/.claude-remote" ] && [ -
     || say "[bootstrap] WARN: .claude-session-init.sh failed — validate MD structure manually per BOOTSTRAP.md"
 fi
 
+# --- Repo git hooks (all environments) --------------------------------------
+# competitor-name guard (owner rule 2026-09-10): pre-commit + commit-msg refuse
+# additions that name the competitor RFID vendor. Idempotent, never fatal.
+if [ -d "$ROOT/scripts/git-hooks" ] && git -C "$ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+  git -C "$ROOT" config core.hooksPath scripts/git-hooks 2>/dev/null || true
+fi
+
 # --- Readiness report (all environments) ------------------------------------
 say "[bootstrap] repo: $(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || echo unknown) on $(git -C "$ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?') ($(uname -s 2>/dev/null || echo unknown))"
 

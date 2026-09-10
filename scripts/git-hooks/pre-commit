@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# scripts/git-hooks/pre-commit — competitor-name guard (owner rule 2026-09-10).
+#
+# The competitor RFID vendor whose tags Manor View's stock carries is never
+# named in code, comments, docs, release notes or artifacts. Write
+# "Competitor RFID Software". This hook refuses a commit whose ADDED lines
+# name the vendor. Existing (context / removed) lines are not checked, so
+# scrubbing commits and edits near the legacy `source_system` key pass.
+#
+# Installed by scripts/claudecode/session-start-hook.sh via
+#   git config core.hooksPath scripts/git-hooks
+# Bypass only with owner approval: git commit --no-verify
+set -u
+V="ar""bre"   # assembled so this file passes its own check
+hits=$(git diff --cached -U0 --diff-filter=ACMR --no-color \
+        | grep -E '^\+' | grep -vE '^\+\+\+ ' \
+        | grep -iE "(^|[^a-z])${V}" | head -n 8)
+if [ -n "$hits" ]; then
+  printf 'pre-commit: competitor-name guard — staged lines name the competitor RFID vendor.\n' >&2
+  printf 'Write "Competitor RFID Software" instead (owner rule 2026-09-10). Offending additions:\n' >&2
+  printf '%s\n' "$hits" | cut -c1-160 >&2
+  exit 1
+fi
+exit 0

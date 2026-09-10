@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# scripts/git-hooks/commit-msg — competitor-name guard for commit messages
+# (owner rule 2026-09-10). Same rule as pre-commit: the competitor RFID vendor
+# is never named; write "Competitor RFID Software". $1 is the message file.
+set -u
+V="ar""bre"
+if grep -iqE "(^|[^a-z])${V}" "$1" 2>/dev/null; then
+  printf 'commit-msg: competitor-name guard — the message names the competitor RFID vendor.\n' >&2
+  printf 'Write "Competitor RFID Software" instead (owner rule 2026-09-10).\n' >&2
+  exit 1
+fi
+exit 0

@@ -10,12 +10,35 @@
           }
         ]
       }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'F=\"${CLAUDE_PROJECT_DIR:-.}/scripts/claudecode/competitor-name-guard.py\"; [ -f \"$F\" ] || exit 0; P=$(command -v python 2>/dev/null || command -v python3 2>/dev/null) || exit 0; exec \"$P\" \"$F\"'",
+            "timeout": 15,
+            "statusMessage": "competitor-name guard"
+          }
+        ]
+      }
     ]
   },
   "enableAllProjectMcpServers": true,
   "extraKnownMarketplaces": {
-    "openai-codex": {"source": {"source": "github", "repo": "openai/codex-plugin-cc"}},
-    "ui-ux-pro-max-skill": {"source": {"source": "github", "repo": "nextlevelbuilder/ui-ux-pro-max-skill"}}
+    "openai-codex": {
+      "source": {
+        "source": "github",
+        "repo": "openai/codex-plugin-cc"
+      }
+    },
+    "ui-ux-pro-max-skill": {
+      "source": {
+        "source": "github",
+        "repo": "nextlevelbuilder/ui-ux-pro-max-skill"
+      }
+    }
   },
   "enabledPlugins": {
     "codex@openai-codex": true,
