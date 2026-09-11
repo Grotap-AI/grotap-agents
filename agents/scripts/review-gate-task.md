@@ -49,10 +49,23 @@ cd frontend && npm install --silent && npx tsc --noEmit && cd ..
 ## 4. Aftercare
 - Merged cases: `UPDATE pipeline_cases SET status='done', updated_at=NOW() WHERE case_id=...`
   and close their dispatch rows: `UPDATE pipeline_dispatch_log SET status='done', completed_at=NOW() WHERE case_id=... AND status IN ('pending','active','awaiting_review')`.
-- If this run processed any `awaiting_human` (orchestrator-parked) cases, say so in the summary
-  hold and instruct: **redeploy the orchestrator (`railway up`, NEVER git-triggered) after the
-  batch** — its slot map is boot-only and paused threads whose cases were closed underneath it
-  must be re-scanned, not resumed (boot must never re-enter `next=['human_gate']` threads).
+- If this run processed any `awaiting_human` (orchestrator-parked) cases, VERIFY whether a
+  redeploy is actually owed before instructing one — this instruction has fired FALSE on every
+  run that checked (4x through 2026-09-11), and `railway up` KILLS in-flight SSH dispatches.
+  All three must hold to owe a redeploy; if any fails, say "no redeploy owed" and why:
+  1. `curl -s https://orchestrator-production-e14c.up.railway.app/health` → `git_sha`, then
+     `git rev-list --count <git_sha>..origin/master -- orchestrator/` must be **> 0**.
+     (A backend-only batch ships no orchestrator code — the redeploy is byte-identical.)
+  2. A thread must actually need a re-scan that boot would deliver. It normally does NOT:
+     `orchestrator/src/lib/resume-guard.ts` keys on `snapshot.next.includes("human_gate")` and
+     refuses to resume such a thread at ANY case status (proved by
+     `orchestrator/src/lib/__tests__/human-gate-boot-survival.test.ts`), so a parked thread whose
+     case was closed underneath it is already INERT — leave it, no redeploy.
+  3. The slot map is **NOT boot-only** (stale premise): `startSlotMapReconciler()`
+     (`orchestrator/src/fleet.ts:211`, wired at `server.ts:149`) re-reconciles every 5 min
+     (`SLOT_MAP_RECONCILE_INTERVAL_MS`, default 300000). Slot drift alone never owes a redeploy.
+  Also check `pipeline_dispatch_log` for `status IN ('active','pending')` first — each one is a
+  live agent run a redeploy would destroy.
 - Defects found: INSERT a fix case into pipeline_cases (status='submitted', type='bug', P2,
   case_data.raw_input = precise defect + fix scope + file paths) — the noon dispatch picks it up.
 - **Do NOT apply SQL migration files to live DBs.** List every new `backend/migrations/*.sql`
