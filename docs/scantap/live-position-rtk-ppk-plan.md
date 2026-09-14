@@ -14,7 +14,7 @@ default; `--file` POSTs). Status: DRAFT — not filed, nothing committed, no mig
    GNSS is never the source of the cm position; an external receiver is.
 3. **No WiFi and no hotspot in the field.** Base-to-rover corrections travel by radio (base radio -> rover radio ->
    receiver). The tablet never relays RTCM and never needs a network connection for the live fix.
-4. **Base site and base power are not decided** — owner action, tracked in section 9. The runbook (LPOS-5) tells the
+4. **Base site = the office, on mains power** (owner 2026-09-14). Remaining owner check on site: open sky and a ~3 m radio mast with line of sight to the fields; tracked in section 9. The runbook (LPOS-5) tells the
    owner how to choose; it does not choose for them.
 5. The receiver is an **optional add-on SKU** in the Scan M kit BOM: "Live Position add-on — instant live accurate
    locations of your scans". It is a separate kit entry with two variants (Budget ≈ $850, Robust ≈ $1,390 — section
@@ -356,7 +356,7 @@ tenant (ledger at v035) — LPOS files must reference no v036–v043 object.
 
 ## 7. Open owner actions
 
-1. **Base site + power** — pick the spot (open sky, ≥ 3 m from RFID antennas, base radio antenna at ~3 m elevation;
+1. **Base at the office on mains power (decided 2026-09-14)** — verify the spot (open sky, ≥ 3 m from RFID antennas, base radio antenna at ~3 m elevation;
    mains, or the LiFePO4 battery with the optional 30 W solar trickle) — blocks the first live test.
 2. **Buy Budget (≈ $850–970) or Robust (≈ $1,390)** — section 4a; the radio decision is made (XBee 3 PRO 2.4 GHz),
    so this is a purchase, not a design question. ArduSimple ships DHL from Spain in 2–5 days.
