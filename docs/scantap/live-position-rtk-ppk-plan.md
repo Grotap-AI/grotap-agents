@@ -14,6 +14,9 @@ default; `--file` POSTs). Status: DRAFT — not filed, nothing committed, no mig
    GNSS is never the source of the cm position; an external receiver is.
 3. **No WiFi and no hotspot in the field.** Base-to-rover corrections travel by radio (base radio -> rover radio ->
    receiver). The tablet never relays RTCM and never needs a network connection for the live fix.
+   **Amended 2026-09-14 by the owner doc "RTK Devices and Services Integration"** (section 11): the tablet MAY have
+   a cell link (Verizon) and MAY act as the NTRIP client for a third-party correction service (rtkdata.com) or for
+   our own base published through a caster. Radio stays the offline option; it is no longer the only one.
 4. **Base site = the office, on mains power** (owner 2026-09-14). Remaining owner check on site: open sky and a ~3 m radio mast with line of sight to the fields; tracked in section 9. The runbook (LPOS-5) tells the
    owner how to choose; it does not choose for them.
 5. The receiver is an **optional add-on SKU** in the Scan M kit BOM: "Live Position add-on — instant live accurate
@@ -404,9 +407,179 @@ tenant (ledger at v035) — LPOS files must reference no v036–v043 object.
 ## 10. Not in scope
 
 - Tag-level cm positioning in production (LPOS-6 is a spike only).
-- NTRIP relaying through the tablet, WiFi/hotspot field networking, cellular modems.
+- Cellular modem hardware inside the reader box (a phone hotspot / Jetpack / cell tablet is an owner purchase, not a case).
+  (Tablet NTRIP relaying was excluded here until 2026-09-14; it is now LPOS-7 — section 11.)
 - Automating OPUS/CSRS-PPP submission or survey-in.
 - A new map library on the tablet; changes to the coverage engine contract or colour model.
 - Changes to reader power / antenna / zone config (SZC, ANT), print BOM rows (another session), SBI / inventory views (SIV).
 - iOS builds, PPP (Galileo HAS) receivers, multi-base networks, moving-base heading.
 - HI holds for worker run summaries (PRODUCT FREEZE — logs and status columns only).
+
+## 11. RTK devices and services integration (owner doc 2026-09-14)
+
+Source: owner document `#RTK Devices and Services Integration.md` (Downloads, 2026-09-14). It asks for three things:
+(a) use RTK equipment with a **third-party correction service (rtkdata.com)** over a **Verizon cell link on the
+tablet**; (b) the tablet connected to an **external GNSS receiver over Bluetooth or USB**, the ScanTap mobile app
+choosing between the built-in GPS "like we do now" and the external RTK fix; (c) **server-side PPK with RTKLIB
+`rnx2rtkp`** and automatic NOAA CORS base download, fed from an uploaded `.rinex` file, results mapped in the UI.
+The document is chatbot output (Node/Express sample, a NOAA URL that does not resolve, a CORS station that does not
+exist); the facts below replace it. Nothing from its code sample is ported — our stack is FastAPI + the agent-06
+Docker worker (LPOS-4).
+
+### 11.1 What the existing cases already cover
+
+| Owner ask | Already in | Gap |
+|---|---|---|
+| Tablet ↔ external receiver over USB / Bluetooth, app prefers RTK fix, falls back to built-in GPS | **LPOS-2** (`PositionProvider`, USB-OTG + BT SPP, fix pill) | none for the receiver link; the **NTRIP client** on the tablet did not exist (decision 3 forbade it) |
+| Per-tenant choice of correction source incl. a public/commercial NTRIP caster | **LPOS-1** (`method='ntrip'`, `correction_transport='ntrip'`, `ntrip_*` columns, caster catalog) | catalog has no commercial US services; credentials never reach the tablet; no field says WHO runs the NTRIP client |
+| RTKLIB PPK against NOAA CORS, automatic base fetch, `.pos` parsed to positions | **LPOS-4** (Docker `convbin` + `rnx2rtkp`, S3 archive, 30-min cron) | input is only our own `.ubx` from LPOS-3; no manual RINEX upload; three factual fixes (11.2) |
+| Raw logging on the tablet | **LPOS-3** | none |
+| "Ready in 15 minutes" processing status in the UI, track on a map | — | **new** (LPOS-8) |
+| Verizon cell on the tablet | — | owner purchase + config; no hardware case |
+
+### 11.2 Verified facts (research 2026-09-14; supersede the owner doc where they differ)
+
+**rtkdata.com** — Kansi Solutions GmbH (Germany). Aggregates third-party reference networks and resells them through
+its own NTRIP caster ("20,000+ stations in 140+ countries"); it does not disclose whose stations serve Maryland
+(page lists "active stations near Baltimore, Annapolis, Frederick, Rockville …", no distances, no mount-point
+list). Nearest-single-base, chosen from the rover's GGA via mountpoint **`AUTO`** (also `AUTO_WGS84`,
+`AUTO_ITRF2020`); not VRS. RTCM 3.2 MSM4, GPS+GLO+GAL+BDS, works with a ZED-F9P. **Requires a constant internet
+link on the rover.** Claims 1–2 cm H / 2–3 cm V. **Pricing: $40/month, $400/year, $1,920/5 years, ONE concurrent
+stream per licence (a second login kicks the first); 30-day free trial, no card.** Host/port and credentials are
+issued at signup — the catalog entry therefore ships with `host=NULL, verified=false` until the trial account exists.
+Baseline from the unnamed "Baltimore" station is unknown; at 20–30 km a single-base RTK fix is realistic but slower
+to fix and closer to 3–4 cm than 1–2 cm. Sources: rtkdata.com/pricing, docs.rtkdata.com/faq, rtkdata.com/us/maryland.
+
+**Alternatives** (all take a plain ZED-F9P unless noted): Alpha RTK (DE/MD/NJ/PA/DC network, $195/mo, $995/yr,
+1-week trial); Point One Polaris (True RTK $125/mo or $1,500/yr, RTCM 3.2 MSM4, 14-day trial); Onocoy ($20/30 days +
+$0.15 per streamed hour); Skylark Nx RTK ($699/yr); GEODNET RTK ($40/mo, $400/yr via resellers); KeyNetGPS (Trimble
+VRS, $375/30 days, $3,135/yr); Leica SmartNet NA (~$2,400/yr state level). **No free RTN in MD, PA or DE.**
+
+**NOAA CORS** — **there is no station "MD02"** (absent from the NGS coordinate list and the S3 archive; checked
+2026-09-14). Real stations within 50 km of Monkton, INTERVAL read from the RINEX headers of DOY 256: **BACO**
+(Towson) 20.1 km at **5 s**; **UMBC** 37.2 km at **1 s**; **YORK** (PA) 46.8 km at **1 s**. GODE/LOYF/DENE are
+65–74 km at 30 s. Archive: `https://noaa-cors-pds.s3.amazonaws.com/rinex/YYYY/DDD/ssss/ssssDDDh.YYo.gz` (`h`=a–x
+hourly, `0`=daily, `.d.gz` Hatanaka). **Hourly files are kept 2 days** (verified: DOY 254 gone on DOY 257); daily
+files are decimated to 30 s after ~30 days. Consequence: the 30-min cron with a 90-min delay (LPOS-4) is right; a
+file uploaded manually more than 2 days after the drive must use the daily file, and after 30 days only 30 s data
+remains (PPK still works, fix ratio drops). GEODNET PPK API exists (account by e-mail, JWT, RINEX 3.04 orders) but
+publishes no price — not seeded.
+
+**RTKLIB** — the maintained fork is rtklibexplorer/RTKLIB ("RTKLIB-EX"); demo5 branch retired 2025-07-26; latest
+stable **v2.5.1 (2026-06-22)**, BSD-2-Clause. Linux: CMake or `app/consapp/rnx2rtkp/gcc && make`; no official Docker
+image. `.pos` Q flags: 1 fix, 2 float, 3 SBAS, 4 DGPS, 5 single, 6 PPP. **`rnx2rtkp` does NOT take the base position
+from the RINEX header by default** (`refpos=POSOPT_SINGLE`, i.e. an average of single-point solutions — decimetres
+of bias); pass `-r X Y Z` (ECEF from the NGS coordinate file) or `-l lat lon hgt`, or `ant2-postype=rinexhead` in the
+`-k` config. Run time for 1 h at 1 Hz: seconds to ~2 min (forward+backward doubles it) — the doc's "under 2 seconds"
+is unverified.
+
+**Cell on the tablet** — Samsung sells the Tab S11 Ultra in the US as **Wi-Fi only** (SM-X930); the 5G SM-X936 is
+not a US/Verizon SKU. The Xenarc RT71-PRO has an LTE modem without Verizon band 13 and no carrier certification.
+RTCM at 1–2 kB/s is ≈ 5–7 MB per hour of scanning; a month of daily drives is well under 1 GB. Verizon: Tablet/
+Hotspot Unlimited $20/mo added to a voice line ($75 standalone), prepaid tablet $50; a phone hotspot costs nothing
+extra. Third-party FCC-derived coverage for 21111 is 99 % 4G/5G (Verizon's own map is address-interactive; verify on
+site). **Answer to "we may have to have cell-enabled tablets": no — a phone hotspot or a Jetpack in the cart box
+serves the Wi-Fi tablet; a cell tablet is optional.**
+
+**Android integration paths for an external receiver** —
+- *Bridge app (zero app change)*: **GNSS Master** (EPS Works, free) does USB-OTG, BT Classic, BLE, NTRIP v1/v2 with
+  "Send NMEA GGA to Base Station" (needed for `AUTO`/VRS), Android **mock location**, and can switch on UBX
+  RXM-RAWX/SFRBX for PPK. Lefebure NTRIP Client (free) is the BT-only equivalent. Emlid Flow as a mock-location
+  provider is UNVERIFIED (conflicting docs). Once "Select mock location app" points at the bridge, **expo-location
+  in the current app already receives the RTK position and its accuracy** (`coords.accuracy`, `mocked=true`) —
+  `tag_records.accuracy_m` records it today with no code change. What is missing is attribution (fixed vs float)
+  and raw logging into our pipeline.
+- *In-app (LPOS-2 + LPOS-7)*: NMEA over `@serserm/react-native-turbo-serialport` (USB, New-Arch) or
+  `react-native-bluetooth-classic` 1.73.0-rc (BT SPP; New-Arch interop risk, issue #334) plus an NTRIP client
+  written on `react-native-tcp-socket` (~100 lines: HTTP GET with Basic auth, `Ntrip-Version: Ntrip/2.0`, GGA
+  upstream every ~10 s; `react-native-ntrip-client` 1.0.6 is unmaintained, use it as a reference only).
+- *Receivers*: ArduSimple simpleRTK2B $221 + BT module €34 (SPP) or BT+BLE bridge €71 — already carted; Emlid Reach
+  RX ~$1,599 (**no raw logging**, NTRIP client lives in Emlid Flow); SparkFun RTK Torch $2,149.95 today (**no
+  logging**, own NTRIP client only over Wi-Fi). Tab S11 Ultra GNSS is L1-only single band — never PPK material.
+
+### 11.3 Design — one correction path on the tablet, three sources behind it
+
+```
+  correction source (tenant config)          delivery                 rover on the cart
+  ─────────────────────────────────          ───────────────          ─────────────────────────────
+  own base at the office ──RTCM3──▶ XBee 2.4 GHz radio ─────────────▶ ZED-F9P ──USB/BT──▶ tablet   (Route A, today)
+  own base at the office ──RTCM3──▶ Emlid Caster / RTK2Go (office WiFi)┐
+  rtkdata.com  mountpoint AUTO  (or any caster in the catalog)         ├─ NTRIP over cell ─▶ tablet NTRIP client ──▶ ZED-F9P  (LPOS-7)
+  state RTN (ODOT / FPRN)                                              ┘        ▲ GGA upstream every 10 s
+```
+
+- **Tablet NTRIP client (LPOS-7)** is the only new runtime piece. It runs when `correction_transport='ntrip'` and
+  `rover_ntrip_client='tablet_app'`: connects to the tenant's caster, forwards RTCM bytes to the receiver over the
+  LPOS-2 transport, sends GGA upstream, shows correction age in the scan pill, and drops to the radio/none path when
+  the link dies (the receiver keeps a float/single solution; `fix_source` reflects it). Credentials reach the tablet
+  through a **new device-token route that returns them decrypted once per session, audit-logged**, only when
+  `rover_ntrip_client='tablet_app'` — the frozen `GET /scantap/positioning/device` shape stays credential-free.
+- **Bridge-app path (LPOS-7, runbook + server rule)**: for tenants who run GNSS Master / Lefebure as the mock-location
+  provider, the app stays as it is. LPOS-2's `PositionProvider` marks an expo-location fix with `mocked=true` as
+  `fix_source='ext_mock'` (additive value; the vocabulary list in LPOS-2 gains one entry, nothing existing changes)
+  and carries `coords.accuracy` as `acc`; `tag_locations` treats `ext_mock` with `acc ≤ 0.05 m` like `rtk_fixed`
+  (`method='rtk'`). This is the path the owner can test **this month** with only the rover half of the kit and the
+  rtkdata.com trial, while LPOS-2 waits behind the SZC/CAD/ANT tablet leaves.
+- **Own base through a caster** (LPOS-5 amendment): the office base gets a "caster" variant — ArduSimple **WiFi NTRIP
+  Master** (ESP32, XBee socket, ~€60) pushes RTCM3 to Emlid Caster (free, private mount point) or RTK2Go over the
+  office Wi-Fi; the rover pulls it over cell. The XBee 3 PRO pair becomes the offline option, not the default, IF
+  the owner confirms Q10. Saves ~$120 and removes the line-of-sight constraint.
+- **Manual RINEX/UBX upload + PPK status (LPOS-8)**: the Live Position page gets an "Upload GNSS log" block
+  (`.obs/.rnx/.yyO/.ubx`, ≤ 200 MB, presigned PUT to the LPOS-3 R2 prefix), a job list from `gnss_raw_logs`
+  (queued / processing / processed / failed with reason and the "base data becomes available ~N min after the hour"
+  note derived from the log's end time), and a result view: fix ratio, station, baseline, and the track drawn on the
+  MapLibre map that MAP-2 provides (falls back to a plain list when the map stack is not deployed). The worker
+  (LPOS-4) accepts RINEX directly (skip `convbin`), matches a manual log to a scan session by tenant + time overlap
+  (owner picks when ambiguous), and never overwrites live values.
+- **Catalog** (LPOS-1 amendment): seed rtkdata.com (`mountpoint='AUTO'`, `host=NULL`, `verified=false`, `price_note`
+  "$40/mo per concurrent rover, 30-day trial"), Alpha RTK, Point One Polaris, Onocoy, Skylark Nx, GEODNET RTK,
+  KeyNetGPS — each with `source_url`, `price_note`, `verified=false` except the ones whose host/port are published.
+  `positioning_configs` gains `rover_ntrip_client CHECK IN ('none','tablet_app','bridge_app','receiver') DEFAULT
+  'none'` and `ntrip_send_gga BOOL DEFAULT true` (both in v044 — LPOS-1 is not dispatched yet, so no new migration).
+- **LPOS-4 corrections**: replace `MD02` nowhere (it was never in the plan) but pin the base coordinate: pass
+  `-r X Y Z` from the NGS coordinate file for the station (catalog `published_xyz`), fall back to `ant2-postype=
+  rinexhead` — never the default single-point average; pin **RTKLIB-EX v2.5.1** (tag + commit) instead of demo5 b34;
+  accept RINEX 2/3 obs as input and only run `convbin` for `.ubx`; write `result.input_format`.
+
+### 11.4 Cases added / amended
+
+| Case | Change | Status |
+|---|---|---|
+| LPOS-1 `CASE-20260914-94B579` | + catalog rows, `rover_ntrip_client`, `ntrip_send_gga`, `price_note`/`published_xyz` columns on the catalog | amended before dispatch |
+| LPOS-2 `CASE-20260914-F02FCF` | + `fix_source='ext_mock'` from `mocked=true`, `acc` from `coords.accuracy`; expose a `writeToReceiver(bytes)` hook on the transport for LPOS-7 | amended, parked |
+| LPOS-3 `CASE-20260914-F0F196` | + `gnss_raw_logs.source CHECK IN ('tablet','manual') DEFAULT 'tablet'`, `format CHECK IN ('ubx','rinex')`, `uploaded_by` (v046) | amended, parked |
+| LPOS-4 `CASE-20260914-915E58` | base coordinate `-r` rule, RTKLIB-EX v2.5.1 pin, RINEX-direct input, manual-log ↔ session matching | amended, parked |
+| LPOS-5 `CASE-20260914-E7C338` | + "caster" base variant (WiFi NTRIP Master → Emlid Caster) in kit + runbook, radio pair marked optional | amended, parked |
+| **LPOS-7** `CASE-20260914-83DF98` Tablet NTRIP client + bridge-app path — complex, 80 turns | blocked by LPOS-2 (mobile tree); parked `awaiting_deps` | filed 2026-09-14 |
+| **LPOS-8** `CASE-20260914-5898B3` Manual GNSS log upload + PPK job status/track UI — medium, 40 turns | blocked by LPOS-3 + LPOS-4 (+ MAP-2 for the map, soft, fail-open); parked `awaiting_deps` | filed 2026-09-14 |
+
+Build order becomes `LPOS-1 → LPOS-2 → LPOS-3 → LPOS-4 → LPOS-8`, `LPOS-7` after LPOS-2 on the tablet tree, LPOS-5 in
+parallel after LPOS-1, LPOS-6 unchanged. Migration numbers unchanged (v044–v046 / cp v185–v188 absorb the additive
+columns because none of LPOS-1..3 has been claimed).
+
+### 11.5 Owner questions (Q8–Q13) — recommendations in bold; filed as one clarification hold on LPOS-7
+
+- **Q8 Recurring fee.** rtkdata.com is $40/month per concurrent rover ($400/yr). The decision of record was "zero
+  recurring fees, own base". **Recommend: start the 30-day free trial now (no card) to validate cm positions on the
+  cart before any base install; keep the own base as the long-term default for Manor View; keep rtkdata.com /
+  Alpha RTK as the per-tenant option for tenants without a base.** Yes / no / trial only?
+- **Q9 Cell link.** Phone hotspot ($0), Verizon Jetpack or hotspot line in the cart box (~$20/mo on the existing
+  account), or a cell tablet (no US Tab S11 Ultra 5G SKU; RT71-PRO lacks Verizon band 13). **Recommend hotspot for
+  the trial, a Jetpack mounted in the reader box for production.** This reverses decision 3 ("no WiFi/hotspot in the
+  field") — confirm.
+- **Q10 Own base over the internet instead of radio.** With cell on the cart the office base can publish to Emlid
+  Caster (free) and the rover pulls it like any NTRIP source: no XBee pair (−$120), no line of sight, one code path.
+  **Recommend yes; keep radio as the offline fallback variant in the kit.**
+- **Q11 Bridge app first.** GNSS Master as the Android mock-location provider makes today's app record cm positions
+  with zero code (attribution and raw logging follow in LPOS-2/7). **Recommend yes for the trial month.** It means
+  the field procedure has an extra app on the tablet until LPOS-7 ships.
+- **Q12 Receiver purchase.** The carted ArduSimple rover half (simpleRTK2B + BT/BLE bridge + ANN-MB antenna, ~$300)
+  is enough for the trial; Emlid Reach RX ($1,599) cannot log raw data; RTK Torch ($2,149) cannot either.
+  **Recommend: buy the rover half now, the base half after the trial (Q8/Q10).**
+- **Q13 Manual upload UI.** Only needed when logs come from receivers/apps other than ours (Emlid RS3, GNSS Master
+  export). **Recommend yes (LPOS-8), sequenced after LPOS-4 — it is the UI the owner doc describes.**
+
+Assumptions until answered: Q8 trial-only, Q9 hotspot, Q10 yes, Q11 yes, Q12 rover half, Q13 yes. LPOS-7 (`CASE-20260914-83DF98`) and LPOS-8 (`CASE-20260914-5898B3`) are filed
+under these assumptions and parked at `awaiting_deps` (the assign loop ignores `pipeline_case_deps` and only skips
+that status — platform-75, 2026-09-14); nothing is dispatched that a "no" would waste except the LPOS-1 catalog rows,
+which are harmless.
