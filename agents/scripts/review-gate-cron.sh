@@ -216,6 +216,7 @@ cd "$PLATFORM_REPO"
 timeout "$TIMEOUT_SECS" doppler run --project grotap --config prd -- \
   claude -p "$(cat "$TASK")" \
     --permission-mode bypassPermissions \
+    --model "${REVIEW_GATE_MODEL:-claude-sonnet-4-6}" \
     --max-turns 400
 RC=$?
 echo "claude exit: $RC"
