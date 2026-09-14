@@ -47,11 +47,13 @@ Agent-06 is the ops/monitoring server — it does not run dev tasks.
 ## Expected DNS (canonical copy — ROLE files reference this table)
 | Record | Type | Target | Notes |
 |---|---|---|---|
-| apps.grotap.com | CNAME | cname.vercel-dns.com | Vercel frontend |
-| api.grotap.com | CNAME | Railway target | Backend API |
-| agents.grotap.com | CNAME | cname.vercel-dns.com | Agents brand frontend |
-| agents.grotap.ai | CNAME | cname.vercel-dns.com | Agents brand (.ai TLD) |
-| *.grotap.com | — | MUST NOT EXIST | Wildcard was removed — never re-add |
+| apps.grotap.com | CNAME (DNS-only, TTL 300) | ec9a3efc9f58a0b1.vercel-dns-016.com | Vercel frontend — explicit record `c7d600d7c8a008bf095b0d4de1b6e28d` created 2026-09-14 |
+| app.grotap.com | CNAME (DNS-only, TTL 300) | ec9a3efc9f58a0b1.vercel-dns-016.com | Vercel alias (308 → apps) — explicit record `060e898ace536cfed0926185b90dce10` created 2026-09-14 |
+| agents.grotap.com | CNAME (DNS-only, TTL 300) | ec9a3efc9f58a0b1.vercel-dns-016.com | Agents brand frontend — explicit record `7570e19998438f37ff5993fd0f8b5b4b` created 2026-09-14 |
+| api.grotap.com | CNAME (proxied) | grotap-backend-production.up.railway.app | Backend API |
+| www.grotap.com | CNAME | cname.vercel-dns.com | grotap-landing (apex is A 76.76.21.21) |
+| agents.grotap.ai | CNAME | cname.vercel-dns.com | Agents brand (.ai TLD, separate zone) |
+| *.grotap.com | — | MUST NOT EXIST | Wildcard (→ vercel-dns-016, created 2026-07-19) REMOVED 2026-09-14 — apps/app/agents had been resolving only through it; rollback JSON `agents/logs/dns-wildcard-removed-20260914.json`. Never re-add; a new brand host needs its own explicit Cloudflare CNAME (provisioner fix filed 2026-09-14). |
 
 ## Key References
 - Vercel manual deploy: `doppler secrets get VERCEL_TOKEN` + `npx vercel --prod --yes`
