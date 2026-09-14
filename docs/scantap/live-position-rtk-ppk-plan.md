@@ -17,6 +17,8 @@ default; `--file` POSTs). Status: DRAFT — not filed, nothing committed, no mig
    **Amended 2026-09-14 by the owner doc "RTK Devices and Services Integration"** (section 11): the tablet MAY have
    a cell link (Verizon) and MAY act as the NTRIP client for a third-party correction service (rtkdata.com) or for
    our own base published through a caster. Radio stays the offline option; it is no longer the only one.
+   **Amended again 2026-09-14 by owner answer Q9** (section 11.6): the cell link is the **tablet's own Verizon
+   band 13 modem** — no phone hotspot and no Jetpack in the cart. Choosing that tablet is open owner action 5.
 4. **Base site = the office, on mains power** (owner 2026-09-14). Remaining owner check on site: open sky and a ~3 m radio mast with line of sight to the fields; tracked in section 9. The runbook (LPOS-5) tells the
    owner how to choose; it does not choose for them.
 5. The receiver is an **optional add-on SKU** in the Scan M kit BOM: "Live Position add-on — instant live accurate
@@ -366,6 +368,17 @@ tenant (ledger at v035) — LPOS files must reference no v036–v043 object.
 3. **OPUS / CSRS-PPP upload of the 2–4 h base log** — after the base is installed; the coordinate is typed into the
    platform (LPOS-1 form) and into the base receiver's TMODE3 FIXED mode by the owner. No automation.
 4. **PPK station order** — confirm `{UMBC,BACO}` (1 s station first) as the default — see LPOS-4.
+5. **Pick and buy the cell tablet (opened 2026-09-14 by owner answer Q9)** — an Android tablet with its own
+   Verizon **band 13** modem that Verizon will actually activate (certified/BYOD-approved IMEI, not just a spec
+   sheet listing the band), ideally with an external cellular antenna connector for the weatherproof box. Neither
+   deployed tablet qualifies (SM-X930 is US WiFi-only; RT71-PRO lacks band 13). Blocks the live NTRIP path in
+   LPOS-7; does **not** block LPOS-7 from being built, because the bridge-app and no-data-link states are in scope.
+   Candidates researched 2026-09-14 in section 11.7 — recommended buy is the Samsung Galaxy Tab Active5 Pro
+   `SM-X358U`, the only shortlisted device that is both Verizon-sold and has an external cellular antenna port.
+6. **Buy the rover half now (owner answer Q12)** — ArduSimple simpleRTK2B + BT/BLE bridge + ANN-MB antenna ≈ $300,
+   already in the cart. Base half waits for the trial result. Item 2 above is therefore split, not executed whole.
+7. **Start the rtkdata.com 30-day trial (owner answer Q8)** — no card required; the clock is better spent now than
+   after the receiver lands.
 
 ## 8. Risks
 
@@ -600,3 +613,71 @@ Assumptions until answered: Q8 trial-only, Q9 hotspot, Q10 yes, Q11 yes, Q12 rov
 under these assumptions and parked at `awaiting_deps` (the assign loop ignores `pipeline_case_deps` and only skips
 that status — platform-75, 2026-09-14); nothing is dispatched that a "no" would waste except the LPOS-1 catalog rows,
 which are harmless.
+
+### 11.6 Owner answers of record (2026-09-14) — these supersede the 11.5 assumptions
+
+- **Q8 — Trial only.** Start the rtkdata.com 30-day trial (no card, $40/mo · $400/yr afterwards, one concurrent
+  rover per licence). Own base stays the long-term default for Manor View; the paid caster stays a per-tenant
+  option for tenants with no base of their own. Do not put a subscription in the kit price.
+- **Q9 — CHANGED from the recommendation. No hotspot and no Jetpack: buy an Android tablet that carries its own
+  Verizon band 13 modem.** The tablet is the cell link. This keeps decision 3's "no WiFi/hotspot in the field"
+  intact in spirit — there is no separate radio brick in the cart box to charge, mount or lose — and it removes the
+  hotspot from the field procedure entirely. Consequences:
+  - The tablet SKU is now part of the Live Position kit, not a given. Model selection is a hardware research task,
+    tracked as owner action A5 in section 9; a candidate must be **Verizon-certified/activatable**, not merely
+    band-13 capable on a spec sheet, or the IMEI will not activate.
+  - Decision 2 ("any tablet must work") is unchanged **as a software requirement** — the app still must run on the
+    SM-X930 11" and the Xenarc RT71-FHD 7" with no cell link, degrading to radio or to PPK-only. What changes is
+    that the *cell* correction path (LPOS-7) is only available on a cell-equipped tablet, so the tenant config and
+    the UI must treat "this device has no data link" as a first-class state rather than an error.
+  - Both currently deployed tablets fail this test: SM-X930 is WiFi-only in the US (SM-X936 is not sold here) and
+    the Xenarc RT71-PRO modem lacks band 13. Neither can be made to work by adding a plan.
+  - A weatherproof enclosure attenuates cellular; prefer a candidate with an external cellular antenna connector.
+- **Q10 — Yes.** The office base publishes to Emlid Caster (free) and the rover pulls it over NTRIP like any other
+  source: one code path, no line-of-sight requirement, and the XBee 3 PRO pair (−$120) leaves the default kit.
+  Radio stays as the documented offline fallback variant in the LPOS-5 runbook and BOM, not the default.
+- **Q11 — Yes, for the trial month.** GNSS Master as the Android mock-location provider gives cm positions with no
+  app change; expo-location reports them and LPOS-7's `fix_source='ext_mock'` path attributes them. The extra app
+  on the tablet is accepted until LPOS-7 ships.
+- **Q12 — Buy the rover half now** (ArduSimple simpleRTK2B + BT/BLE bridge + ANN-MB antenna ≈ $300). The base half
+  is bought after the trial, once Q8/Q10 have been proven on the cart. Emlid Reach RX and SparkFun RTK Torch stay
+  rejected: neither can log raw observations, so neither can feed PPK (Route B).
+- **Q13 — Yes.** LPOS-8 ships as specified, sequenced after LPOS-4.
+
+**What this changes in the filed cases** (amendments, not re-files): LPOS-1 caster catalog carries the rtkdata trial
+row and an Emlid Caster row for our own base; LPOS-5's default kit drops the XBee pair, gains the cell tablet line
+and splits the BOM into "buy now" (rover half) and "buy after trial" (base half); LPOS-7's cell link is the tablet's
+own modem, with the no-data-link state made explicit. LPOS-4 is **platform-30's case body** — none of these answers
+change it, and this session does not edit it.
+
+### 11.7 Cell tablet candidates (research 2026-09-14, for owner action 5)
+
+The requirement from Q9: an Android tablet with its **own Verizon band 13 modem that Verizon will activate**.
+Certification is the gate, not the spec sheet — a device that lists band 13 but is not on Verizon's approved
+list will not activate. Ranked shortlist; prices are US street as of 2026-09-14.
+
+1. **Samsung Galaxy Tab Active5 Pro `SM-X358U` (5G) — recommended.** 10.1" WUXGA, Snapdragon 7s Gen 3, 6 GB /
+   128 GB, 10,100 mAh, MIL-STD-810H + IP68, Android 15, USB-C OTG + BT 5.3. **Sold directly by Verizon Business**
+   (certification confirmed) and it has a **dedicated SMA external-antenna connector** — the one candidate that
+   directly answers the weatherproof-enclosure attenuation problem. ~$625–770.
+   `https://www.verizon.com/business/shop/products/devices/tablets/galaxy-tab-active5-pro`
+2. **Getac ZX70 G2 — the only 7" rugged option found.** 7" sunlight-readable, IP67, 1.82 m drop. Verizon's Open
+   Development showcase lists a Getac ZX70 with band 13, **but the listed spec (2 GB RAM / Android 6) matches an
+   older hardware revision than the G2 being sold, so which revision is certified is UNCONFIRMED**. The G2 ships
+   Android 10 — a short security runway for a 2026 purchase. External antenna UNCONFIRMED. ~$1,200–2,500,
+   enterprise channel. Verify the exact SKU with Getac sales before buying.
+3. **Samsung Galaxy Tab S10 FE 5G `SM-X528U`** — 10.9", **7 years of OS + security updates** (best longevity here),
+   IP68 but not drop-rated, no external antenna port. Verizon sells it directly; the US SKU's exact band list is
+   UNCONFIRMED (band 13 is confirmed on the international X526B). ~$499–650. Needs our own enclosure.
+4. **Zebra ET45 (8" / 10.1")** — MIL-STD-810H / IP65, Wi-Fi 6, hot-swap battery option. Verizon Business publicly
+   certified the ET40/ET45 in Dec 2023. External antenna UNCONFIRMED (Zebra documents one for the ET6x, not ET4x).
+   Price is quote-only everywhere — expect a sales call.
+5. **Samsung Galaxy Tab A9+ 5G `SM-X218U`** — 11", band 13, Verizon-sold, ~$219–269, but **Android updates end
+   ~Oct 2026 and security patches in 2027**. Spare only, never the fleet standard.
+
+Rejected: Panasonic Toughbook A3 (discontinued, Android 9) · Getac ZX10 (Verizon listing behind a login,
+UNCONFIRMED) · Honeywell RT10A (no Verizon confirmation) · Durabook R11 (only the sibling U11 is listed) ·
+Kyocera and Sonim (no current Android tablet) · Lenovo (no current Verizon-sold cellular tablet).
+
+Open before buying: confirm with Verizon that the exact IMEI/SKU activates on a data plan, and confirm the
+enclosure fit and mount for whichever size is chosen (the fleet runs 11" and 7" today; the Active5 Pro is 10.1").
