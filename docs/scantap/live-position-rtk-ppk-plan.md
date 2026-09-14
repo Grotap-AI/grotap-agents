@@ -681,3 +681,43 @@ Kyocera and Sonim (no current Android tablet) · Lenovo (no current Verizon-sold
 
 Open before buying: confirm with Verizon that the exact IMEI/SKU activates on a data plan, and confirm the
 enclosure fit and mount for whichever size is chosen (the fleet runs 11" and 7" today; the Active5 Pro is 10.1").
+
+### 11.8 What the third tablet model costs in code (measured 2026-09-14)
+
+Q9's answer is not only a purchase. Model routing is **not** data-driven — it is a hardcoded catalogue
+mirrored in three places, held consistent by a test — and the screen layout is chosen at **build** time,
+not from the registered model. Adding the Active5 Pro therefore needs a deliberate change, and until it
+is made the tablet enrols with `device_model = NULL` (a deliberate safety default, not a bug) and stays
+on whatever MDM config it happened to enrol into.
+
+The four-file change, plus its test, in one PR:
+- `backend/db/migrations/control_plane/v122_scan_m_device_model.sql:54` — the CHECK lists exactly
+  `'xenarc_rt71_fhd','standard_11in'`; a new migration extends it.
+- `backend/app/routers/scan_m.py:189` — `TABLET_MODELS` (id, name, `app_package`, `config_names`, and the
+  exact `panel_models` strings matched case-insensitively by `_detect_tablet_model`, `:249`). The device's
+  real reported model string can only be captured **from the tablet itself**, so this entry cannot be
+  written until the hardware is in hand. `_validate_device_model` (`:218`) 422s on any other value.
+- `frontend/src/pages/scan-m/scan-m-tablet-models.ts:33` — the `TabletModelId` TS union.
+- `backend/tests/test_scan_m_router.py::TabletModelCatalogueTests` — asserts the SQL CHECK, the Python
+  dict and the TS union carry the same id set, so a partial edit fails rather than drifting silently.
+
+Open question the purchase decides: **which APK the 10.1" device runs.** There are two build variants
+today — `standard` (1056×1691 dp) and `compact` (540×960 dp) — selected by `EXPO_PUBLIC_VARIANT` at build
+time (`platform/platform/mobile/scantap/constants/variant.ts:24`), with every token going through
+`byVariant(standard, compact)` in `styles/theme.ts` and `constants/touch.ts`, and the Android package fixed
+per variant (`tools/build-variant.js:35`, `app.config.js:18`). A 10.1" 2000×1200 panel matches neither dp
+target exactly. Either it is assigned to `standard` and accepted as slightly tight, or a third variant is
+introduced — a chain touching `variant.ts`, `theme.ts`, `touch.ts`, `app.config.js` and `build-variant.js`
+plus a third package name and release lane. **Decide this by testing the real device on the `standard`
+build before committing to a third variant** — a third APK triples the release surface for every future
+Scan M case, all of which currently bump exactly two.
+
+Good news, verified: cellular itself is not architecturally blocked. Nothing in the sync path gates on a
+Wi-Fi connection type, and `EthernetNetworking.ts:172` already generalises its fallback to "WiFi/LTE".
+Only user-facing copy assumes Wi-Fi (`services/api.ts:999` and `:207` say "check the tablet's Wi-Fi"),
+which would misdirect support on a cellular-only tablet — cosmetic, and worth fixing in whichever case
+adds the model.
+
+This section is a cost note for the owner, not a filed case. It is recorded on SZC-3
+`CASE-20260914-E4F206`, CAD-2 `CASE-20260914-B55ABB` and ANT-4 `CASE-20260914-C75EDF` as an amendment
+telling those agents to keep bumping exactly two variants and to add nothing model-conditional.
