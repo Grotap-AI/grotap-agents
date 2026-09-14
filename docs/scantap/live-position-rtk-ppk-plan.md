@@ -465,12 +465,25 @@ file uploaded manually more than 2 days after the drive must use the daily file,
 remains (PPK still works, fix ratio drops). GEODNET PPK API exists (account by e-mail, JWT, RINEX 3.04 orders) but
 publishes no price — not seeded.
 
-**RTKLIB** — the maintained fork is rtklibexplorer/RTKLIB ("RTKLIB-EX"); demo5 branch retired 2025-07-26; latest
-stable **v2.5.1 (2026-06-22)**, BSD-2-Clause. Linux: CMake or `app/consapp/rnx2rtkp/gcc && make`; no official Docker
-image. `.pos` Q flags: 1 fix, 2 float, 3 SBAS, 4 DGPS, 5 single, 6 PPP. **`rnx2rtkp` does NOT take the base position
-from the RINEX header by default** (`refpos=POSOPT_SINGLE`, i.e. an average of single-point solutions — decimetres
-of bias); pass `-r X Y Z` (ECEF from the NGS coordinate file) or `-l lat lon hgt`, or `ant2-postype=rinexhead` in the
-`-k` config. Run time for 1 h at 1 Hz: seconds to ~2 min (forward+backward doubles it) — the doc's "under 2 seconds"
+**RTKLIB** (corrected 2026-09-14 after independent verification by the program's previous owner; their wording
+wins where it differs from the first research pass) — the maintained line is **the same repository**,
+`rtklibexplorer/RTKLIB`, renamed to RTKLIB-EX and now developed on `main`. There is no separate RTKLIB-EX
+repository to clone, and `demo5` is no longer the branch to build. Latest tag **`v2.5.1`, lowercase, published
+2026-06-22**; `main` has moved past it (last commit 2026-08-31), so build from the tag, not from the branch:
+`git clone --branch v2.5.1 --depth 1 https://github.com/rtklibexplorer/RTKLIB.git`. BSD-2-Clause. Linux: CMake or
+`app/consapp/rnx2rtkp/gcc && make`; no official Docker image. `.pos` Q flags: 1 fix, 2 float, 3 SBAS, 4 DGPS,
+5 single, 6 PPP. *Not asserted:* no announcement post retiring `demo5` could be found — the branch readme and the
+commit history are the evidence, and rtkexplorer.com/downloads is stale.
+
+**`rnx2rtkp` does not use the RINEX header base position on a bare invocation** — `rnx2rtkp.c` explicitly assigns
+`prcopt.refpos = POSOPT_SINGLE`, overriding `prcopt_default`, so the base coordinate becomes an average of
+single-point solutions: roughly **2.5 m off** (Emlid), and that error propagates 1:1 into every rover epoch while
+the ratio test still reports Q=1. A fixed-ambiguity solution that is metres wrong passes every quality check we
+would otherwise apply, which is the same class of false pass as the placeholder-EPC one. Three overrides exist:
+`-r X Y Z` (ECEF, from the NGS coordinate file), `-l lat lon hgt`, and `ant2-postype=rinexhead` in a `-k` config —
+the `-k` load runs *after* the hardcoded assignment, so a config file does win. **Never hardcode the integer**:
+`POSOPT_SINGLE` is 2 in RTKLIB-EX (1 upstream), and the `refpos` comment in the EX `rtklib.h` still carries the
+stale 0-4 numbering. Test by asserting on the argv the worker builds, not on the output. Run time for 1 h at 1 Hz: seconds to ~2 min (forward+backward doubles it) — the doc's "under 2 seconds"
 is unverified.
 
 **Cell on the tablet** — Samsung sells the Tab S11 Ultra in the US as **Wi-Fi only** (SM-X930); the 5G SM-X936 is
@@ -542,7 +555,7 @@ serves the Wi-Fi tablet; a cell tablet is optional.**
   'none'` and `ntrip_send_gga BOOL DEFAULT true` (both in v044 — LPOS-1 is not dispatched yet, so no new migration).
 - **LPOS-4 corrections**: replace `MD02` nowhere (it was never in the plan) but pin the base coordinate: pass
   `-r X Y Z` from the NGS coordinate file for the station (catalog `published_xyz`), fall back to `ant2-postype=
-  rinexhead` — never the default single-point average; pin **RTKLIB-EX v2.5.1** (tag + commit) instead of demo5 b34;
+  rinexhead` — never the default single-point average; build from tag `v2.5.1` of `rtklibexplorer/RTKLIB` (same repo, renamed; not `demo5`, not `main`);
   accept RINEX 2/3 obs as input and only run `convbin` for `.ubx`; write `result.input_format`.
 
 ### 11.4 Cases added / amended
