@@ -528,7 +528,11 @@ serves the Wi-Fi tablet; a cell tablet is optional.**
   (`.obs/.rnx/.yyO/.ubx`, ≤ 200 MB, presigned PUT to the LPOS-3 R2 prefix), a job list from `gnss_raw_logs`
   (queued / processing / processed / failed with reason and the "base data becomes available ~N min after the hour"
   note derived from the log's end time), and a result view: fix ratio, station, baseline, and the track drawn on the
-  MapLibre map that MAP-2 provides (falls back to a plain list when the map stack is not deployed). The worker
+  map program's `GeoMap` (default export of `frontend/src/components/map/GeoMap.tsx`, built by MAP-2a
+  `CASE-20260914-C9FB5C`; renders children as react-map-gl `Source`/`Layer`/`Marker`, optional `panels` slot,
+  `onFeatureClick(layerId, feature)`, `useGeoMap().registerLayer(id, label, defaultOn)`; layer ids namespaced
+  `lpos.*` — `scantap.*`, `cad.*`, `vae.*` are taken). Contract confirmed by that program's owner 2026-09-14.
+  MAP-2a is not merged, so the import is guarded and a plain table is the fallback. The worker
   (LPOS-4) accepts RINEX directly (skip `convbin`), matches a manual log to a scan session by tenant + time overlap
   (owner picks when ambiguous), and never overwrites live values.
 - **Catalog** (LPOS-1 amendment): seed rtkdata.com (`mountpoint='AUTO'`, `host=NULL`, `verified=false`, `price_note`
