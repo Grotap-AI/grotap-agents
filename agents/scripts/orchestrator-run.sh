@@ -228,6 +228,51 @@ if ! git worktree add -b "$BRANCH" "$WT" origin/master >> "$LOG" 2>&1; then
   emit "failed" "$BRANCH" 1 "Could not create worktree/branch" "git worktree add failed" 0
 fi
 repo_unlock  # the long Claude run must not hold the shared-repo lock
+
+# Trust the fresh worktree in ~/.claude.json. A worktree Claude Code has never
+# seen is untrusted, and an untrusted workspace silently DISCARDS every
+# permissions.allow entry from .claude/settings.json ("Ignoring N
+# permissions.allow entries ... this workspace has not been trusted"), so the
+# run blocks on the first gated tool and dies with no commits (2026-09-14).
+# flock + a per-process temp file: slots on this box stamp concurrently, and a
+# shared .tmp path would let one runner clobber another's config (or read a
+# half-written one) and leave its worktree untrusted.
+if ! flock "$HOME/.claude.json.lock" python3 - "$WT" <<'TRUSTPY' >> "$LOG" 2>&1
+import json, os, sys, tempfile
+path, cfg = sys.argv[1], os.path.expanduser('~/.claude.json')
+try:
+    with open(cfg) as fh:
+        data = json.load(fh)
+except Exception:
+    data = {}
+entry = data.setdefault('projects', {}).setdefault(path, {})
+if entry.get('hasTrustDialogAccepted') is not True:
+    entry['hasTrustDialogAccepted'] = True
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(cfg) or '.', prefix='.claude.json.')
+    try:
+        with os.fdopen(fd, 'w') as fh:
+            json.dump(data, fh)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.chmod(tmp, 0o600)
+        os.replace(tmp, cfg)
+    except Exception:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+    print('trusted workspace %s' % path)
+TRUSTPY
+then
+  # Do NOT soft-fail. An untrusted workspace does not error — it silently drops
+  # every permissions.allow entry and the run dies later with no commits, which
+  # is exactly the failure mode this step exists to prevent. The stamp is a
+  # no-op exit 0 when the entry is already true, so reaching here means a write
+  # was needed and did not happen.
+  emit "failed" "$BRANCH" 1 "Could not trust worktree"     "writing hasTrustDialogAccepted for $WT in ~/.claude.json failed" 0
+fi
+
 cd "$WT" || emit "failed" "$BRANCH" 1 "Worktree missing" "cd into worktree failed" 0
 
 # ── Build the Claude CLI prompt ──────────────────────────────────────────────
