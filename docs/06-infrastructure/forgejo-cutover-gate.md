@@ -293,20 +293,26 @@ this work:
 - Move agent-06's deploy / health / DR crons onto per-host keys.
 - Fix `agents/scripts/health-monitor.sh`, which still runs
   `ssh -i /home/agent/.ssh/grotap_agents` (currently line 64).
-- Update `agents/SERVERS.md`, which still documents the shared key as the root SSH method — grep it
-  for `grotap_agents` (currently one occurrence, line 92).
+- Update `agents/SERVERS.md`, which still documents the shared key as the root SSH method. It needs
+  **two** greps, because the file records the key in two different forms: `grotap_agents` finds the
+  literal invocation (one occurrence), and `fleet key` finds the prose rows that say
+  `Root SSH = fleet key` (three occurrences — GEX131, maps-01, forge-01). The prose rows are the ones
+  a reader must rewrite when the key is retired, and they do not contain the string the first grep
+  looks for.
 - Only then remove the public key from every `authorized_keys` and delete the private key from
   agent-06 and agent-04.
 
-**Grep for the string, not the line number.** Both references above have already moved once:
-`health-monitor.sh` went from line 59 to 64 when commit `6bd54b4` fixed that file's roster and added
-a comment block above the call, and `SERVERS.md` went from two hits (lines 82 and 92) to one when a
-forge-01 row was inserted and shifted what used to be line 82. The `ssh -i /home/agent/.ssh/grotap_agents`
-invocation itself is unchanged and remains a genuine blocker. Line numbers in a blocker list rot
-faster than anything else in it, so treat the numbers here as a hint and the string as the check:
+**Grep for the string, not the line number.** `health-monitor.sh` moved from line 59 to 64 within an
+hour, when commit `6bd54b4` fixed that file's roster and added a comment block above the call. An
+earlier draft of this section also miscounted `SERVERS.md` as "two hits, lines 82 and 92" — in fact
+the literal `grotap_agents` has only ever appeared once (line 92); what sits at 78, 81 and 82 is the
+prose `Root SSH = fleet key`. That miscount is exactly why both greps below are required: a check
+that looks only for the path silently passes while three rows still tell a reader the fleet key is
+the way in. Treat every line number here as a hint that will rot, and the strings as the check:
 
 ```bash
 grep -rn 'grotap_agents' agents/scripts/health-monitor.sh agents/SERVERS.md
+grep -rni 'fleet key' agents/SERVERS.md
 ```
 
 Once that work is done, the gate itself is a sweep of every box:
