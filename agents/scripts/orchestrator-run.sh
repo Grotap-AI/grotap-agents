@@ -373,9 +373,14 @@ JSON
 # ── Model selection by complexity (cost control — #5) ────────────────────────
 # Default the heavy coding model to the task's complexity tier; override with
 # CODING_MODEL to pin a single model fleet-wide.
+# Resolved from Doppler FIRST: this script runs on the box outside
+# `doppler run --`, so a value set in Doppler is NOT in the environment here.
+# Reading only $CODING_MODEL made the documented fleet-wide pin silently inert
+# (2026-09-14). Env var still wins if the caller exported one.
+_PINNED_MODEL="$(doppler secrets get CODING_MODEL --plain 2>/dev/null || echo "${CODING_MODEL:-}")"
 case "$COMPLEXITY" in
-  complex) MODEL="${CODING_MODEL:-claude-opus-4-8}" ;;
-  *)       MODEL="${CODING_MODEL:-claude-sonnet-4-6}" ;;
+  complex) MODEL="${_PINNED_MODEL:-claude-opus-4-8}" ;;
+  *)       MODEL="${_PINNED_MODEL:-claude-sonnet-4-6}" ;;
 esac
 
 # ── Run Claude CLI headless ──────────────────────────────────────────────────
