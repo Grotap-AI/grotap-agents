@@ -1,0 +1,11 @@
+[Unit]
+Description=Nightly Forgejo backup of forge-01
+
+[Timer]
+OnCalendar=*-*-* 04:20:00 UTC
+RandomizedDelaySec=600
+Persistent=true
+Unit=forge-backup.service
+
+[Install]
+WantedBy=timers.target

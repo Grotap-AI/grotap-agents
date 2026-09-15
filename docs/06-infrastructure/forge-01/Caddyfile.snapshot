@@ -1,0 +1,8 @@
+{
+	email info@grotap.com
+}
+
+forge.grotap.com {
+	encode gzip
+	reverse_proxy forgejo:3000
+}

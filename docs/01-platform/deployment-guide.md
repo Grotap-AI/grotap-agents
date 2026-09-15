@@ -30,7 +30,7 @@ To deploy this ERP platform with integrated native apps, follow a tiered archite
 1. Infrastructure and Environment Setup
 - Infrastructure as Code (IaC): Use the Vercel Terraform Provider  to automate project creation and domain management. Use the Cloudflare Terraform Provider  to manage R2 buckets and DNS.
 - Secret Management: Centralize all API keys (WorkOS, Neon, Inngest) in Doppler. Inject these secrets into Vercel and your Agentics Linux Cluster using the Doppler CLI to ensure consistency across environments.
-- Version Control: Host your source code on GitBucket (self-hosted Git platform). Mirror or sync critical repositories to a provider supported by Vercel (GitHub/GitLab/Bitbucket) to trigger automatic deployments .
+- Version Control: GitHub is the source of truth for all four repositories, and it is what Vercel and Railway build from — every automatic deployment is triggered by a push to GitHub. A self-hosted Forgejo instance at forge.grotap.com holds pull mirrors of all four repositories, refreshing every 10 minutes, and runs CI on self-hosted runners. The mirroring direction is GitHub → Forgejo, never the reverse; no deploy path reads from the forge. See docs/06-infrastructure/forgejo-cutover-gate.md before changing that.
 2. Backend and Database Layer
 - Database (Neon): Provision a serverless PostgreSQL instance on Neon.
      Enable Database Branching to match Vercel's preview deployments, ensuring isolated environments for every pull request.

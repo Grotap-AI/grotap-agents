@@ -1,0 +1,15 @@
+[Unit]
+Description=Forgejo dump of forge-01, uploaded to Wasabi
+Documentation=https://github.com/Grotap-AI/grotap-agents/blob/master/docs/06-infrastructure/forge-01-recovery.md
+After=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/forge-backup.sh
+User=root
+# The dump is a credential (app.ini SECRET_KEY, sqlite with API tokens, every repo).
+UMask=0077
+TimeoutStartSec=3600
+Nice=10
+IOSchedulingClass=idle

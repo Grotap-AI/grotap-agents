@@ -1,5 +1,5 @@
 ---
-title: "Wasabi _ Neon _ PageIndex _ Gitbucket _ Backups"
+title: "Wasabi _ Neon _ PageIndex _ Forgejo _ Backups"
 source: google-drive-docx
 converted: 2026-03-01
 component: "Wasabi"
@@ -21,9 +21,9 @@ status: active
 ---
 
 
-# Wasabi _ Neon _ PageIndex _ Gitbucket _ Backups
+# Wasabi _ Neon _ PageIndex _ Forgejo _ Backups
 
-Wasabi | Neon | PageIndex | Gitbucket | Backups
+Wasabi | Neon | PageIndex | Forgejo | Backups
 
 To set up Wasabi to receive backups from Neon and PageIndex, you must first configure your B2 environment and then use compatible integration tools, as neither platform has a one-click native "Backup to B2" button.
 1. Prepare Wasabi
