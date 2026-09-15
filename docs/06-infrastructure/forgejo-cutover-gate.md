@@ -27,6 +27,46 @@ workstation and the five worker boxes are on the forge's edge allow list and any
 Cloudflare block rather than an application error, and Cloudflare rejects a bare `urllib` user agent
 with a 403 (error 1010), so HTTP probes must send a real `User-Agent`.
 
+## Gate run of record — 2026-09-15, 23:20-23:34 UTC
+
+The full eight-item gate was executed read-only on 2026-09-15. Result: **NO-GO.** Two hard blockers
+fail and two further items do not read clean.
+
+| # | Item | Result | Evidence |
+|---|---|---|---|
+| 1 | Mirror head parity | **PASS** | Two readings 14 min apart, identical both times: `grotap-platform@master 87de93cd1`, `grotap-agents@master 716ef6196`, `grotap-landing@main 27938f0ec`, `grotap-platform-docs@master 88812af39`. No divergence. |
+| 2 | Mirror freshness / stuck check | **PARTIAL** | `mirror_updated` lag 18 min (under threshold). But the first sqlite read showed `next_update_unix` ~9 min in the PAST for all four repos — the documented stuck signature — and the second read 10 min later showed it caught up. Item 1 never diverged across that window, so it reads as scheduler jitter, not a dead mirror. Not a clean pass. |
+| 3 | Canary Actions run | **PASS** | Run 3 `success`, created 2026-09-15T18:20:24Z, head_sha `cbf4848b1`, within the 24 h window. |
+| 4 | Runner fleet | **PASS** | Five `action_runner` rows, all 1-2 s stale; all five hosts `active`; ceilings exact — agent-02..05 `CPUQuotaPerSecUSec=2s` / `MemoryMax=2147483648`, agent-06 `3s` / `4294967296`. |
+| 5 | Webhook HMAC | **PASS** | `signed 202`, `tampered 401 {"detail":"Invalid signature"}`, `health 200 {"ok":true,"configured":true}`. |
+| 6 | Backup | **FAIL — hard blocker** | See below. |
+| 7 | Shared fleet key retired | **FAIL — hard blocker** | Shared pubkey still present in `authorized_keys` on all six hosts (counts 2/2/2/2/2/1, none zero); private key still on agent-06 (2 copies) and agent-04 (1). `health-monitor.sh:64` and `SERVERS.md:92` still name it; three `fleet key` prose rows remain at SERVERS.md 78/81/82. |
+| 8 | Edge control | **PARTIAL** | Workstation curl returns 200, the expected pre-Zero-Trust allow-list state. Zero Trust could NOT be verified: see the token finding below. |
+
+### Two findings from this run that change earlier entries in this document
+
+**The backup credential is now wrong rather than merely absent.** `/root/.forge-backup.env` still
+holds the placeholder and `forge-backup.service` failed three times on 2026-09-15 (18:09:37,
+18:20:33, 18:20:35, exit 1), with `LAST`/`PASSED` both empty — **not one recorded success, ever**.
+The bucket `grotap-forge-backups` (region `us-west-1`) holds exactly one object,
+`forge-01/2026/09/forge-20260915T180937Z.zip`, 141,327,757 bytes, owned by the Wasabi **root**
+account — that is the restore drill's presigned-URL upload, not a timer-fired backup. Separately, a
+`WASABI_FORGE_ACCESS_KEY_ID` / `WASABI_FORGE_SECRET_ACCESS_KEY` pair now exists in Doppler where
+earlier in the day both were the literal string `REPLACE_ME`, **and the pair now present fails
+against Wasabi with `InvalidAccessKeyId`.** A non-functional credential is worse than a placeholder,
+because the placeholder check is what makes the failure self-announcing. Whoever populates these must
+verify them with a real `HeadBucket` before declaring item 6 unblocked.
+
+**Both Cloudflare API tokens in Doppler are invalid.** `CLOUDFLARE_API_TOKEN` and
+`CLOUDFLARE_EDGE_TOKEN` each fail `GET /user/tokens/verify` with
+`{"success":false,"errors":[{"code":1000,"message":"Invalid API Token"}]}`. This is **not** the
+`access.api.error.not_enabled` signal recorded earlier in this document — that reading was taken when
+the tokens still worked. The practical consequence is that **the WAF ruleset
+`833d63affc5d44be931d2ce74bf8f9fd` is currently the only edge control and cannot be inspected or
+modified by API.** If the allow list ever needs an emergency change — adding a box, or restoring
+fleet access after an IPv6 change — it is a dashboard action until a token is reissued. Fix the token
+before relying on item 8 either way.
+
 ## Go / no-go checklist
 
 ### 1. Mirror head parity — the primary signal
@@ -315,6 +355,60 @@ grep -rn 'grotap_agents' agents/scripts/health-monitor.sh agents/SERVERS.md
 grep -rni 'fleet key' agents/SERVERS.md
 ```
 
+#### Measured scope of the retirement, 2026-09-15 (this item is much larger than the four bullets above)
+
+A full sweep of every cron, systemd timer and repository reference was run on 2026-09-15. It found
+that the four bullets above are a subset, not the whole job, and that **the largest dependency is not
+on the fleet boxes at all — it is the production orchestrator on Railway.**
+
+**agent-06 is the only box whose scheduled jobs SSH to other boxes.** agent-04 merely holds the
+private key at rest; nothing scheduled on it uses the key. agent-02, agent-03 and agent-05 hold no
+private key at all and never originate SSH. agent-04's `root` has no private key either — only
+`agent` does. So the cron work is confined to one box, and it is these four jobs:
+
+| Schedule | Job | How it names the key |
+|---|---|---|
+| `*/5 * * * *` | `health-monitor.sh` | **hardcoded**, no override: `ssh -i /home/agent/.ssh/grotap_agents` |
+| `0 6 * * *` | `update-fleet-cli.sh` | cron line re-asserts `SSH_KEY=/home/agent/.ssh/grotap_agents` |
+| `*/10 * * * *` | `reconcile_dispatch.py` -> `dispatch.sh` | same explicit `SSH_KEY=` in the cron line |
+| weekly (backup chain) | `scripts/backup/weekly-openreplay.sh` | `: "${OR_SSH_KEY:=/home/agent/.ssh/grotap_agents}"` |
+
+**The blocker the earlier draft missed.** `orchestrator/src/config.ts:20-26` loads **one** key from
+Doppler (`SSH_PRIVATE_KEY_B64` / `SSH_PRIVATE_KEY`) and uses it for **every** host in `FLEET_HOSTS`.
+That secret *is* the shared farm key, and there is no per-host mechanism and no fallback. Deleting
+the shared key without changing this takes production pipeline dispatch down completely — every
+`/dispatch` call fails. This must be solved and smoke-tested before any `authorized_keys` is touched.
+`orchestrator/src/ssh.ts:3` and `orchestrator/src/config/failure-classes.ts:118` also name the key.
+
+**Ten hosts have no per-host key at all.** The per-host keys minted on 2026-09-15 cover only
+`agent-02..06` and `forge-01`, and they exist **only on the workstation**. Neither agent-06 nor
+agent-04 holds a copy of any of them, and agent-06's own `~/.ssh/config` has no fleet `Host` blocks
+— just a GitHub deploy-key block — so its scripts fall through to the hardcoded shared path with no
+alternative available. Meanwhile `agent-20`/`21` (Team 2), `agent-30`/`31` (Team 3), `agent-40`/`41`
+(Team 4), `GEX131`/`llm-gpu-02`, `maps-01` and `claudecode-01` are reached today only through the
+workstation `~/.ssh/config`'s catch-all IP-glob blocks, which route them all at `grotap_agents`.
+Retiring the key without minting keys for these ten removes all SSH access to them.
+
+**Thirteen workstation scripts each duplicate the same fallback line** — `agents/dispatch.sh:30`
+plus `install-dispatcher.sh:22`, `config.sh:6`, `watchdog.sh:19`, `monitor.sh:3`,
+`monitor-loop.sh:7`, `collect-reviews.sh:19`, `review-pipeline.sh:13`, `server-status.sh:7`,
+`setup-queue.sh:8`, `update-fleet-cli.sh:16`, `setup-support-runner.sh:23`,
+`setup-claude-app-runner.sh:20` — none of which source `config.sh`'s exported `SSH_KEY`. Fix the
+default once, centrally, rather than thirteen times. Two more have no override mechanism to inherit:
+`agents/status-server.js:14` hardcodes the path in JavaScript, and `health-monitor.sh:64` hardcodes
+it in the `-i` flag. `scripts/claudecode/seed-secrets.sh:26` and
+`services/clamav-scan/scripts/bootstrap-host.sh:13,17` carry the same default for provisioning paths.
+
+**Cosmetic only, do not let them block the gate:** `backend/app/routers/server_connections.py:179`
+and `frontend/src/pages/ServerConnectionsSetupPage.tsx:355` carry `ssh_key_label="grotap_agents"` as
+a display string — that admin UI health check is a TCP ping and is not wired to SSH auth at all.
+The ~20 remaining hits are historical narrative in docs and case files.
+
+**What breaks the moment the key is deleted with nothing else changed:** production orchestrator
+dispatch (total loss), agent-06's 5-minute health monitor, the daily fleet CLI update, the 10-minute
+dispatch reconciler, the OpenReplay backup leg, every manual `dispatch.sh` invocation from the
+workstation, `status-server.js` on port 7654, and all SSH access to the ten hosts listed above.
+
 Once that work is done, the gate itself is a sweep of every box:
 
 ```bash
@@ -349,6 +443,64 @@ origin is blocked, **and** item 3's canary is re-run *after* the edge change and
 The allow list **must carry each box's IPv6 /64 as well as its IPv4 address** — the boxes prefer v6,
 and a v4-only list previously locked the runners out of their own forge with `failed to fetch task`.
 Verify v6 explicitly rather than assuming it was inherited.
+
+## What "cutover" can actually mean — the deploy-path constraint
+
+*Measured 2026-09-15 against the live Railway and Vercel APIs. This section exists because the word
+"cutover" implies something the deploy platforms cannot do.*
+
+**Neither Railway nor Vercel can build from a self-hosted Forgejo.** This is a schema-level limit,
+not a permissions gap or a setting nobody found. Railway's `serviceConnect` / `serviceInstanceUpdate`
+mutations accept only `{ repo, image, branch }`, where `repo` is an `owner/name` slug resolved
+through Railway's GitHub App installation — there is no provider field and no arbitrary git-remote
+field. Vercel's `PATCH /v9/projects/{id}` accepts a `link` only for `type: github|gitlab|bitbucket`.
+Forgejo/Gitea is not a supported provider on either platform.
+
+So "point the deploy trigger at the forge" is not an action that exists. What is achievable is one of
+two mechanisms, and the choice should be made explicitly:
+
+- **(A) Forge is the push path; GitHub stays the deploy trigger.** Humans and agents push to
+  `forge.grotap.com`; Forgejo **push-mirrors** to GitHub; Railway and Vercel keep building from
+  GitHub exactly as they do today. This is what the "move the push path first" step in the sequencing
+  below already describes, and it needs no deploy-platform change at all.
+- **(B) CI-driven deploys from the forge.** Replace the GitHub Actions workflows with Forgejo
+  Actions workflows (the YAML is compatible, and `forgejo-runner` already runs on agent-02..06) that
+  run the same `railway up` / `vercel deploy` CLI commands. Railway and Vercel then never see a git
+  provider at all.
+
+**Most of the estate is already on mechanism (B) and does not know it.** Measured today:
+
+| Target | Deploy source | Can it move to the forge? |
+|---|---|---|
+| Vercel `grotapfrontend`, `grotap-landing`, `frontend` | **No git link at all** (`link: null`) — deployed by `.github/workflows/deploy-frontend.yml` running `vercel build` / `vercel deploy --prebuilt` | Yes — swap the workflow to Forgejo Actions; Vercel is already provider-agnostic here |
+| Railway `orchestrator`, `claude-runner` | `source.repo = null`, no triggers — deployed by `.github/workflows/deploy-railway.yml` running `railway up --service <id>` | Yes — same swap |
+| Railway `backend-worker` | git-sourced, but no push-trigger row | Convert to `railway up` like the two above |
+| Railway `grotap-backend`, `grotap-ingestion-worker`, `grotap-agent-worker` | **Native GitHub webhook trigger**, branch `master` | **No.** Either GitHub stays the trigger (mechanism A), or these three are converted to the `railway up` pattern already proven for `orchestrator` |
+
+Railway API note for whoever runs this next: **`RAILWAY_TOKEN` is the token that works**, and only
+as the header `Project-Access-Token: <token>` — not `Authorization: Bearer`. `RAILWAY_API_TOKEN`
+does not authenticate against this API at all. Send a real `User-Agent`; a bare urllib UA gets 403.
+Project `grotap-platform` is `f9bf333c-f929-413e-a95c-7923e10b5777`, environment `production` is
+`02a294e0-f3f9-4530-85c5-9142c7e097b0`.
+
+### The reverse push mirror does not exist yet
+
+`GET /api/v1/repos/Grotap-AI/<repo>/push_mirrors` returns `[]` for **all four** repositories. The
+rollback section below depends on GitHub never being more than ten minutes behind, and mechanism (A)
+depends on the push mirror outright — it *is* the deploy path. **Nothing may be cut over until the
+push mirror is configured and proven**, in the direction opposite to today's.
+
+### Fleet references that a push-path move would break
+
+These read GitHub directly and are not fixed by changing a remote:
+
+- `agents/dispatch.sh:328,613,945` and `agents/scripts/orchestrator-run.sh:224` — bootstrap
+  `git clone https://github.com/Grotap-AI/grotap-agents.git` on every agent run (unpinned; this is
+  the known P1-B risk).
+- `agents/scripts/review-gate-cron.sh:291` — clones `grotap-platform` from GitHub.
+- `agents/scripts/dispatch-poller.sh:19,31-32,49,85` — calls the **GitHub REST Contents API**
+  (`https://api.github.com/repos/Grotap-AI/grotap-agents/contents/...`) to read and write pending
+  task files. This one needs a Forgejo Contents-API equivalent, not a hostname substitution.
 
 ## Canary-first sequencing
 
