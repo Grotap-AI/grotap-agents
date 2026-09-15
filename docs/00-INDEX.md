@@ -76,6 +76,9 @@
 | [terraform-mcp-deployment](./06-infrastructure/terraform-mcp-deployment.md) | Terraform MCP core deployment architecture |
 | [terraform-mcp-connection-guide](./06-infrastructure/terraform-mcp-connection-guide.md) | SSH tunnel + SSE + all provider connections |
 | [terraform-mcp-install](./06-infrastructure/terraform-mcp-install.md) | Terraform MCP server install on Hetzner |
+| [forgejo-cutover-gate](./06-infrastructure/forgejo-cutover-gate.md) | **Go/no-go checks before flipping source of truth to the forge** |
+| [forge-01-recovery](./06-infrastructure/forge-01-recovery.md) | forge-01 backup, restore drill, "the box dies" runbook |
+| [cloudflare-access-forge](./06-infrastructure/cloudflare-access-forge.md) | Zero Trust in front of forge.grotap.com — owner click-path |
 
 ## 07 — Background Jobs (INNGEST)
 | File | Topic |
@@ -111,7 +114,7 @@
 ## 11 — DevOps
 | File | Topic |
 |---|---|
-| [git](./11-devops/git.md) | Git + MCP + Inngest webhook triggers |
+| [git](./11-devops/git.md) | GitHub source of truth, Forgejo mirror, CI |
 | [doppler](./11-devops/doppler.md) | Doppler secrets across all services |
 | [gitguardian-mcp](./11-devops/gitguardian-mcp.md) | GitGuardian MCP — agent secret scanning |
 
