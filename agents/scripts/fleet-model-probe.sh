@@ -32,6 +32,10 @@
 # call this from a cron or a wrapper, do not let its exit status fail your job — read the
 # code and decide. A probe that takes down its caller when the answer is "capped" just moves
 # the problem somewhere new.
+# `-e` is DELIBERATELY OMITTED. This script is full of bare `[[ -n ... ]] && say` guards, and
+# under `set -e` a false condition makes the script exit with status 1 — which is CAPPED's code.
+# A probe that failed to read its own key would then report a spend cap. That is the same defect
+# that bit prune_local in forge-backup.sh, one letter away. Do not "harden" this line.
 set -uo pipefail
 
 CONFIG="prd"
@@ -74,7 +78,20 @@ if [[ -n "$REMOTE_HOST" ]]; then
   OUT=$(ssh -o ConnectTimeout=10 -o BatchMode=yes "$REMOTE_HOST" \
         "su - agent -c 'doppler run -- bash -s' <<'EOF'
 $PROBE_CMD
-EOF" 2>&1) || { say "UNREACHABLE  could not run on $REMOTE_HOST:"; say "$(printf '%s' "$OUT" | tail -3)"; exit 2; }
+EOF" 2>&1) || {
+    # Exit 2 covers "the probe could not run", but the REASON changes who fixes it: a network or
+    # SSH failure is an infrastructure problem, a Doppler failure is a bad or expired service
+    # token on that box. Same exit code, because the caller's action is identical (the probe told
+    # you nothing) — different message, because the human's next step is not.
+    if printf '%s' "$OUT" | grep -qi 'doppler'; then
+      say "UNREACHABLE  Doppler failed on $REMOTE_HOST — a CONFIG fault on the box (bad or"
+      say "             expired service token), NOT a network problem:"
+    else
+      say "UNREACHABLE  could not reach or run on $REMOTE_HOST:"
+    fi
+    say "$(printf '%s' "$OUT" | tail -3)"
+    exit 2
+  }
 else
   say "probe: workstation Doppler, grotap/$CONFIG, model $MODEL"
   OUT=$(doppler run -p grotap -c "$CONFIG" -- bash -c "$PROBE_CMD" 2>&1) \
