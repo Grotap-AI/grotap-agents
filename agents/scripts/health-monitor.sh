@@ -43,12 +43,17 @@ for NAME in "${!ENDPOINTS[@]}"; do
 done
 
 # ── Agent server SSH checks ──────────────────────────────────────────────────
+# Roster of record is SERVERS.md — keep this list equal to the agent-0N rows there.
+# It was wrong in both directions until 2026-09-15: it probed agent-01, deleted
+# 2026-06-29 with its IP recycled to supportagents (so the check passed while
+# testing a different machine entirely), and it omitted agent-06 — the box whose
+# crons must always run, and the box this script itself runs on.
 AGENTS=(
-  "agent-01:5.161.189.143"
   "agent-02:5.161.74.39"
   "agent-03:5.161.81.193"
   "agent-04:178.156.222.220"
   "agent-05:5.161.73.195"
+  "agent-06:5.78.178.81"
 )
 
 for ENTRY in "${AGENTS[@]}"; do
