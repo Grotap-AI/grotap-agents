@@ -5,19 +5,67 @@ review backlog — review every agent-built branch, merge what is correct, route
 defects back to the fleet, and leave an auditable trail. You work in a fresh checkout of
 `grotap-platform` on `master`.
 
-## 1. Collect the queue
-Two shapes of reviewable case: `change_review`, AND `awaiting_human` cases parked at the
-orchestrator's human gate (their latest dispatch row is `awaiting_review` — same built-branch,
-same checklist; without this they starve because the human gate creates no HI hold).
+## 0. Claim your slice of the queue (GATECLAIM-1)
+Concurrent gate processes must never review the same case. Before reviewing anything,
+atomically claim up to 15 cases. Work ONLY the case_ids the UPDATE returns — anything
+not returned was already claimed by a peer gate; skip it entirely.
+
 ```bash
-doppler run -- psql "$DATABASE_URL" -Atc \
-  "SELECT case_id FROM pipeline_cases WHERE status='change_review'
-   UNION
-   SELECT c.case_id FROM pipeline_cases c
-   WHERE c.status='awaiting_human'
-     AND EXISTS (SELECT 1 FROM pipeline_dispatch_log dl
-                 WHERE dl.case_id=c.case_id AND dl.status='awaiting_review')
-   ORDER BY case_id"
+# Unique identity for this run: hostname + PID
+GATE_ID="review-gate-$(hostname -s)-$$"
+
+# Atomic claim: skips cases held by another gate within the 30-minute TTL.
+# 30 minutes chosen because a real single-branch review takes <10 min and
+# a crashed gate must not park a case longer than two timer cycles (2 × 15 min).
+CLAIMED_IDS=$(doppler run -- psql "$DATABASE_URL" -Atc "
+UPDATE pipeline_cases
+SET claimed_by  = '$GATE_ID',
+    claimed_at  = NOW(),
+    claim_label = 'review-gate',
+    updated_at  = NOW()
+WHERE case_id IN (
+  SELECT case_id FROM (
+    SELECT case_id FROM pipeline_cases
+    WHERE status = 'change_review'
+      AND (claimed_by IS NULL
+           OR claimed_at IS NULL
+           OR claimed_at < NOW() - INTERVAL '30 minutes')
+    UNION
+    SELECT c.case_id FROM pipeline_cases c
+    WHERE c.status = 'awaiting_human'
+      AND EXISTS (
+          SELECT 1 FROM pipeline_dispatch_log dl
+          WHERE dl.case_id = c.case_id AND dl.status = 'awaiting_review'
+      )
+      AND (c.claimed_by IS NULL
+           OR c.claimed_at IS NULL
+           OR c.claimed_at < NOW() - INTERVAL '30 minutes')
+    ORDER BY case_id
+    LIMIT 15
+  ) q
+)
+RETURNING case_id")
+
+echo "Claimed for this run ($GATE_ID): $CLAIMED_IDS"
+```
+
+**On exit — success or failure — release your claims.** Run this before exiting:
+```bash
+doppler run -- psql "$DATABASE_URL" -Atc "
+UPDATE pipeline_cases
+SET claimed_by  = NULL,
+    claimed_at  = NULL,
+    claim_label = NULL,
+    updated_at  = NOW()
+WHERE claimed_by = '$GATE_ID'"
+```
+If the process dies mid-review, any case it held is automatically reclaimable after 30 minutes.
+
+## 1. Collect the queue
+Work ONLY the case_ids you claimed in §0. If $CLAIMED_IDS is empty, the queue is either
+empty or fully claimed by peers — exit cleanly (print why, file nothing).
+
+```bash
 git fetch origin --prune
 ```
 Each case's branch is `origin/case-<CASE-ID>`. No branch → leave the case alone, note it in the summary.
@@ -49,6 +97,25 @@ cd frontend && npm install --silent && npx tsc --noEmit && cd ..
 ## 4. Aftercare
 - Merged cases: `UPDATE pipeline_cases SET status='done', updated_at=NOW() WHERE case_id=...`
   and close their dispatch rows: `UPDATE pipeline_dispatch_log SET status='done', completed_at=NOW() WHERE case_id=... AND status IN ('pending','active','awaiting_review')`.
+- **Route-backs (FIX verdict):** You MUST supply your full verdict reasoning. Use the
+  `POST /pipeline/cases/{case_id}/gate-route-back` endpoint (X-Node-Secret auth) with a
+  non-empty `verdict_text`. An empty route-back is refused by the backend — do NOT fall
+  back to a bare SQL `UPDATE pipeline_cases SET status='change_review'` without verdict
+  text, because the next agent attempt would receive a bare status change with no
+  reasoning and would re-derive from scratch. Also, NEVER instruct the agent to
+  `git checkout <ref> -- <path>` to discard a prior attempt — that overwrites peers'
+  merged work under that path with no conflict indicator. Instead, write: "revert
+  attempt's own commits with `git revert <sha>`" or "start a fresh worktree from
+  `origin/master`". See fleet-ops.md for the full rule.
+  ```bash
+  NODE_SECRET=$(doppler secrets get NODE_SECRET --plain)
+  curl -sf -X POST "https://api.grotap.com/pipeline/cases/${CASE_ID}/gate-route-back" \
+    -H "X-Node-Secret: $NODE_SECRET" \
+    -H "Content-Type: application/json" \
+    -d "{\"verdict_text\": \"<your full defect description and required fix>\"}"
+  ```
+  If verdict_text is empty, the backend returns HTTP 400 and the route-back does NOT land.
+  This is intentional — write the reasoning before routing back.
 - If this run processed any `awaiting_human` (orchestrator-parked) cases, VERIFY whether a
   redeploy is actually owed before instructing one — this instruction has fired FALSE on every
   run that checked (4x through 2026-09-11), and `railway up` KILLS in-flight SSH dispatches.
@@ -84,7 +151,11 @@ cd frontend && npm install --silent && npx tsc --noEmit && cd ..
   A clean run files NOTHING. (2026-08-13: 14 of 120 pending holds were gate receipts carrying no
   decision — a log posted to the board is noise that buries the real items.)
 
+- After all merges, route-backs, and status updates, **release your claims** (see §0).
+
 ## Hard limits
 - Never force-push. Never push if any gate fails. Never touch branches outside case-*.
 - Budget: if the queue exceeds 25 branches, do the 25 oldest and say so in the summary.
 - If `git push` is rejected (master moved), pull --rebase once and retry; second rejection → stop, file hold.
+- **Claim release is always the last step**, even if the run exits non-zero. A crashed gate
+  must not park cases for longer than the 30-minute TTL.
