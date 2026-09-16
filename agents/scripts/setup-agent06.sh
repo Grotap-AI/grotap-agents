@@ -4,7 +4,8 @@
 set -euo pipefail
 
 AGENT06="5.78.178.81"
-SSH_KEY="$HOME/.ssh/grotap_agents"
+# Phase 2b (2026-09-16): per-host key via the resolver, not the shared key.
+SSH_KEY="$(bash "$(dirname "$0")/ssh-key-for.sh" "$AGENT06")"
 SSH="ssh -i $SSH_KEY -o StrictHostKeyChecking=no root@$AGENT06"
 SCP="scp -i $SSH_KEY -o StrictHostKeyChecking=no"
 

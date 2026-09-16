@@ -16,11 +16,15 @@
 # The token is NEVER committed. To rotate: mint a new grotap/prd service token,
 # `doppler secrets set FLEET_DOPPLER_TOKEN`, re-run this script.
 #
-# Run from a machine with the grotap_agents SSH key + Doppler auth:
+# Run from a machine with per-host fleet SSH keys + Doppler auth:
 #   bash agents/scripts/sync-all-agents.sh
 set -uo pipefail
 
-SSH_KEY="$HOME/.ssh/grotap_agents"
+# Key resolution goes through ssh-key-for.sh (phase 2b, 2026-09-16) so this
+# script stops hardcoding the shared fleet key grotap_agents. Resolved per
+# target inside the loop, not once up front -- each host has its own key.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+key_for() { bash "$SCRIPT_DIR/ssh-key-for.sh" "$1" 2>/dev/null || printf %s "$HOME/.ssh/grotap_agents"; }
 
 # Active fleet (consolidated 2026-04-29: agent-01/08/09/10/11 retired).
 AGENTS=(
@@ -29,8 +33,13 @@ AGENTS=(
   "agent-04:178.156.222.220"
   "agent-05:5.161.73.195"
   "agent-06:5.78.178.81"
-  "agent-07:89.167.66.105"
 )
+# agent-07 (89.167.66.105) REMOVED 2026-09-16. That address is no longer ours --
+# Hetzner released and recycled it to another customer (absent from every Hetzner
+# Cloud project and from Robot; its host key no longer matches known_hosts). This
+# loop SSHed to it as root with the shared fleet key, which is the single worst
+# form of the bare-IP problem: fleet credentials offered to a stranger's machine.
+# Do not re-add a host here without confirming ownership via the Hetzner API.
 
 # Resolve the fleet Doppler token once (env override, else from Doppler).
 FLEET_TOKEN="${FLEET_DOPPLER_TOKEN:-}"
@@ -48,6 +57,7 @@ echo ""
 for ENTRY in "${AGENTS[@]}"; do
   NAME="${ENTRY%%:*}"
   IP="${ENTRY##*:}"
+  SSH_KEY="$(key_for "$NAME")"
   echo -n "$NAME ($IP): "
 
   # 1) Pull the latest grotap-agents bootstrap.

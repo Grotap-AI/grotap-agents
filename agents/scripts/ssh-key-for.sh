@@ -29,7 +29,10 @@
 #      today). $HOME reflects whichever OS user actually runs this — /root
 #      under a root crontab, /home/agent under `sudo -u agent` — so root and
 #      agent get the correct key from the exact same call, no extra flag.
-#   2. Otherwise, the shared fleet key: $HOME/.ssh/grotap_agents. This
+#   2. Otherwise a workstation-style per-host key at
+#      $HOME/.ssh/grotap_<canonical-target> -- the naming the owner
+#      workstation uses. Fleet boxes have none of these and fall past it.
+#   3. Otherwise, the shared fleet key: $HOME/.ssh/grotap_agents. This
 #      fallback is what makes it safe to roll the resolver out before every
 #      per-host key pair exists, and to keep relying on it afterwards: any
 #      target with no key yet (a jumpbox, a host this resolver doesn't run
@@ -74,16 +77,50 @@ declare -A _SSH_KEY_FOR_HOST_BY_IP=(
   ["5.161.73.195"]="agent-05"
   ["5.78.178.81"]="agent-06"
   ["87.99.148.22"]="agent-20"
-  ["5.161.243.18"]="agent-21"
   ["167.233.59.142"]="agent-30"
-  ["167.233.194.57"]="agent-31"
   ["178.156.219.232"]="agent-40"
-  ["178.156.220.48"]="agent-41"
+  # agent-21/31/41 REMOVED 2026-09-16: those Hetzner servers were deleted and
+  # their IPs released. Hetzner recycles released IPs, so mapping them to a
+  # fleet host name would offer a fleet key to a stranger. See agents/SERVERS.md.
+  ["5.161.107.80"]="maps-01"
+  ["178.156.246.81"]="forge-01"
+  ["178.63.124.99"]="llm-gpu-02"
+  ["178.156.209.112"]="claudecode-01"
+  ["claudecode.grotap.com"]="claudecode-01"
+  ["5.161.189.143"]="cobrowse-01"
+  ["supportagents.grotap.com"]="cobrowse-01"
+  ["178.156.199.83"]="runner-01"
 )
 
-canon="$TARGET"
-if [[ -n "${_SSH_KEY_FOR_HOST_BY_IP[$TARGET]:-}" ]]; then
-  canon="${_SSH_KEY_FOR_HOST_BY_IP[$TARGET]}"
+# --- Canonicalize the target BEFORE the lookup -------------------------------
+# This resolver is the single authority for key selection, so it must be safe
+# for whatever token a caller happens to hold. Every non-canonical form below
+# would otherwise MISS the table and fall through to the shared fleet key
+# silently -- a caller that forgets to pre-clean its input gets fleet-wide
+# credentials instead of an error. Callers still clean their own input as
+# defense in depth; this is what makes that optional rather than load-bearing.
+#   root@host       -> host        (an ssh destination, not a host name)
+#   [host]:2222     -> host        (bracketed form with a port)
+#   host:22         -> host        (port suffix)
+#   Host.Example    -> host.example (DNS is case-insensitive; keys are lower)
+# A bare IPv6 literal is left alone: its colons are the address, not a port.
+# Trim first: a padded token (" agent-04 ", from a quoted shell variable or a
+# hand-edited config line) would miss the table and fall through to the shared
+# key -- the same silent downgrade the rest of this block prevents.
+lookup="${TARGET#"${TARGET%%[![:space:]]*}"}"
+lookup="${lookup%"${lookup##*[![:space:]]}"}"
+lookup="${lookup##*@}"
+lookup="${lookup#[}"
+lookup="${lookup%%]*}"
+case "$lookup" in
+  *:*:*) : ;;
+  *:*) lookup="${lookup%%:*}" ;;
+esac
+lookup="${lookup,,}"
+
+canon="$lookup"
+if [[ -n "${_SSH_KEY_FOR_HOST_BY_IP[$lookup]:-}" ]]; then
+  canon="${_SSH_KEY_FOR_HOST_BY_IP[$lookup]}"
 fi
 
 # --- Which host is THIS resolver running on? ---------------------------------
@@ -102,6 +139,23 @@ if [[ -n "$from_suffix" ]]; then
     printf '%s\n' "$candidate"
     exit 0
   fi
+fi
+
+# --- 2. Workstation-style per-host key -------------------------------------
+# The owner workstation names its per-host keys $HOME/.ssh/grotap_<host>
+# (grotap_agent-04, grotap_forge-01, grotap_cobrowse-01, ...) rather than
+# the grotap_from<N>_<host> form the fleet boxes use: there is only one
+# source host, so the "from" half would carry no information. Without this
+# branch the resolver handed back the SHARED key for every workstation call
+# even though a per-host key was sitting right next to it -- exactly the
+# dependency phase 2b exists to remove.
+#
+# A literal target of "agents" resolves to grotap_agents here, i.e. the
+# shared key: the same answer the fallback gives, so it needs no guard.
+ws_candidate="$HOME/.ssh/grotap_${canon}"
+if [[ -f "$ws_candidate" ]]; then
+  printf '%s\n' "$ws_candidate"
+  exit 0
 fi
 
 printf '%s\n' "$SHARED_KEY"
