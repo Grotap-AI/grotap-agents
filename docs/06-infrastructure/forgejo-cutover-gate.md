@@ -616,6 +616,25 @@ verification followed by a broken fleet.
 retirement and the key is back. It must change in the SAME commit that deletes the key, or it is a
 loaded gun pointed at the whole exercise.
 
+**RESOLVED 2026-09-16 04:46Z — and the answer shrinks the work while raising a separate alarm.**
+Of the seven, exactly **one** needed a key and got one. The rest should not be touched:
+
+| Host | Finding |
+|---|---|
+| `claudecode` (`claudecode.grotap.com`, user `user1`) | **Legitimate — key minted and proven.** Same physical box as `claudecode-01` (178.156.209.112), already covered under `root`; this is a second account on it, so it genuinely needed its own key. |
+| `agent-01` (5.161.189.143) | **Not an agent box.** `agent` has no `.ssh` directory at all; the shared key logs in as `root`; the host identifies itself as **`grotap-cobrowse-01`** — the Cobrowse server, which the owner ordered ripped out on 2026-08-30. A leftover alias, not a fleet member. Decide decommission vs. re-purpose; do not quietly dress it up as fleet. |
+| `agent-08` (77.42.42.213) | **Dead.** TCP connect to port 22 times out, confirmed twice including a raw `/dev/tcp` probe. |
+| `agent-07` (89.167.66.105), `agent-09` (46.62.184.50), `agent-10` (46.62.184.52), `agent-11` (46.62.184.51) | **HOST KEY CHANGED.** `known_hosts` holds prior ed25519 and rsa records; each server now presents a different, unmatched ed25519 key. No login was attempted past the warning and nothing was appended. Consistent with these being rebuilt or reassigned — `agent-07` appears only in a stale `orchestrator/DEPLOY.md:166` list and not in live `FLEET_HOSTS`. |
+
+**The host-key mismatch is a finding in its own right, not merely an obstacle.** All four of those IPs are
+listed in the second catch-all glob in the workstation `~/.ssh/config` — the one carrying
+`StrictHostKeyChecking no`. That combination means any script connecting to them **by bare IP** does
+not merely fall back to the shared key, it **suppresses the host-key warning that just fired here and
+connects to a machine that may no longer be ours**, authenticating with the fleet-wide credential.
+The manual probe refused; the automated path would not have. This is the strongest argument yet for
+deleting those glob blocks and the `StrictHostKeyChecking no` with them, and it should be raised
+independently of the key retirement.
+
 **2. Seven more hosts depend on the shared key and have no per-host key at all.** The count of
 "nine remaining hosts" was itself incomplete. Also on `grotap_agents` with nothing else:
 `agent-01` (5.161.189.143), `agent-07` (89.167.66.105), `agent-08` (77.42.42.213),
