@@ -3,12 +3,13 @@
 # (a fleet host name like "agent-04" or its IP) as the CURRENT OS user, on the
 # CURRENT host.
 #
-# TWIN FILE: health-monitor.sh (this repo, grotap-agents) and dispatch.sh /
-# config.sh / update-fleet-cli.sh / status-server.js / reconcile_dispatch.py
-# (grotap-platform) all need this resolver, but the two are separate repos
-# both checked out on agent-06. Rather than reach across repos on a guessed
-# checkout path, this file is kept byte-identical at
-# agents/scripts/ssh-key-for.sh in both repos. Change one, copy to the other.
+# TWIN FILE: dispatch.sh, config.sh, update-fleet-cli.sh, status-server.js and
+# reconcile_dispatch.py live in grotap-platform, while health-monitor.sh and
+# SERVERS.md (the fleet roster this table must stay in lockstep with) live in
+# grotap-agents — two separate repos, both checked out on agent-06. Rather
+# than have grotap-platform scripts reach across repos on a guessed checkout
+# path, this file is kept byte-identical in both repos at
+# agents/scripts/ssh-key-for.sh. Change one, copy to the other.
 #
 # Part of retiring the shared fleet key `grotap_agents` (phase 2b,
 # 2026-09-16). Phase 1 (2026-09-16 04:01Z) provisioned per-target keys on
@@ -72,6 +73,12 @@ declare -A _SSH_KEY_FOR_HOST_BY_IP=(
   ["178.156.222.220"]="agent-04"
   ["5.161.73.195"]="agent-05"
   ["5.78.178.81"]="agent-06"
+  ["87.99.148.22"]="agent-20"
+  ["5.161.243.18"]="agent-21"
+  ["167.233.59.142"]="agent-30"
+  ["167.233.194.57"]="agent-31"
+  ["178.156.219.232"]="agent-40"
+  ["178.156.220.48"]="agent-41"
 )
 
 canon="$TARGET"
