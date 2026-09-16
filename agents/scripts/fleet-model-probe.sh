@@ -75,7 +75,19 @@ INNER
 
 if [[ -n "$REMOTE_HOST" ]]; then
   say "probe: $REMOTE_HOST (key as that box resolves it), model $MODEL"
-  OUT=$(ssh -o ConnectTimeout=10 -o BatchMode=yes "$REMOTE_HOST" \
+  # StrictHostKeyChecking=yes — fail closed. --host takes a bare IP as readily as an
+  # alias, and a bare IP resolves through the catch-all glob in ~/.ssh/config, which
+  # carries "StrictHostKeyChecking no". This probe runs a command on the far end and
+  # reads a key fingerprint back, so an unverified destination is the wrong place to
+  # be relaxed. The exposure is unauthenticated-destination command execution, NOT
+  # key disclosure: offering public-key auth does not hand over the private half.
+  # THIS ALONE DOES NOT CLOSE THE HOLE — the ~/.ssh/config globs are the actual
+  # mitigation and are owned by another session; this removes one automated rider.
+  # SEEDING REQUIRED: known_hosts must hold a correct entry for every fleet address
+  # used here. As of 2026-09-15 four fleet IPs present ed25519 keys that MISMATCH
+  # known_hosts; a mismatch is a refusal, not a first-contact prompt, so those four
+  # fail immediately under this setting.
+  OUT=$(ssh -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=yes "$REMOTE_HOST" \
         "su - agent -c 'doppler run -- bash -s' <<'EOF'
 $PROBE_CMD
 EOF" 2>&1) || {
