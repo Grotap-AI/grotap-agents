@@ -147,9 +147,16 @@ cd frontend && npm install --silent && npx tsc --noEmit && cd ..
   from merged branches in the summary hold — the backend's idempotent startup DDL covers the
   mirrored ones; a human/Claude session applies the rest.
 - New lessons (recurring agent mistakes) → append ONE line to the matching
-  `agents/lessons/<surface>.md` (grep it first and generalize an existing line if the root cause
-  is already there). NEVER `agents/GLOBAL.md` — it is byte-capped and shipped verbatim to every
-  agent on every dispatch.
+  **`$AGENTS_REPO/agents/lessons/<surface>.md`** (grep it first and generalize an existing line if
+  the root cause is already there). NEVER `agents/GLOBAL.md` — it is byte-capped and shipped
+  verbatim to every agent on every dispatch.
+  **Write the path with `$AGENTS_REPO`, never bare `agents/lessons/...`.** Your cwd is
+  `$PLATFORM_REPO`, so a relative path silently creates a SECOND lessons file in the platform
+  clone that nothing reads and no session following platform/CLAUDE.md will ever grep. That is
+  how `agents/lessons/{fleet-ops,sql-migrations,wiring-contracts,scantap}.md` appeared in the
+  platform repo between 2026-09-14 and 2026-09-16 — 6 commits, all gate-written, against a
+  corpus in this repo with 47 commits on fleet-ops.md alone. Commit lessons in THIS repo.
+  Only `git add` the lesson file itself; never stage the platform clone's tree from here.
 - **Run summary goes to stdout, NOT to the HI board.** Always print merged N / fix-cases M /
   skipped K (+why) / migrations / gate status — the cron log is the record.
   File a hold ONLY when the run leaves something a human must DECIDE or DO, and then only for

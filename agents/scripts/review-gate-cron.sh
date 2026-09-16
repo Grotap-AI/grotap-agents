@@ -41,6 +41,12 @@ TIMEOUT_SECS=7200   # 2h hard cap
 GATE_ID="review-gate-$(hostname -s)-$$"
 export GATE_ID
 
+# AGENTS_REPO is exported for the same reason: the Claude run below executes with
+# cwd = $PLATFORM_REPO, so any RELATIVE path in review-gate-task.md resolves inside
+# the platform clone. Lessons belong in this repo, so the task file names
+# "$AGENTS_REPO/agents/lessons/<surface>.md" and needs the variable to reach it.
+export AGENTS_REPO
+
 # Stale-claim window. A gate that dies holding a claim must not park a case forever.
 # 30 minutes, NOT pipeline_automation.py's CLAIM_LEASE_MINUTES=10: this value has to
 # equal the TTL in the claim UPDATE in review-gate-task.md §0, and a real
