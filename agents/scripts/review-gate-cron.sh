@@ -33,6 +33,23 @@ LOG="${LOG:-$AGENT_HOME/logs/review-gate.log}"
 TASK="${TASK:-$AGENTS_REPO/agents/scripts/review-gate-task.md}"
 TIMEOUT_SECS=7200   # 2h hard cap
 
+# ── gate claim identity + stale-claim window (GATECLAIM-2, CASE-20260916-0C947B) ──
+# GATE_ID is derived ONCE here and exported so the Claude subprocess inherits the
+# SAME id that review-gate-task.md §0 stamps into pipeline_cases.claimed_by. The
+# task file must read it as "${GATE_ID:-...}" — if it re-derives its own id from
+# its own $$ the release below matches zero rows and every claim waits out the TTL.
+GATE_ID="review-gate-$(hostname -s)-$$"
+export GATE_ID
+
+# Stale-claim window. A gate that dies holding a claim must not park a case forever.
+# 30 minutes, NOT pipeline_automation.py's CLAIM_LEASE_MINUTES=10: this value has to
+# equal the TTL in the claim UPDATE in review-gate-task.md §0, and a real
+# single-branch review can exceed 10 minutes. A shorter window here than there would
+# let this pre-check count a case the claim UPDATE then refuses, which is the
+# empty-run it exists to prevent. Change both or neither.
+CLAIM_TTL_MINUTES=30
+export CLAIM_TTL_MINUTES
+
 mkdir -p "$AGENT_HOME/logs"
 exec >>"$LOG" 2>&1
 echo "=== review-gate run $(date -u +%FT%TZ) agents=$AGENTS_REPO platform=$PLATFORM_REPO ==="
@@ -76,7 +93,43 @@ fail_hold() {
 #     and no failure check at all, so a failed fetch silently continued against
 #     a stale agents checkout.
 STDERR_FILE="$(mktemp)"
-trap 'rm -f "$LOCK" "$STDERR_FILE"' EXIT
+
+# Release every pipeline_cases row this gate claimed. Runs from the EXIT trap so it
+# fires on the failure and timeout paths too, not just the happy one — review-gate-
+# task.md §0 asks Claude to release on exit, but a SIGKILL from the TIMEOUT_SECS cap
+# never reaches it.
+#
+# CLAUDE_LAUNCHED gates the call. Most runs exit at the empty-queue check having
+# claimed nothing, and only the Claude subprocess ever writes a claim — releasing on
+# those runs would spend a doppler invocation and a DB round trip per timer tick
+# (52 runs on agent-06 on 2026-09-16) to update zero rows.
+#
+# Failure is LOGGED, not swallowed. The release must not abort the trap or change the
+# run's exit code, but `|| true` plus an unconditional success line is a check whose
+# failure looks exactly like its success — the trap this file's own lessons name. A
+# failed release is not fatal (the claim expires after CLAIM_TTL_MINUTES) but it IS
+# the reason a case sat unreviewable for half an hour, so it has to be greppable.
+CLAUDE_LAUNCHED=0
+release_gate_claims() {
+  [ "$CLAUDE_LAUNCHED" = "1" ] || return 0
+  cd "$PLATFORM_REPO" 2>/dev/null || {
+    echo "WARN: gate claim release SKIPPED — $PLATFORM_REPO unreachable; claims for $GATE_ID expire after ${CLAIM_TTL_MINUTES}m"
+    return 0
+  }
+  local out rc
+  out=$(doppler run --project grotap --config prd -- \
+          python3 scripts/db.py \
+          "UPDATE pipeline_cases SET claimed_by=NULL, claimed_at=NULL, claim_label=NULL, updated_at=NOW() WHERE claimed_by='$GATE_ID'" 2>&1)
+  rc=$?
+  if [ "$rc" -eq 0 ]; then
+    # db.py prints the tag, e.g. "UPDATE 3" — log the row count, not just "done".
+    echo "gate claims released for $GATE_ID: $(printf '%s' "$out" | tail -1)"
+  else
+    echo "WARN: gate claim release FAILED rc=$rc for $GATE_ID — claims expire after ${CLAIM_TTL_MINUTES}m: $(printf '%s' "$out" | tail -2 | tr '\n' ' ' | cut -c1-300)"
+  fi
+  return 0
+}
+trap 'rm -f "$LOCK" "$STDERR_FILE"; release_gate_claims' EXIT
 
 sync_repo() {
   # $1 = repo path. Fetch ONLY master, then hard-reset onto it.
@@ -203,8 +256,14 @@ sync_with_retry "$PLATFORM_REPO" "grotap-platform" || exit 1
 # change_review PLUS awaiting_human cases parked at the orchestrator human gate
 # (latest dispatch row awaiting_review). db.py prints a header row then the value;
 # tail -1 extracts the count.
+#
+# GATECLAIM-2: the claim predicate belongs HERE as well as in the claim UPDATE.
+# Without it this count sees cases a peer gate already holds, the gate spawns a
+# Claude run costing a full model invocation, and that run correctly does nothing.
+# On 2026-09-16 that happened 10 times on agent-06 in 52 runs. The predicate must
+# stay byte-equivalent to the one in review-gate-task.md §0 or the two disagree.
 QUEUE=$(cd "$PLATFORM_REPO" && doppler run --project grotap --config prd -- \
-  python3 scripts/db.py "SELECT count(*) FROM (SELECT case_id FROM pipeline_cases WHERE status='change_review' UNION SELECT c.case_id FROM pipeline_cases c WHERE c.status='awaiting_human' AND EXISTS (SELECT 1 FROM pipeline_dispatch_log dl WHERE dl.case_id=c.case_id AND dl.status='awaiting_review')) q" \
+  python3 scripts/db.py "SELECT count(*) FROM (SELECT case_id FROM pipeline_cases WHERE status='change_review' AND (claimed_by IS NULL OR claimed_at IS NULL OR claimed_at < NOW() - INTERVAL '${CLAIM_TTL_MINUTES} minutes') UNION SELECT c.case_id FROM pipeline_cases c WHERE c.status='awaiting_human' AND (c.claimed_by IS NULL OR c.claimed_at IS NULL OR c.claimed_at < NOW() - INTERVAL '${CLAIM_TTL_MINUTES} minutes') AND EXISTS (SELECT 1 FROM pipeline_dispatch_log dl WHERE dl.case_id=c.case_id AND dl.status='awaiting_review')) q" \
   2>/dev/null | tail -1 || echo "?")
 echo "queue: $QUEUE reviewable cases (change_review + parked awaiting_review)"
 [[ "$QUEUE" =~ ^[0-9]+$ ]] || { echo "FATAL: QUEUE is non-numeric ('$QUEUE') — accessor broken"; exit 1; }
@@ -213,6 +272,10 @@ if [ "$QUEUE" = "0" ]; then echo "queue empty — nothing to do"; exit 0; fi
 # Run Claude with the standing task. Doppler injects DATABASE_URL etc. for the
 # psql/API calls the task makes. Bypass permissions: this box is a headless runner.
 cd "$PLATFORM_REPO"
+# From here on the Claude run may have claimed rows, so the EXIT trap must release
+# them. Set BEFORE the invocation, not after: the timeout SIGKILL is exactly the
+# path that needs the release, and it never returns to the next line.
+CLAUDE_LAUNCHED=1
 timeout "$TIMEOUT_SECS" doppler run --project grotap --config prd -- \
   claude -p "$(cat "$TASK")" \
     --permission-mode bypassPermissions \

@@ -11,12 +11,20 @@ atomically claim up to 15 cases. Work ONLY the case_ids the UPDATE returns — a
 not returned was already claimed by a peer gate; skip it entirely.
 
 ```bash
-# Unique identity for this run: hostname + PID
-GATE_ID="review-gate-$(hostname -s)-$$"
+# Unique identity for this run: hostname + PID.
+# GATECLAIM-2: PREFER the id review-gate-cron.sh exported. That script releases any
+# rows still holding this id from its EXIT trap, which is the only release that
+# survives the 2h timeout SIGKILL. Deriving a fresh id from this shell's own $$
+# instead would make the trap match zero rows. The fallback is for a manual run.
+GATE_ID="${GATE_ID:-review-gate-$(hostname -s)-$$}"
 
 # Atomic claim: skips cases held by another gate within the 30-minute TTL.
 # 30 minutes chosen because a real single-branch review takes <10 min and
 # a crashed gate must not park a case longer than two timer cycles (2 × 15 min).
+# This TTL is duplicated as CLAIM_TTL_MINUTES in review-gate-cron.sh, whose
+# empty-queue pre-check uses the same predicate. Change both or neither: if the
+# pre-check's window is SHORTER than this one it counts cases this UPDATE then
+# refuses, and the gate burns a whole Claude run discovering it has no work.
 CLAIMED_IDS=$(doppler run -- psql "$DATABASE_URL" -Atc "
 UPDATE pipeline_cases
 SET claimed_by  = '$GATE_ID',
