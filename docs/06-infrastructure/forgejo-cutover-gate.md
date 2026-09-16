@@ -53,8 +53,10 @@ and are never typed inline.
 
 ## Gate run of record — 2026-09-15, 23:20-23:34 UTC
 
-The full eight-item gate was executed read-only on 2026-09-15. Result: **NO-GO.** Two hard blockers
-fail and two further items do not read clean.
+The full eight-item gate was executed read-only on 2026-09-15. Result at the time of the run: **NO-GO** — two hard
+blockers failing and two further items not clean. **Item 6 has since passed** (2026-09-16 04:26Z, see
+below) and item 8's edge control has since been resolved by enabling Cloudflare Access. Item 7 remains
+the outstanding hard blocker, and the canary-first sequencing below has not started.
 
 | # | Item | Result | Evidence |
 |---|---|---|---|
@@ -63,7 +65,7 @@ fail and two further items do not read clean.
 | 3 | Canary Actions run | **PASS** | Run 3 `success`, created 2026-09-15T18:20:24Z, head_sha `cbf4848b1`, within the 24 h window. |
 | 4 | Runner fleet | **PASS** | Five `action_runner` rows, all 1-2 s stale; all five hosts `active`; ceilings exact — agent-02..05 `CPUQuotaPerSecUSec=2s` / `MemoryMax=2147483648`, agent-06 `3s` / `4294967296`. |
 | 5 | Webhook HMAC | **PASS** | `signed 202`, `tampered 401 {"detail":"Invalid signature"}`, `health 200 {"ok":true,"configured":true}`. |
-| 6 | Backup | **FAIL — hard blocker** | See below. |
+| 6 | Backup | **PASS** (2026-09-16 04:26Z) | Unattended timer fire: `OK forge-01/2026/09/forge-20260916T042632Z.zip size=143068543`, 3 s, exit 0, no human in the loop. See below. |
 | 7 | Shared fleet key retired | **FAIL — hard blocker** | Shared pubkey still present in `authorized_keys` on all six hosts (counts 2/2/2/2/2/1, none zero); private key still on agent-06 (2 copies) and agent-04 (1). `health-monitor.sh:64` and `SERVERS.md:92` still name it; three `fleet key` prose rows remain at SERVERS.md 78/81/82. |
 | 8 | Edge control | **PARTIAL** | Workstation curl returns 200, the expected pre-Zero-Trust allow-list state. Zero Trust could NOT be verified: see the token finding below. |
 
@@ -372,12 +374,28 @@ independently re-listed:
 | 23:53:18Z | 34 | `forge-01/.permission-check-20260915T2352Z.txt` — policy proof object, root-key-deletable only |
 | 23:55:12Z | 142,521,928 | `forge-01/2026/09/forge-20260915T235510Z.zip` — **first real upload through the scoped key** (3 s elapsed, `local_kept=2`) |
 
-**The item still FAILS, for exactly one reason: that upload was hand-run.** The pass condition is an
-*unattended* run — the timer firing on its own schedule and landing an object with no human in the
-loop. Next fire is 2026-09-16 04:22:20 UTC. Do not read "the env file is wired and a 142 MB archive
-uploaded" as this item passing, and equally do not read this item's FAIL as "the placeholder is still
-there" — that was true earlier on 2026-09-15 and is no longer true. The honest one-line status is
-**wiring proven, awaiting an unattended run.**
+**PASSED 2026-09-16 04:26:32Z — the timer fired unattended and succeeded:**
+
+```
+Sep 16 04:26:32 forge-01 systemd[1]: Starting forge-backup.service...
+Sep 16 04:26:35 forge-01 forge-backup.sh[17704]: OK forge-01/2026/09/forge-20260916T042632Z.zip size=143068543
+Sep 16 04:26:35 forge-01 systemd[1]: forge-backup.service: Deactivated successfully.
+```
+
+Three seconds, 143,068,543 bytes, exit 0, no human in the loop. Next fire 2026-09-17 04:27:14 UTC.
+That is the run that counts: the 18:20 attempt on the 15th failed on the placeholder and the 23:55 one
+was hand-triggered. **Both axes of this item are now satisfied** — a restore proven from Wasabi onto a
+scratch host with `git fsck` clean, and a scheduled archive that runs and uploads on its own.
+
+It also fired while agent-02 and agent-03 were running live agent work with CI runners up on all five
+boxes, so the backup window and the fleet's working hours demonstrably overlap without contention.
+One data point, not a stress test.
+
+**Do not let this close the wrong thing.** The canary-first sequencing below separately requires that
+a backup *taken inside the 14-day boring window* be restored and verified. This archive was taken
+before that window starts, so it does not satisfy that clause — and the distinction is the same
+"proven once is not proven ongoing" trap that the hand-triggered run already sprang once in this
+document.
 
 **Pass:** the restore record above stands (satisfied), **and** the nightly has run unattended and
 uploaded on its own schedule at least once — that is, the placeholder is gone and a timer-fired run
@@ -549,6 +567,51 @@ failure mode this whole exercise exists to remove. Note agent-05's hostname answ
 and deploy the orchestrator branch, deploy the repointed fleet scripts, then prove every box and
 every cron works with the shared key already unused. Both deploys are deliberately held for a quiet
 window — the assign loop is back on at `max_inflight=14`.
+
+#### Three findings from an independent sweep that change the retirement plan
+
+A second, independent read-only sweep of both repos and the workstation `~/.ssh/config` on
+2026-09-16 turned up three things the earlier survey missed. All three would have produced a green
+verification followed by a broken fleet.
+
+**1. A script re-plants the shared private key.** `agents/scripts/setup-agent06.sh` (lines 7-9, 28-29,
+61) `scp`s `~/.ssh/grotap_agents` onto agent-06 as `/home/agent/.ssh/grotap_agents`. Run it after the
+retirement and the key is back. It must change in the SAME commit that deletes the key, or it is a
+loaded gun pointed at the whole exercise.
+
+**2. Seven more hosts depend on the shared key and have no per-host key at all.** The count of
+"nine remaining hosts" was itself incomplete. Also on `grotap_agents` with nothing else:
+`agent-01` (5.161.189.143), `agent-07` (89.167.66.105), `agent-08` (77.42.42.213),
+`agent-09` (46.62.184.50), `agent-10` (46.62.184.52), `agent-11` (46.62.184.51), and
+`claudecode` (`claudecode.grotap.com`, user `user1`). Whether each is live must be established before
+deletion, not assumed from its absence in `SERVERS.md`.
+
+**3. Two catch-all IP-glob blocks in the workstation `~/.ssh/config` route bare-IP connections to the
+shared key**, both with `StrictHostKeyChecking no`:
+
+```
+Host 5.161.189.143 77.42.42.213                      (User agent)
+Host 5.161.74.39 5.161.81.193 178.156.222.220 5.161.73.195 5.78.178.81      89.167.66.105 46.62.184.50 46.62.184.51 46.62.184.52   (User root)
+```
+
+The second lists **all five `FLEET_HOSTS` IPs**. This is the subtle one: the per-host `Host` blocks are
+keyed by NAME, but `dispatch.sh` and its siblings connect by bare IP after team routing rewrites
+`SERVER_IP`. So a script that "correctly" drops its `-i` flag and relies on ssh config does not get a
+per-host key — it falls past the name blocks onto the glob and gets the shared key. Everything keeps
+working until the key is deleted, then fails at once, and a name-based verification sweep passes
+beforehand. **The resolver must map IP to host to key explicitly, and the sweep must test a bare-IP
+call, not only a named one.** Delete these globs in the same change as the key: not before, since they
+are today's working fallback, and not after, since they would keep a dead path alive and mask which
+scripts are still wrong.
+
+Two smaller notes from the same sweep. `agents/scripts/fleet-load.sh:118-126` is the only script
+already per-host aware (`key_for()` prefers `$SSH_KEY_DIR/grotap_$1`) — its fallback becomes dead code,
+not a breakage. And `scripts/verify_slot_health.py:129,140-143` reads the base64 secret and writes a
+temporary key file, so it follows the orchestrator's secret rather than any file on disk.
+
+**A repo grep cannot see the crontab.** agent-06's cron lines exist in neither repo — only the scripts
+do. Any `SSH_KEY=` override asserted in a cron line is invisible to a file survey and must be read off
+the box with `crontab -l`, `crontab -l -u agent` and `systemctl list-timers`.
 
 Once that work is done, the gate itself is a sweep of every box:
 
