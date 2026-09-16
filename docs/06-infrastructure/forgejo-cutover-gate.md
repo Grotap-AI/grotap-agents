@@ -227,8 +227,13 @@ nothing on its own; only item 1 decides.
 **A cheaper tell, and one that doesn't lie the way `mirror_updated` does:** check `next_update_unix`
 against `now()` directly. At 18:14:48 the three broken repos had `next_update_unix` sitting in the
 past — `16:42:00`–`16:42:05`, frozen since their last successful cycle — while the healthy public
-repo showed `18:24:48`, correctly scheduled ten minutes forward. A mirror whose `next_update_unix` is
-behind `now()` is stuck, no matter how fresh `updated_unix` looks.
+repo showed `18:24:48`, correctly scheduled ten minutes forward. A mirror whose `next_update_unix` is behind `now()` is **overdue**, which is necessary but not
+sufficient evidence of a stall. Measured 2026-09-16: three repos read `next_update_unix` ~10
+minutes in the past with zero sync failures in the log, then synced normally on the next pass —
+the scheduler was simply late, not broken. **Stuck means the value does not advance across two
+readings a full interval apart, or the log carries a `SyncMirrors ... failed` line.** One overdue
+reading on its own is jitter; treating it as a fault produces the opposite error to the one this
+check exists to prevent.
 
 ```sql
 SELECT repo_id, datetime(updated_unix,'unixepoch'), datetime(next_update_unix,'unixepoch') FROM mirror;
