@@ -400,7 +400,11 @@ A full sweep of every cron, systemd timer and repository reference was run on 20
 that the four bullets above are a subset, not the whole job, and that **the largest dependency is not
 on the fleet boxes at all — it is the production orchestrator on Railway.**
 
-**agent-06 is the only box whose scheduled jobs SSH to other boxes.** agent-04 merely holds the
+**agent-06 is the only box whose scheduled jobs SSH to other boxes**, and its two most frequent jobs
+run under **root's** crontab, not `agent`'s — `health-monitor.sh` and `update-fleet-cli.sh` are
+invoked directly as root, while `reconcile_dispatch.py` runs `sudo -u agent`. All three connect as
+`root@<target>`. Any key migration therefore has to cover both source users on agent-06, not just
+`agent`. agent-04 merely holds the
 private key at rest; nothing scheduled on it uses the key. agent-02, agent-03 and agent-05 hold no
 private key at all and never originate SSH. agent-04's `root` has no private key either — only
 `agent` does. So the cron work is confined to one box, and it is these four jobs:
@@ -419,14 +423,19 @@ the shared key without changing this takes production pipeline dispatch down com
 `/dispatch` call fails. This must be solved and smoke-tested before any `authorized_keys` is touched.
 `orchestrator/src/ssh.ts:3` and `orchestrator/src/config/failure-classes.ts:118` also name the key.
 
-**Ten hosts have no per-host key at all.** The per-host keys minted on 2026-09-15 cover only
+**Nine further hosts have no per-host key at all, and all nine are live.** The per-host keys minted on 2026-09-15 cover only
 `agent-02..06` and `forge-01`, and they exist **only on the workstation**. Neither agent-06 nor
 agent-04 holds a copy of any of them, and agent-06's own `~/.ssh/config` has no fleet `Host` blocks
 — just a GitHub deploy-key block — so its scripts fall through to the hardcoded shared path with no
 alternative available. Meanwhile `agent-20`/`21` (Team 2), `agent-30`/`31` (Team 3), `agent-40`/`41`
 (Team 4), `GEX131`/`llm-gpu-02`, `maps-01` and `claudecode-01` are reached today only through the
 workstation `~/.ssh/config`'s catch-all IP-glob blocks, which route them all at `grotap_agents`.
-Retiring the key without minting keys for these ten removes all SSH access to them.
+Retiring the key without minting keys for these nine removes all SSH access to them. A sweep on
+2026-09-16 confirmed **all nine are reachable and all nine carry the shared key in `root`'s
+`authorized_keys`** — none is decommissioned, so none can be skipped:
+`agent-20` 87.99.148.22, `agent-21` 5.161.243.18, `agent-30` 167.233.59.142,
+`agent-31` 167.233.194.57, `agent-40` 178.156.219.232, `agent-41` 178.156.220.48,
+`GEX131`/`llm-gpu-02` 178.63.124.99, `maps-01` 5.161.107.80, `claudecode-01` 178.156.209.112.
 
 **Thirteen workstation scripts each duplicate the same fallback line** — `agents/dispatch.sh:30`
 plus `install-dispatcher.sh:22`, `config.sh:6`, `watchdog.sh:19`, `monitor.sh:3`,
@@ -447,6 +456,19 @@ The ~20 remaining hits are historical narrative in docs and case files.
 dispatch (total loss), agent-06's 5-minute health monitor, the daily fleet CLI update, the 10-minute
 dispatch reconciler, the OpenReplay backup leg, every manual `dispatch.sh` invocation from the
 workstation, `status-server.js` on port 7654, and all SSH access to the ten hosts listed above.
+
+#### Phase 1 complete — 2026-09-16 04:01Z, additive only
+
+New ed25519 pairs were generated **on agent-06 itself** (a private key is never transported) for each
+of its four SSH targets, for both source users: `/home/agent/.ssh/grotap_from06_agent-0{2,3,4,5}` and
+`/root/.ssh/grotap_from06_agent-0{2,3,4,5}`. Public halves were appended to `/root/.ssh/authorized_keys`
+and `/home/agent/.ssh/authorized_keys` on agent-02..05, and `Host agent-02..05` blocks with
+`IdentitiesOnly yes` were appended to both of agent-06's `~/.ssh/config` files, preserving the existing
+`github-reports` deploy-key block. Every file modified was backed up as `*.bak-20260916T040148Z`.
+
+All eight new keys were login-proven (`rc=0`, correct `hostname`/`whoami` as root on each target), and
+the shared key was re-proven working from both source users to all four targets afterwards. **Nothing
+was removed and sshd was not touched on any host.** The shared key remains live everywhere.
 
 Once that work is done, the gate itself is a sweep of every box:
 
