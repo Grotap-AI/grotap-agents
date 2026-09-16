@@ -67,18 +67,20 @@ fi
 SHARED_KEY="$HOME/.ssh/grotap_agents"
 
 # --- IP -> canonical fleet host name (see header comment) -------------------
+# Only the team1 boxes (agent-02..06) are listed: they are the only targets
+# that have per-host keys today. The team2/3/4/5 boxes deliberately have NO
+# rows — no per-host key pair has been provisioned for them, so a row would
+# resolve to a key path that does not exist and fall through to the shared
+# key anyway, while implying the opposite. Add a row at the same time as the
+# key, never before. (agent-21 / agent-31 / agent-41 were deleted from
+# Hetzner on 2026-09-16 and must never come back here; agent-20 / agent-30 /
+# agent-40 are live but still shared-key.)
 declare -A _SSH_KEY_FOR_HOST_BY_IP=(
   ["5.161.74.39"]="agent-02"
   ["5.161.81.193"]="agent-03"
   ["178.156.222.220"]="agent-04"
   ["5.161.73.195"]="agent-05"
   ["5.78.178.81"]="agent-06"
-  ["87.99.148.22"]="agent-20"
-  ["5.161.243.18"]="agent-21"
-  ["167.233.59.142"]="agent-30"
-  ["167.233.194.57"]="agent-31"
-  ["178.156.219.232"]="agent-40"
-  ["178.156.220.48"]="agent-41"
 )
 
 canon="$TARGET"
