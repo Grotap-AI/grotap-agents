@@ -56,12 +56,20 @@ AGENTS=(
   "agent-06:5.78.178.81"
 )
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 for ENTRY in "${AGENTS[@]}"; do
   NAME="${ENTRY%%:*}"
   IP="${ENTRY##*:}"
   FAIL_FILE="$STATE_DIR/fail_count_$NAME"
 
-  if ssh -i /home/agent/.ssh/grotap_agents -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o BatchMode=yes "root@$IP" "echo ok" >/dev/null 2>&1; then
+  # Per-host key when this OS user (root, via root's crontab) has one on THIS
+  # box (agent-06); falls back to the shared fleet key otherwise. $HOME here
+  # is root's — the resolver reads it internally, so root and agent (via
+  # sudo -u agent) get the right key from the same call. See ssh-key-for.sh.
+  SSH_KEY_FOR_TARGET="$(bash "$SCRIPT_DIR/ssh-key-for.sh" "$NAME" 2>/dev/null || echo "$HOME/.ssh/grotap_agents")"
+
+  if ssh -i "$SSH_KEY_FOR_TARGET" -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o BatchMode=yes "root@$IP" "echo ok" >/dev/null 2>&1; then
     echo "0" > "$FAIL_FILE"
   else
     PREV=$(cat "$FAIL_FILE" 2>/dev/null || echo "0")
