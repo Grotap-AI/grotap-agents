@@ -25,6 +25,25 @@ runs from:
 | **A fleet box (agent-02..06) or forge-01 itself, HTTPS to the forge** | None extra | A Bypass policy admits the five worker IPv4/IPv6 addresses and forge-01 on **every path**, not only `/api/actions` — this covers runner clone/checkout traffic (`/Grotap-AI/<repo>`, `git-upload-pack`) as well as the runner protocol. Confirm this is still true before relying on it; it is an edge policy someone else can change. |
 | **Any caller, git-over-SSH** | None — SSH is unaffected regardless of caller | `forge-ssh.grotap.com:2222` is an **unproxied** DNS record. Cloudflare's proxy cannot carry the SSH transport, so Access — which only sits at Cloudflare's edge — never sees this traffic. It is protected solely by the Hetzner firewall `forge-fw` and Forgejo's own SSH key auth. |
 
+> **CORRECTION, measured 2026-09-16 — do not plan the round-trip test around SSH.** Git over SSH to
+> the forge is indeed untouched by Cloudflare Access, but it **does not currently work**: no user SSH
+> key is registered on the Forgejo account, so `forge-ssh.grotap.com:2222` refuses the connection.
+> "Access cannot see it" and "it works" are different claims and this document previously conflated
+> them. Either register a key on the Forgejo account first, or do the round-trip over HTTPS using the
+> header form below.
+>
+> **Git over HTTPS to the forge needs the Access headers too, and fails SILENTLY without them.**
+> A `git push` without them reports success and lands nothing — proven by a canary push that never
+> arrived while the command exited 0. Pass them explicitly:
+>
+> ```bash
+> git -c http.extraHeader="CF-Access-Client-Id: $FORGE_CF_ACCESS_CLIENT_ID" >     -c http.extraHeader="CF-Access-Client-Secret: $FORGE_CF_ACCESS_CLIENT_SECRET" >     push origin master
+> ```
+>
+> The same silent-success trap applies to `curl -sf` against the forge API: **`-f` fails on 4xx/5xx
+> only, not on the 302** that Access returns, so curl exits 0 with empty output and any `json.load`
+> pipe downstream sees nothing. A check written that way stops checking without appearing to.
+
 This document's own command blocks were run from the workstation and include the two `CF-Access-*`
 headers throughout. If a fleet box runs the same commands later, those two headers are harmless but
 unnecessary.
@@ -365,7 +384,7 @@ it is ever asked to move real content.
 This is the step that actually tests the reversed direction, not just the wiring:
 
 ```bash
-# push a trivial commit to the forge over SSH (unaffected by CF Access — see §0)
+# NOTE — read the SSH caveat below before running this. As of 2026-09-16 this clone FAILS.
 git clone ssh://git@forge-ssh.grotap.com:2222/Grotap-AI/grotap-platform-docs.git /tmp/docs-canary-test
 cd /tmp/docs-canary-test
 echo "push-mirror canary test $(date -u +%FT%TZ)" >> PUSH_MIRROR_CANARY.md
