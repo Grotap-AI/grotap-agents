@@ -105,6 +105,120 @@ HELPER
   fi
 }
 
+# ── Bootstrap pin (P1-B) ─────────────────────────────────────────────────────
+# ~/grotap-agents is reset --hard to origin/master on every run and THIS FILE is
+# executed from it, so whatever is on that branch runs as the agent user on every
+# fleet host. It was taken on trust. agents/BOOTSTRAP_SHA records a blessed
+# commit and this checks against it.
+#
+# SELF-REFERENCE. The pin file lives in the repo it pins, so an exact pin can
+# never be written: the commit that records a SHA cannot contain its own SHA.
+# Hence two enforcing modes, and the default is the one that survives normal
+# development:
+#
+#   ORCH_BOOTSTRAP_PIN=ancestor  (DEFAULT) — the target commit must BE the pin
+#     or a DESCENDANT of it. Catches a force-push, a history rewrite, a reset to
+#     an unrelated tree, or a remote swapped for a different repo. Does NOT catch
+#     a malicious commit appended on top of master by someone who already has
+#     push access — say so out loud rather than calling this "the repo is
+#     verified". Rotating the pin forward is what shrinks that window.
+#   ORCH_BOOTSTRAP_PIN=exact — the target must equal the pin exactly. Full
+#     control, and it stops the fleet the moment grotap-agents master moves until
+#     the pin is rotated. Use it for a lockdown window, not as a steady state.
+#   ORCH_BOOTSTRAP_PIN=off — no check, loud warning. Emergency bypass.
+#
+# Absent or malformed pin file on a host that has NEVER verified a pin => loud
+# warning and continue, NOT a brick: this file reaches hosts by the very
+# self-sync it is guarding, so a host can be running a copy of the script that is
+# newer than its copy of the pin file.
+# Absent or malformed on a host that HAS verified one before => hard FAIL. The
+# difference is $HOME/.grotap_bootstrap_pin_seen, stamped on every successful
+# verify and living outside the git tree so a push cannot clear it. Without that
+# distinction, one ordinary commit deleting agents/BOOTSTRAP_SHA would switch
+# rewrite detection off permanently, for every actor, with nothing louder than a
+# log line — turning "we cannot catch one malicious append" into "one malicious
+# append disables the control".
+BOOTSTRAP_PIN_FAIL=""
+verify_bootstrap_pin() {
+  local mode target pinned
+  mode="$(printf '%s' "${ORCH_BOOTSTRAP_PIN:-ancestor}" | tr '[:upper:]' '[:lower:]')"
+  if [ "$mode" = "off" ] || [ "$mode" = "0" ] || [ "$mode" = "false" ] || [ "$mode" = "no" ]; then
+    log "WARNING: bootstrap pin DISABLED (ORCH_BOOTSTRAP_PIN=$mode) — ~/grotap-agents is UNVERIFIED"
+    return 0
+  fi
+
+  # The pin lives INSIDE the repo it pins, so anyone with ordinary push access
+  # can delete or corrupt it with one legitimate commit. `ancestor` mode passes
+  # that commit — a disclosed gap — but the side effect is far larger than the
+  # gap itself: every SUBSEQUENT run would see "no pin file", warn, and proceed,
+  # so one append would permanently switch rewrite detection off for every actor
+  # thereafter. The seen-marker lives OUTSIDE the git tree, where a push cannot
+  # reach it, and turns that into a fail-closed error. A genuinely fresh host has
+  # no marker and keeps the deliberate fail-open, so this does not brick a box
+  # whose script is newer than its pin file.
+  local pin_file="$HOME/grotap-agents/agents/BOOTSTRAP_SHA"
+  local seen_marker="$HOME/.grotap_bootstrap_pin_seen"
+  if [ ! -f "$pin_file" ]; then
+    if [ -f "$seen_marker" ]; then
+      BOOTSTRAP_PIN_FAIL="bootstrap pin WENT MISSING: $pin_file is absent but this host has verified a pin before ($seen_marker). A commit deleted the pin file — that disables rewrite detection for every later run, so this is refused rather than warned. Restore agents/BOOTSTRAP_SHA, or set ORCH_BOOTSTRAP_PIN=off deliberately."
+      log "ERROR: $BOOTSTRAP_PIN_FAIL"
+      return 1
+    fi
+    log "WARNING: no $pin_file — bootstrap tree UNPINNED (P1-B still open on this host)"
+    return 0
+  fi
+  pinned="$(grep -oE '^[0-9a-f]{40}$' "$pin_file" 2>/dev/null | head -1)"
+  if [ -z "$pinned" ]; then
+    if [ -f "$seen_marker" ]; then
+      BOOTSTRAP_PIN_FAIL="bootstrap pin CORRUPT: $pin_file holds no bare 40-hex SHA, but this host has verified a pin before ($seen_marker). Treated as tampering, not as a fresh host. Restore agents/BOOTSTRAP_SHA, or set ORCH_BOOTSTRAP_PIN=off deliberately."
+      log "ERROR: $BOOTSTRAP_PIN_FAIL"
+      return 1
+    fi
+    log "WARNING: $pin_file holds no bare 40-hex SHA — bootstrap tree UNPINNED"
+    return 0
+  fi
+
+  # What we are about to trust: the fetched remote tip when the fetch worked,
+  # otherwise whatever is already checked out.
+  if [ "${_BS_FETCH_OK:-1}" = "1" ]; then
+    target="$(git -C "$HOME/grotap-agents" rev-parse origin/master 2>/dev/null || echo "")"
+  else
+    target="$(git -C "$HOME/grotap-agents" rev-parse HEAD 2>/dev/null || echo "")"
+  fi
+  if [ -z "$target" ]; then
+    BOOTSTRAP_PIN_FAIL="bootstrap pin: cannot resolve a commit to verify in ~/grotap-agents"
+    log "ERROR: $BOOTSTRAP_PIN_FAIL"
+    return 1
+  fi
+
+  if [ "$target" = "$pinned" ]; then
+    log "Bootstrap tree VERIFIED at pinned $pinned (mode=$mode)"
+    : > "$seen_marker" 2>/dev/null || true
+    return 0
+  fi
+
+  if [ "$mode" = "exact" ]; then
+    BOOTSTRAP_PIN_FAIL="bootstrap pin MISMATCH (exact): ~/grotap-agents is at $target, agents/BOOTSTRAP_SHA pins $pinned. Rotate the pin or set ORCH_BOOTSTRAP_PIN=ancestor."
+    log "ERROR: $BOOTSTRAP_PIN_FAIL"
+    return 1
+  fi
+
+  # ancestor mode
+  if ! git -C "$HOME/grotap-agents" cat-file -e "${pinned}^{commit}" 2>/dev/null; then
+    BOOTSTRAP_PIN_FAIL="bootstrap pin: pinned commit $pinned does not exist in ~/grotap-agents — the history was rewritten, or the remote is not the repo this pin was taken from."
+    log "ERROR: $BOOTSTRAP_PIN_FAIL"
+    return 1
+  fi
+  if git -C "$HOME/grotap-agents" merge-base --is-ancestor "$pinned" "$target" 2>/dev/null; then
+    log "Bootstrap tree OK: $target descends from pinned $pinned (mode=ancestor)"
+    : > "$seen_marker" 2>/dev/null || true
+    return 0
+  fi
+  BOOTSTRAP_PIN_FAIL="bootstrap pin BROKEN: $target does not descend from pinned $pinned — force-push or history rewrite on grotap-agents master. Refusing to reset --hard onto it. Rotate agents/BOOTSTRAP_SHA only after reading what changed; ORCH_BOOTSTRAP_PIN=off is the emergency bypass."
+  log "ERROR: $BOOTSTRAP_PIN_FAIL"
+  return 1
+}
+
 # ── Ensure platform repo exists and is current ───────────────────────────────
 ensure_repo() {
   ensure_git_auth
@@ -114,11 +228,26 @@ ensure_repo() {
   # already-fixed stale-lease bug). git swaps the file by rename, so the running bash keeps
   # the old inode; the NEXT run gets the update. Local-only commits are parked on a
   # backup branch, never discarded.
+  _BS_FETCH_OK=1
   if git -C "$HOME/grotap-agents" fetch origin +refs/heads/master:refs/remotes/origin/master -q >> "$LOG" 2>&1; then
+    # ── P1-B: verify the incoming bootstrap tree BEFORE reset --hard puts it
+    # on disk. This is not prompt hygiene: the next run executes this very
+    # file out of ~/grotap-agents, so an unverified reset --hard is remote
+    # code execution on every fleet host, one run later.
+    if ! verify_bootstrap_pin; then
+      return 1
+    fi
     if [ -n "$(git -C "$HOME/grotap-agents" log --oneline origin/master..HEAD 2>/dev/null)" ]; then
       git -C "$HOME/grotap-agents" branch -f "backup/local-$(date -u +%Y%m%d-%H%M%S)" HEAD >> "$LOG" 2>&1 || true
     fi
     git -C "$HOME/grotap-agents" reset --hard origin/master -q >> "$LOG" 2>&1 || true
+  else
+    # Fetch failed: nothing new lands, but the tree on disk still executes, so
+    # it is still checked — against HEAD rather than the unavailable remote.
+    _BS_FETCH_OK=0
+    if ! verify_bootstrap_pin; then
+      return 1
+    fi
   fi
   if [ ! -d "$PLATFORM_DIR/.git" ]; then
     log "Cloning grotap-platform..."
@@ -133,7 +262,11 @@ ensure_repo() {
 if [ "${1:-}" = "--merge" ]; then
   BRANCH="$(printf '%s' "$PAYLOAD" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("branch",""))')"
   repo_lock  # held until exit — merge mode checkouts/pulls the shared clone directly
-  ensure_repo || { echo '{"merged": false, "error": "repo unavailable"}'; exit 1; }
+  ensure_repo || { python3 -c '
+import json, sys
+print(json.dumps({"merged": False,
+                  "error": sys.argv[1] or "repo unavailable"}))
+' "${BOOTSTRAP_PIN_FAIL:-}"; exit 1; }
   # ensure_repo fetches ONLY master, so on any host that didn't execute this
   # case origin/$BRANCH is missing (or stale) and the merge fails — which the
   # catch-all below used to misreport as "merge conflict". Fetch the branch
@@ -182,7 +315,7 @@ print("PRIOR_ERRORS=" + shlex.quote("\n---\n".join(d.get("prior_errors") or []))
 log "=== Execute case=$CASE_ID branch=$BRANCH attempt=$ATTEMPT ==="
 
 repo_lock
-ensure_repo || emit "failed" "$BRANCH" 1 "Platform repo unavailable" "Could not clone/fetch grotap-platform" 0
+ensure_repo || emit "failed" "$BRANCH" 1 "${BOOTSTRAP_PIN_FAIL:-Platform repo unavailable}" "${BOOTSTRAP_PIN_FAIL:+Bootstrap pin check failed}${BOOTSTRAP_PIN_FAIL:-Could not clone/fetch grotap-platform}" 0
 
 # Worktree GC + inode guard (fleet incident 2026-07-08: hundreds of stale
 # done-case worktrees, each carrying a node_modules, exhausted inodes on
@@ -335,14 +468,62 @@ $RETRY_BLOCK
 #   CLAUDE_PERMISSION_MODE=bypass       (default) — current behavior (skip perms)
 #   CLAUDE_PERMISSION_MODE=acceptEdits            — enforce allow/deny policy
 #   CLAUDE_PERMISSION_MODE=dontAsk                — strict fail-closed (deny, no prompt)
+#
+# ── What the two enforcing modes ACTUALLY do (measured 2026-09-15, claude CLI
+#    2.1.273, against this exact policy file — not inferred) ─────────────────
+#   acceptEdits : the `allow` list is NOT a reliable whitelist for Bash.
+#                 `rm -rf dist` is in neither `allow` nor `deny`, and RAN — no
+#                 prompt, no denial. But do NOT generalise that to "acceptEdits
+#                 enforces nothing": `dd if=/dev/zero of=...` and `tar -cf ...`,
+#                 equally unlisted, were DENIED under the same mode. So the CLI
+#                 appears to carry an internal, undocumented carve-out for
+#                 certain commands (at least `rm`, and `hostname`) rather than a
+#                 general absence of enforcement. What is safe to rely on:
+#                 `deny` always bites, and an unlisted command MAY run. Treat
+#                 acceptEdits as "bypass minus the deny list, plus an
+#                 unspecified extra" — not as a whitelist.
+#                 Externally-reaching tools are still gated: WebFetch denied.
+#                 Unexplained rather than assumed absent: `hostname` ran
+#                 unprompted even under dontAsk, which looks like a separate
+#                 inert-command carve-out. Nobody has read the CLI source for
+#                 either carve-out; both are black-box observations.
+#   dontAsk     : the `allow` list IS a whitelist. The same `rm -rf dist2` was
+#                 DENIED in 7 seconds, recorded in permission_denials, directory
+#                 left in place.
+#   NEITHER MODE HUNG. The header's warning below about a headless prompt
+#   hanging a slot until the SSH timeout did not reproduce on this CLI version;
+#   denials came back clean and fast in both modes. That lowers the cost of
+#   flipping the env — but agents/setup-server.sh installs @anthropic-ai/
+#   claude-code UNPINNED, so re-measure against the version actually on the box
+#   before trusting it fleet-wide.
+#
+# ── What this policy cannot do, stated plainly ──────────────────────────────
+# `Bash(python3 *)` and `Bash(node *)` are in `allow` and are REQUIRED (the
+# prompt above tells the agent to run python3 -m py_compile; npm/npx run
+# arbitrary package scripts). An interpreter is a general-purpose file-read and
+# process-spawn primitive, so the allow list is not a containment boundary.
+# Measured: `node -e "...readFileSync(...)"` ran with permission_denials EMPTY.
+# The same prompt aimed at .env was refused — but by the MODEL, not the policy,
+# and model judgment is not a control. What the deny list does buy is real and
+# worth keeping: the direct network-egress verbs and the obvious secret paths
+# are blocked, including via head/grep/sed/awk (all four were denied against a
+# canary .env — the engine matches the path, not just the verb).
+# Do NOT add Bash(bash *), Bash(sh *), Bash(xargs *), Bash(timeout *) or
+# Bash(tar *) to `allow`: each is a launcher that would void the list wholesale.
 PERM_MODE="${CLAUDE_PERMISSION_MODE:-bypass}"
 SETTINGS_FILE="$HOME/.config/orchestrator/claude-settings.json"
 mkdir -p "$(dirname "$SETTINGS_FILE")"
-cat > "$SETTINGS_FILE" <<'JSON'
+# Atomic write. Up to 3 slots share this box and this path is FIXED, so a plain
+# `cat >` truncate-in-place lets a peer read a half-written file — and `claude
+# -p` SILENTLY IGNORES a settings file that fails validation (documented in
+# `claude --help`), i.e. the policy would vanish with no error. The trust stamp
+# for ~/.claude.json above takes the same precaution for the same reason.
+_SETTINGS_TMP="${SETTINGS_FILE}.$$.tmp"
+cat > "$_SETTINGS_TMP" <<'JSON'
 {
   "permissions": {
     "allow": [
-      "Read", "Edit", "Write",
+      "Read", "Edit", "Write", "Glob", "Grep",
       "Bash(git *)",
       "Bash(npm *)", "Bash(npx *)", "Bash(pnpm *)", "Bash(yarn *)", "Bash(node *)",
       "Bash(python *)", "Bash(python3 *)", "Bash(pip *)", "Bash(pip3 *)",
@@ -353,7 +534,10 @@ cat > "$SETTINGS_FILE" <<'JSON'
       "Bash(sort *)", "Bash(uniq *)", "Bash(diff *)",
       "Bash(mkdir *)", "Bash(cp *)", "Bash(mv *)", "Bash(touch *)",
       "Bash(echo *)", "Bash(sed *)", "Bash(awk *)",
-      "Bash(cd *)", "Bash(pwd)", "Bash(test *)", "Bash(env)"
+      "Bash(cd *)", "Bash(pwd)", "Bash(test *)", "Bash(env)",
+      "Bash(rm *)", "Bash(printf *)", "Bash(tee *)", "Bash(which *)",
+      "Bash(date *)", "Bash(tr *)", "Bash(cut *)",
+      "Bash(basename *)", "Bash(dirname *)", "Bash(chmod *)", "Bash(true)"
     ],
     "deny": [
       "Bash(curl *)", "Bash(wget *)",
@@ -364,11 +548,15 @@ cat > "$SETTINGS_FILE" <<'JSON'
       "Bash(cat ~/.ssh/*)", "Bash(cat ~/.aws/*)",
       "Read(.env)", "Read(.env.*)", "Read(**/.env)", "Read(**/.env.*)",
       "Read(~/.ssh/**)", "Read(~/.aws/**)", "Read(~/.config/doppler/**)",
-      "Read(**/id_rsa*)", "Read(**/*.pem)"
+      "Read(**/id_rsa*)", "Read(**/*.pem)",
+      "WebFetch", "WebSearch",
+      "Bash(git push origin master)", "Bash(git push origin main)",
+      "Bash(git push --force *)", "Bash(git push -f *)"
     ]
   }
 }
 JSON
+mv -f "$_SETTINGS_TMP" "$SETTINGS_FILE"
 
 # ── Model selection by complexity (cost control — #5) ────────────────────────
 # Default the heavy coding model to the task's complexity tier; override with
@@ -384,14 +572,35 @@ case "$COMPLEXITY" in
 esac
 
 # ── Run Claude CLI headless ──────────────────────────────────────────────────
+# Secret narrowing rides the SAME env gate as the permission policy — no second
+# flag. On bypass the invocation below is byte-identical to what it always was.
+#
+# This script is NOT run under `doppler run --` (see the CODING_MODEL comment
+# above, which is load-bearing: a Doppler value is not in this environment). So
+# there is no whole-config injection to undo here. What the agent DOES inherit
+# is everything ~/.env, ~/.profile and ~/.bashrc export — they are sourced with
+# `set -a` at the top of this file, so every one of those values is exported
+# into claude. `Bash(env)` is in the allow list, which makes that inheritance
+# directly readable by the agent.
+# GITHUB_TOKEN is stripped too: the runner's own push happens outside this
+# invocation, and git inside the worktree still authenticates because
+# git-credential-doppler falls back to `doppler secrets get` — a helper git
+# spawns itself, which the Bash(doppler *) deny rule does not touch.
 if [ "$PERM_MODE" = "bypass" ]; then
   PERM_ARGS=(--dangerously-skip-permissions)
 else
   PERM_ARGS=(--permission-mode "$PERM_MODE" --settings "$SETTINGS_FILE")
 fi
 log "Running Claude: model=$MODEL perm_mode=$PERM_MODE"
-CLAUDE_OUT="$(claude -p "$PROMPT" --model "$MODEL" --output-format json "${PERM_ARGS[@]}" 2>>"$LOG")"
-CLAUDE_RC=$?
+if [ "$PERM_MODE" = "bypass" ]; then
+  CLAUDE_OUT="$(claude -p "$PROMPT" --model "$MODEL" --output-format json "${PERM_ARGS[@]}" 2>>"$LOG")"
+  CLAUDE_RC=$?
+else
+  CLAUDE_OUT="$(env -u NODE_SECRET -u DOPPLER_TOKEN -u GITHUB_TOKEN \
+      -u DATABASE_URL -u TENANT_DATABASE_URL -u OPEN_MODEL_API_KEY \
+      claude -p "$PROMPT" --model "$MODEL" --output-format json "${PERM_ARGS[@]}" 2>>"$LOG")"
+  CLAUDE_RC=$?
+fi
 
 # Parse claude's JSON result → tab-separated: is_error, result, input_tok, output_tok
 CLAUDE_PARSED="$(printf '%s' "$CLAUDE_OUT" | python3 -c '
@@ -408,8 +617,41 @@ print("\t".join([is_error, result, str(u.get("input_tokens", 0) or 0), str(u.get
 IFS=$'\t' read -r IS_ERROR RESULT_TEXT IN_TOK OUT_TOK <<< "$CLAUDE_PARSED"
 TOKENS=$(( ${IN_TOK:-0} + ${OUT_TOK:-0} ))
 
+# ── Tool-denial visibility ───────────────────────────────────────────────────
+# A tool refused by the permission policy does NOT make claude exit non-zero and
+# does NOT set is_error: measured, a denied Bash returns is_error=false with the
+# assistant asking for approval. The run then dies further down as "No commits
+# produced on $BRANCH" — which is indistinguishable from an Anthropic API or
+# credit failure, and that misdiagnosis has burned repeated sessions on the
+# status page. So name it, from a structural signal rather than a text grep:
+# `claude --output-format json` emits a top-level "permission_denials" array,
+# one entry per refusal, carrying tool_name and tool_input (verified against
+# claude CLI 2.1.273, for both --disallowedTools and a --settings deny list).
+DENIED_TOOLS="$(printf '%s' "$CLAUDE_OUT" | python3 -c '
+import sys, json
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    d = None
+out = []
+for e in ((d or {}).get("permission_denials") or []):
+    if not isinstance(e, dict):
+        continue
+    name = e.get("tool_name") or "?"
+    ti = e.get("tool_input") if isinstance(e.get("tool_input"), dict) else {}
+    detail = ti.get("command") or ti.get("file_path") or ti.get("url") or ""
+    out.append("%s: %s" % (name, str(detail)[:120]) if detail else name)
+print(" | ".join(out[:10]))
+' 2>/dev/null)"
+
+DENY_NOTE=""
+if [ -n "$DENIED_TOOLS" ]; then
+  DENY_NOTE="TOOL DENIED BY THE RUNNER PERMISSION POLICY (CLAUDE_PERMISSION_MODE=$PERM_MODE, $SETTINGS_FILE): ${DENIED_TOOLS}. This is NOT an Anthropic API or credit failure — do not go read the status page. Widen the allow list in orchestrator-run.sh, or set CLAUDE_PERMISSION_MODE=bypass to restore unconfined runs."
+  log "$DENY_NOTE"
+fi
+
 if [ "$CLAUDE_RC" -ne 0 ] || [ "${IS_ERROR:-true}" = "true" ]; then
-  emit "failed" "$BRANCH" "$CLAUDE_RC" "Claude CLI error: $RESULT_TEXT" "Agent run failed" "$TOKENS"
+  emit "failed" "$BRANCH" "$CLAUDE_RC" "${DENY_NOTE:+$DENY_NOTE }Claude CLI error: $RESULT_TEXT" "Agent run failed" "$TOKENS"
 fi
 
 # ── Verify (Layer 9) ─────────────────────────────────────────────────────────
@@ -534,7 +776,9 @@ print(json.dumps({"checks": checks, "passed": sys.argv[2] == "1",
 
 # Did the agent actually produce committed changes?
 if ! git rev-parse --verify HEAD >/dev/null 2>&1 || [ -z "$(git log origin/master..HEAD --oneline 2>/dev/null)" ]; then
-  emit "failed" "$BRANCH" 1 "No commits produced on $BRANCH" "Agent made no committed changes" "$TOKENS" "$(build_verify_json 0)"
+  # DENY_NOTE first: "no commits produced" on its own is exactly the string
+  # people misread as an API/credit fault.
+  emit "failed" "$BRANCH" 1 "${DENY_NOTE:+$DENY_NOTE }No commits produced on $BRANCH" "Agent made no committed changes" "$TOKENS" "$(build_verify_json 0)"
 fi
 
 if [ -n "$VALID_ERR" ]; then

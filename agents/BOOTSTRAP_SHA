@@ -1,0 +1,79 @@
+# agents/BOOTSTRAP_SHA — supply-chain pin for the bootstrap repo (P1-B)
+#
+# WHAT THIS PINS, AND WHY IT IS NOT A DOCS PROBLEM
+#   This repo. `agents/scripts/orchestrator-run.sh` — the runner the LangGraph
+#   orchestrator SSHes into on every fleet host — does, on every single run:
+#       git -C ~/grotap-agents fetch origin ... && git reset --hard origin/master
+#   and the NEXT run executes this repo's copy of that script. Whatever sits on
+#   grotap-agents master therefore runs as the `agent` user, on every box, one
+#   run later. That is remote code execution on the fleet, gated by nothing but
+#   push access, and until this file existed it was gated by nothing at all.
+#   (`agents/dispatch.sh` in grotap-platform additionally cats BOOTSTRAP.md and
+#   agents/GLOBAL.md from here straight into the model prompt.)
+#
+# WHO READS IT
+#   grotap-agents : agents/scripts/orchestrator-run.sh -> verify_bootstrap_pin()
+#                   — the LIVE path, invoked as
+#                   `bash ~/grotap-agents/agents/scripts/orchestrator-run.sh`
+#                   (orchestrator/src/nodes/execute.ts, deploy.ts, ds-steps.ts).
+#   grotap-platform : agents/scripts/orchestrator-run.sh (agent-06 only) and
+#                   agents/dispatch.sh, which keep their own copy of this file.
+#                   Two repos, two copies, on purpose — each verifies the other
+#                   side of the trust boundary it actually crosses.
+#   SECURITY_OPERATIONS.md 2.1 [MUST] / 2.3 smoke check (grotap-platform).
+#
+# FORMAT
+#   Comments start with '#'. Exactly one line is a bare 40-character lowercase
+#   hex commit SHA; the reader takes the first such line. A file with no such
+#   line is treated as UNPINNED with a loud warning — deliberately not a hard
+#   failure, because this file reaches hosts through the very self-sync it
+#   guards, so a host can be running a newer script than its copy of this file.
+#
+# THE SELF-REFERENCE, AND HOW IT IS HANDLED
+#   The pin lives in the repo it pins, so an exact pin can never be written:
+#   the commit that records a SHA cannot contain its own SHA. Two modes:
+#
+#   ORCH_BOOTSTRAP_PIN=ancestor   (DEFAULT)
+#     The commit about to be checked out must BE the pin or a DESCENDANT of it.
+#     CATCHES: a force-push, a history rewrite, a reset onto an unrelated tree,
+#              a remote swapped for a different repository.
+#     DOES NOT CATCH: a malicious commit appended on top of master by someone
+#              who already holds push access. Say that out loud; do not describe
+#              ancestor mode as "the bootstrap repo is verified". Rotating the
+#              pin forward regularly is what narrows that window.
+#
+#   ORCH_BOOTSTRAP_PIN=exact
+#     Must equal the SHA below. Real containment, and it stops the fleet the
+#     moment grotap-agents master moves until someone rotates this file. Use it
+#     for a lockdown window, never as a steady state. How fast does that bite?
+#     Measured on 2026-09-15 inside a single working session, master went
+#     79b23e3f -> e87c79d2 -> c24423e8. Three tips in one afternoon.
+#
+#   ORCH_BOOTSTRAP_PIN=off
+#     No check, loud warning in the run log. Emergency bypass only.
+#
+# ROTATION
+#   1. Resolve the tip from the REMOTE, never from a local checkout (a local
+#      clone can be stale or peer-dirty):
+#        git ls-remote https://github.com/Grotap-AI/grotap-agents.git refs/heads/master
+#   2. Read what you are about to bless. This is the point of the pin:
+#        git log --oneline <old>..<new>
+#        git diff <old>..<new> -- agents/scripts/orchestrator-run.sh \
+#                                 BOOTSTRAP.md agents/GLOBAL.md
+#      The runner script is executed; those two markdown files become model
+#      instructions. Anything touching them gets read, not skimmed.
+#   3. Replace the SHA line below, commit, push to master.
+#   4. Confirm on the next dispatch — the run log should carry one of:
+#        Bootstrap tree VERIFIED at pinned <sha> (mode=...)
+#        Bootstrap tree OK: <sha> descends from pinned <sha> (mode=ancestor)
+#   5. Mirror the same SHA into grotap-platform's agents/BOOTSTRAP_SHA so the
+#      dispatch.sh path and agent-06 agree with the fleet.
+#
+# STATUS OF THE SHA BELOW
+#   Pinned 2026-09-15, verified present on the live remote with
+#     git ls-remote https://github.com/Grotap-AI/grotap-agents.git refs/heads/master
+#   It was master at the time it was taken. It is now 2+ commits BEHIND live
+#   master (see the three-tip measurement above), which is harmless in the
+#   default ancestor mode and would abort every run in exact mode. Rotate it at
+#   the next convenient point rather than letting the gap widen.
+79b23e3fc242889afbfa3bb8f4a17a78bfbb0820
