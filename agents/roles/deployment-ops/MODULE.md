@@ -55,6 +55,31 @@ Agent-06 is the ops/monitoring server — it does not run dev tasks.
 | agents.grotap.ai | CNAME | cname.vercel-dns.com | Agents brand (.ai TLD, separate zone) |
 | *.grotap.com | — | MUST NOT EXIST | Wildcard (→ vercel-dns-016, created 2026-07-19) REMOVED 2026-09-14 — apps/app/agents had been resolving only through it; rollback JSON `agents/logs/dns-wildcard-removed-20260914.json`. Never re-add; a new brand host needs its own explicit Cloudflare CNAME (provisioner fix filed 2026-09-14). |
 
+
+### Who writes these records, and what silently does not get written (CASE-20260914-7D138E)
+Per-brand/app hosts are created by `brand_provisioner.py` calling `cloudflare_dns_provider.py`,
+one explicit `<app-slug>.grotap.com CNAME <vercel-target>` per provisioned tenant app. There is no
+wildcard to fall back on (see the last table row), so an unprovisioned or mistyped subdomain
+returns NXDOMAIN — the safe default, and the reason a missing record shows up as a dead host
+rather than as traffic reaching the wrong app. Each explicit CNAME resolves to Vercel edge IPs.
+That is the whole argument against ever re-adding the wildcard: it would forward EVERY subdomain
+to Vercel regardless of provisioning state, which both masks provisioning errors and creates an
+open-redirect risk, where a host nobody provisioned still answers.
+
+Two secrets gate that write, both on `grotap-backend` and both in `REQUIRED_VARS` in
+`scripts/railway_secret_audit.py`:
+
+| Var | Purpose | Absent behaviour |
+|---|---|---|
+| `CLOUDFLARE_EDGE_TOKEN` | DNS write token scoped to the grotap.com zone | provisioner logs a warning, SKIPS the DNS step, and reports success — the tenant subdomain is simply never created |
+| `CLOUDFLARE_ZONE_ID_GROTAP_COM` | Zone ID, avoids a Zones API lookup | extra round trip; fails outright if the edge token lacks Zones:Read |
+
+The edge token's silent skip is the failure worth knowing: provisioning "succeeds" and the host
+does not resolve. NXDOMAIN on a host that should exist means provisioning was incomplete or the
+CNAME was deleted — re-run the provisioner rather than hand-adding a record, so the table above
+stays the only source of truth. Token scopes and rotation history live in
+`docs/06-infrastructure/cloudflare-access-forge.md`.
+
 ## Key References
 - Vercel manual deploy: `doppler secrets get VERCEL_TOKEN` + `npx vercel --prod --yes`
 - Railway verify: `railway deployment list --service grotap-backend` → confirm SUCCESS
