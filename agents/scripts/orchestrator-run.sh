@@ -156,9 +156,25 @@ verify_bootstrap_pin() {
   # reach it, and turns that into a fail-closed error. A genuinely fresh host has
   # no marker and keeps the deliberate fail-open, so this does not brick a box
   # whose script is newer than its pin file.
+  #
+  # WHERE THE PIN IS READ FROM, and why it is not the working tree.
+  # The verify runs BEFORE `reset --hard origin/master`, so the on-disk file is
+  # the PREVIOUS run's copy. If a bad value is ever committed -- a trailing
+  # space, a CRLF from a Windows edit, an abbreviated SHA -- it lands on all
+  # five boxes on run N and fails every run from N+1, and the corrected push can
+  # never take effect, because updating the tree is downstream of the check that
+  # is refusing. Recovery would be SSH to five boxes. Reading the pin out of the
+  # fetched remote ref instead makes a corrected push effective on the very next
+  # run, while still being a value the operator committed deliberately.
   local pin_file="$HOME/grotap-agents/agents/BOOTSTRAP_SHA"
   local seen_marker="$HOME/.grotap_bootstrap_pin_seen"
-  if [ ! -f "$pin_file" ]; then
+  local pin_src="working tree"
+  local pin_text=""
+  if [ "${_BS_FETCH_OK:-1}" = "1" ]; then
+    pin_text="$(git -C "$HOME/grotap-agents" show origin/master:agents/BOOTSTRAP_SHA 2>/dev/null || true)"
+    [ -n "$pin_text" ] && pin_src="origin/master"
+  fi
+  if [ ! -f "$pin_file" ] && [ -z "$pin_text" ]; then
     if [ -f "$seen_marker" ]; then
       BOOTSTRAP_PIN_FAIL="bootstrap pin WENT MISSING: $pin_file is absent but this host has verified a pin before ($seen_marker). A commit deleted the pin file — that disables rewrite detection for every later run, so this is refused rather than warned. Restore agents/BOOTSTRAP_SHA, or set ORCH_BOOTSTRAP_PIN=off deliberately."
       log "ERROR: $BOOTSTRAP_PIN_FAIL"
@@ -167,7 +183,15 @@ verify_bootstrap_pin() {
     log "WARNING: no $pin_file — bootstrap tree UNPINNED (P1-B still open on this host)"
     return 0
   fi
-  pinned="$(grep -oE '^[0-9a-f]{40}$' "$pin_file" 2>/dev/null | head -1)"
+  if [ -n "$pin_text" ]; then
+    pinned="$(printf '%s
+' "$pin_text" | tr -d '
+' | grep -oE '^[0-9a-f]{40}$' | head -1)"
+  else
+    pinned="$(tr -d '
+' < "$pin_file" 2>/dev/null | grep -oE '^[0-9a-f]{40}$' | head -1)"
+  fi
+  log "Bootstrap pin source: $pin_src"
   if [ -z "$pinned" ]; then
     if [ -f "$seen_marker" ]; then
       BOOTSTRAP_PIN_FAIL="bootstrap pin CORRUPT: $pin_file holds no bare 40-hex SHA, but this host has verified a pin before ($seen_marker). Treated as tampering, not as a fresh host. Restore agents/BOOTSTRAP_SHA, or set ORCH_BOOTSTRAP_PIN=off deliberately."
@@ -315,7 +339,18 @@ print("PRIOR_ERRORS=" + shlex.quote("\n---\n".join(d.get("prior_errors") or []))
 log "=== Execute case=$CASE_ID branch=$BRANCH attempt=$ATTEMPT ==="
 
 repo_lock
-ensure_repo || emit "failed" "$BRANCH" 1 "${BOOTSTRAP_PIN_FAIL:-Platform repo unavailable}" "${BOOTSTRAP_PIN_FAIL:+Bootstrap pin check failed}${BOOTSTRAP_PIN_FAIL:-Could not clone/fetch grotap-platform}" 0
+# A pin abort is an INFRASTRUCTURE fault, not a defect in the task. The
+# orchestrator's evaluateRunnerResult only classifies timeout and api_exhausted
+# as infra, so without this marker every case dispatched during a pin outage
+# burns a retry strike and lands as `failed` for a reason unrelated to its own
+# content — one bad pin churns the whole backlog. The marker is carried in the
+# errors string because emit()'s positional contract has no error_class slot
+# here; the orchestrator greps for it.
+ensure_repo || {
+  _EC=""
+  [ -n "${BOOTSTRAP_PIN_FAIL:-}" ] && _EC="error_class=infra "
+  emit "failed" "$BRANCH" 1     "${_EC}${BOOTSTRAP_PIN_FAIL:-Platform repo unavailable}"     "${BOOTSTRAP_PIN_FAIL:+Bootstrap pin check failed (infra, not a task defect)}${BOOTSTRAP_PIN_FAIL:-Could not clone/fetch grotap-platform}" 0
+}
 
 # Worktree GC + inode guard (fleet incident 2026-07-08: hundreds of stale
 # done-case worktrees, each carrying a node_modules, exhausted inodes on
@@ -535,9 +570,9 @@ cat > "$_SETTINGS_TMP" <<'JSON'
       "Bash(mkdir *)", "Bash(cp *)", "Bash(mv *)", "Bash(touch *)",
       "Bash(echo *)", "Bash(sed *)", "Bash(awk *)",
       "Bash(cd *)", "Bash(pwd)", "Bash(test *)", "Bash(env)",
-      "Bash(rm *)", "Bash(printf *)", "Bash(tee *)", "Bash(which *)",
+      "Bash(printf *)", "Bash(which *)",
       "Bash(date *)", "Bash(tr *)", "Bash(cut *)",
-      "Bash(basename *)", "Bash(dirname *)", "Bash(chmod *)", "Bash(true)"
+      "Bash(basename *)", "Bash(dirname *)", "Bash(true)"
     ],
     "deny": [
       "Bash(curl *)", "Bash(wget *)",
