@@ -757,6 +757,32 @@ temporary key file, so it follows the orchestrator's secret rather than any file
 do. Any `SSH_KEY=` override asserted in a cron line is invisible to a file survey and must be read off
 the box with `crontab -l`, `crontab -l -u agent` and `systemctl list-timers`.
 
+#### Host-key policy, and the condition `accept-new` depends on
+
+The `StrictHostKeyChecking no` that appeared alongside the shared key is gone, but not uniformly, and
+the split is deliberate:
+
+- **`accept-new` where the host set is fixed and pre-keyed.** `agents/status-server.js` iterates
+  `TEAM_POOL` from `agents/config.sh` — `agent-02..05`, `agent-20/21`, `agent-30/31`, `agent-40/41`,
+  every one still ours and already carrying a per-host key, and **none of the five recycled addresses
+  is in a team pool**, so this daemon's exposure to them was zero. A changed key is refused, which is
+  the threat; first contact is still recorded, so a newly provisioned box does not take the daemon
+  dark for want of a hand-seeded `known_hosts`.
+- **`yes` where the target can be an arbitrary or caller-supplied address.** `fleet-load.sh` and
+  `fleet-model-probe.sh` both take `--host`, which accepts a bare IP as readily as an alias. Against a
+  *changed* key the two settings are identical; against the case that generated this whole finding
+  they are not. **A recycled address that is new to us presents as first contact, not as a mismatch**,
+  so `accept-new` would silently trust it and pin a stranger's machine in `known_hosts` permanently —
+  the same exposure arriving through the other door. That is precisely how one of the five would have
+  been trusted had it entered a host list before anyone first connected to it rather than after.
+
+**The condition `accept-new` rests on, which is not currently met anywhere:** it is only safe on a
+fixed pool if a newly provisioned box's host key is seeded **from the provider** — the Hetzner API or
+console — rather than from whatever answers on the IP. If provisioning does not do that, every new
+pool member is a trust-on-first-use event and `accept-new` inherits the same risk on a delay. No
+provisioning path does this today. Recorded as a known gap rather than an assumption, so that the next
+person to add a box knows it is theirs to close.
+
 Once that work is done, the gate itself is a sweep of every box:
 
 ```bash
