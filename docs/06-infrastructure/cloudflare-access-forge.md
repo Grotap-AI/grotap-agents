@@ -14,6 +14,88 @@ on me.
 
 ---
 
+## 0. STATUS — EXECUTED 2026-09-16
+
+This document was written as a click-path for work that had not been done. It has now been done.
+Everything below this section is kept for its detail and its reasoning, but read this section first:
+several "current state" facts further down are stale, and §7's carve-out design was changed during
+execution for the reason given below.
+
+| Step | State |
+|---|---|
+| Zero Trust enabled on the account | **DONE** — owner activated Zero Trust Free (50-seat cap) in the dashboard, 2026-09-16 04:21Z. `access.api.error.not_enabled` no longer reproduces. |
+| Team domain | **`grotap.cloudflareaccess.com`** — renamed from the auto-generated `lucky-limit-e2d1.cloudflareaccess.com` immediately after enablement, before anything depended on it. |
+| Access application | `Forgejo (forge.grotap.com)`, id `921bc544-3a92-42c4-9027-6934cd25421c`, type `self_hosted`, session 24h, not shown in the App Launcher. |
+| Policy 1 (precedence 1) | `Bypass` — the six fleet/forge IPv4 addresses **and all six IPv6 `/64` prefixes**, on every path. |
+| Policy 2 (precedence 2) | `Allow` — `email_domain: grotap.com`. |
+| Policy 3 (precedence 3) | `Service auth` (`non_identity`) — service token `forge-api-automation`, 8760h. |
+| WAF ruleset `833d63affc5d44be931d2ce74bf8f9fd` | **Unchanged**, still underneath Access as the second layer. |
+| Canary after the edge change | **GREEN** — `Grotap-AI/forge-smoke` run #4 on commit `65c30e48db66`, 2026-09-16 04:23:54Z, status `success`. Gate item 8 satisfied *after* the change, not before. |
+
+### The API tokens had been deleted, not merely invalidated
+
+Both `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_EDGE_TOKEN` failed `/user/tokens/verify` with code 1000.
+The dashboard showed **both the user and the account token lists completely empty**, so the tokens
+had been deleted rather than expiring in place. Replacement: account-owned token
+`grotap-edge-20260916`, id `2136600fd018d4288cd7e9c22a582ac2`, no expiration, no IP filter, stored in
+Doppler `grotap` prd **and** dev under both of the old names so every existing reader keeps working.
+Its scopes: account — Access Apps and Policies W, Access Orgs/IdP/Groups W, Access Service Tokens W,
+Zero Trust W, Account Settings R; zone `grotap.com` — Zone R, Zone Settings R, DNS W, **Zone WAF W**,
+Firewall Services W, Access Apps and Policies W. The Zone WAF write scope is deliberate: it is what
+makes an emergency IPv6 `/64` addition an API call instead of a dashboard trip.
+
+Note that an account-owned token verifies at `/accounts/{account_id}/tokens/verify`, **not**
+`/user/tokens/verify` — a check against the user endpoint reports a perfectly good account token as
+invalid.
+
+### Correction to §7: a path-scoped bypass on `/api/actions` alone is NOT sufficient
+
+The design below carves out `forge.grotap.com/api/actions` because `forgejo-runner` cannot send
+`CF-Access-Client-Id` / `CF-Access-Client-Secret` headers. That premise is right and the carve-out is
+too narrow. A runner does not only call `FetchTask`; `actions/checkout` clones the repository over
+HTTPS at `/<owner>/<repo>` and `git-upload-pack`, which a host-wide application blocks even with
+`/api/actions` bypassed. CI would have failed on checkout rather than on task fetch.
+
+What was built instead: **one Bypass policy scoped to the fleet and forge-01 source IPs, matching
+every path**. The runners are already the only non-owner source the WAF admits, so this grants the
+same set of machines the same reach they already had, while still forcing identity for the owner's
+browser — the workstation IP `98.97.42.234` is deliberately **excluded** from the bypass. That
+carve-out must not be "tidied up" later, and neither must the IPv6 prefixes.
+
+### Consequence for anything that calls the forge API over HTTPS
+
+Access now challenges the REST API, so an HTTPS call without service-token headers gets a `302` to
+`grotap.cloudflareaccess.com` instead of its response.
+
+**There are two independent auth layers and a caller needs BOTH.** The Access service token only gets
+the request past Cloudflare's edge; Forgejo still runs with `REQUIRE_SIGNIN_VIEW`, so it then needs a
+Forgejo credential of its own. The three failure shapes, measured 2026-09-16:
+
+| Headers sent | Result |
+|---|---|
+| neither | `302` to the Access login page |
+| `Authorization: token $FORGE_API_TOKEN` only | `302` to the Access login page |
+| `CF-Access-Client-Id` + `-Secret` only | `403 {"message":"Only signed in user is allowed to call APIs."}` — note this is **Forgejo's** message, so the request cleared Access and reached the origin |
+| all three | `200 {"version":"13.0.5+gitea-1.22.0"}` |
+
+**The `302` is the hazard, not the `403`.** A missing or wrong Access header returns a redirect to an
+HTML login page, not a `401`. A caller using `curl -L` therefore gets HTTP 200 and an HTML body, and
+`curl -sf` exits 0 — the failure surfaces later as a JSON parse error far from its cause. Assert on
+`%{http_code}` being 200 **and** on the body parsing as JSON; never on curl's exit status alone.
+
+Callers must send:
+
+```
+CF-Access-Client-Id:     $FORGE_CF_ACCESS_CLIENT_ID
+CF-Access-Client-Secret: $FORGE_CF_ACCESS_CLIENT_SECRET
+```
+
+...**plus** `Authorization: token $FORGE_API_TOKEN`. All three are in Doppler `grotap` prd and dev. Unaffected: git over SSH on `forge-ssh.grotap.com:2222`
+(unproxied, as §1 explains), and anything originating from a fleet box or forge-01, which policy 1
+bypasses.
+
+---
+
 ## 1. What this protects, and what it does not
 
 Cloudflare Access sits at Cloudflare's edge and challenges **HTTP requests** to a hostname before
@@ -42,7 +124,7 @@ signs in **twice**: once to Cloudflare Access, then once to Forgejo. That is exp
 |---|---|
 | Cloudflare account | `Info@grotap.com's Account`, id `25c5bc14485348a4e9690aada1962818` |
 | Zone | `grotap.com`, id `a589e163cb028b700d725fa08d5bb009` |
-| Zero Trust / Access | **not enabled** — API returns `access.api.error.not_enabled` |
+| Zero Trust / Access | ~~**not enabled**~~ — **ENABLED 2026-09-16**, see §0. Team domain `grotap.cloudflareaccess.com`. |
 | `forge.grotap.com` | A record, **proxied** (orange cloud) → forge-01 `178.156.246.81` |
 | `forge-ssh.grotap.com` | A record, **unproxied**, port 2222 — Cloudflare cannot proxy git-SSH |
 | Origin web server | Caddy in `/opt/forge`, config `/opt/forge/caddy/Caddyfile` |
