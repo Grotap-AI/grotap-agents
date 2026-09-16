@@ -28,7 +28,6 @@ NO claude CLI on these boxes by design. ⚠ NOT in the Team 1 dispatch pool: do 
 | Server | IP | Hardware / DC | Purpose | Execute slots |
 |---|---|---|---|---|
 | agent-20 | 87.99.148.22 | cpx21, Ashburn (id 148646754) | Team 2 open-model executor | 3 |
-| agent-21 | 5.161.243.18 | cpx21, Ashburn (id 148646760) | Team 2 open-model executor | 3 |
 
 Baseline: Ubuntu 24.04, agent user, node 22, doppler CLI + `git-credential-doppler`, aider (pipx),
 4 GiB swap, `~/grotap-agents` + `~/grotap-platform` clones, `~/worktrees`. Scale Team 2 by adding
@@ -44,7 +43,6 @@ boxes cannot attach (single-zone rule). ⚠ NOT dispatchable until the `config.s
 | Server | IP | Private IP | Hardware / DC | Purpose | Execute slots |
 |---|---|---|---|---|---|
 | agent-30 | 167.233.59.142 | 10.0.2.1 | cpx22, FSN1 (id 150155427) | Team 3 Grok executor | 3 |
-| agent-31 | 167.233.194.57 | 10.0.2.2 | cpx22, FSN1 (id 150155432) | Team 3 Grok executor | 3 |
 
 Baseline identical to Team 2 (agent user, node 22, doppler + `git-credential-doppler`, aider via
 pipx, 4 GiB swap, both repo clones, `~/worktrees`). Note: cpx21 is not offered in FSN1 — cpx22
@@ -57,16 +55,23 @@ Provisioned 2026-07-13 for the GPT-5.6 hedge team (cases B8EF68/FC0208/BA9BC6/8B
 Ashburn, public-only: inference is OpenRouter-hosted, so no GPU-LAN adjacency (and ash cannot
 join the eu-central `team2-llm-lan` anyway). ⚠ NOT dispatchable until the `config.sh` team4
 registry (case FC0208) merges and pilot cases are tagged `case_data.team=team4`.
-Team 5 note: the Codex CLI runner experiment (case 8B9BFC) SHARES these two boxes by design
+Team 5 note: the Codex CLI runner experiment (case 8B9BFC) SHARES this box by design
 (experiment phase; 3 slots/box, inference remote) — revisit if both teams go live.
 
 | Server | IP | Hardware / DC | Purpose | Execute slots |
 |---|---|---|---|---|
 | agent-40 | 178.156.219.232 | cpx21, Ashburn (id 150671577) | Team 4 GPT-5.6 executor | 3 |
-| agent-41 | 178.156.220.48 | cpx21, Ashburn (id 150671582) | Team 4 GPT-5.6 executor | 3 |
 
 Baseline identical to Team 2/3 (agent user, node 22, doppler + `git-credential-doppler`, aider
 via pipx, 4 GiB swap, docker + `grotap-sandbox:latest`, both repo clones, `~/worktrees`).
+
+> **Retired 2026-09-16:** `agent-21` (148646760), `agent-31` (150155432) and `agent-41`
+> (150671582) were deleted from Hetzner. Each had ZERO rows in `pipeline_dispatch_log` for its
+> entire life; verified empty first (no tmux, no worktrees, clones clean, load 0.00). Their
+> siblings agent-20/30/40 carry the work and stay. `TEAM_POOL` in `agents/config.sh` is now
+> single-host for team2/3/4/5 (grotap-platform `5226d7fc9`). Rebuild specs: cpx21 (cpx22 for
+> team3/FSN1), ubuntu-24.04, labels `role=<open-model|grok|gpt>-executor`, `team=team<N>`;
+> provision scripts `agents/provision-team{2,3,4}.py`.
 
 ## Special hosts — NOT executors, never dispatch, never add to `config.sh` pools
 | Host | IP | Purpose |
