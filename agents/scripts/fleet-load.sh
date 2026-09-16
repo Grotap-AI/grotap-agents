@@ -141,7 +141,19 @@ sweep() {
     IP="${ENTRY##*:}"
     KEY="$(key_for "$NAME")"
 
-    SSH_ARGS=(-o ConnectTimeout=8 -o StrictHostKeyChecking=no -o BatchMode=yes)
+    # StrictHostKeyChecking=yes — fail closed on host-key verification.
+    # With `no`, this loop suppressed the warning a human probe would see and ran a
+    # command on an UNVERIFIED destination. The exposure is
+    # unauthenticated-destination command execution, NOT key disclosure: offering
+    # public-key auth does not hand over the private half.
+    # THIS ALONE DOES NOT CLOSE THE HOLE. The catch-all IP-glob Host blocks in
+    # ~/.ssh/config that carry `StrictHostKeyChecking no` are the actual mitigation
+    # and are owned elsewhere; this only stops ONE automated path from riding them.
+    # SEEDING REQUIRED: every fleet host must have a correct known_hosts entry for
+    # the address used here or the probe reports UNREACHABLE. As of 2026-09-15 four
+    # fleet IPs present ed25519 keys that MISMATCH known_hosts, so those four break
+    # first — a mismatch is a refusal, not a first-contact prompt.
+    SSH_ARGS=(-o ConnectTimeout=8 -o StrictHostKeyChecking=yes -o BatchMode=yes)
     [ -n "$KEY" ] && SSH_ARGS+=(-i "$KEY")
 
     RAW=$(printf '%s\n' "$PROBE" | ssh "${SSH_ARGS[@]}" "$SSH_USER@$IP" "sh -s" 2>/dev/null | tail -1)
