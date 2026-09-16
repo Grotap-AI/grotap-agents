@@ -50,12 +50,20 @@ holds the placeholder and `forge-backup.service` failed three times on 2026-09-1
 18:20:33, 18:20:35, exit 1), with `LAST`/`PASSED` both empty — **not one recorded success, ever**.
 The bucket `grotap-forge-backups` (region `us-west-1`) holds exactly one object,
 `forge-01/2026/09/forge-20260915T180937Z.zip`, 141,327,757 bytes, owned by the Wasabi **root**
-account — that is the restore drill's presigned-URL upload, not a timer-fired backup. Separately, a
-`WASABI_FORGE_ACCESS_KEY_ID` / `WASABI_FORGE_SECRET_ACCESS_KEY` pair now exists in Doppler where
-earlier in the day both were the literal string `REPLACE_ME`, **and the pair now present fails
-against Wasabi with `InvalidAccessKeyId`.** A non-functional credential is worse than a placeholder,
-because the placeholder check is what makes the failure self-announcing. Whoever populates these must
-verify them with a real `HeadBucket` before declaring item 6 unblocked.
+account — that is the restore drill's presigned-URL upload, not a timer-fired backup.
+
+**A correction to an earlier reading of this run, kept because the trap is reusable.** This audit
+reported that the `WASABI_FORGE_*` pair in Doppler had changed from a placeholder into a real-looking
+key that failed `InvalidAccessKeyId`. That was **wrong**. Both values were read directly from prd and
+dev afterwards: lengths 37 and 41, prefix `REPLACE_ME_`, byte-identical to the reading two hours
+earlier. Nothing had changed. `InvalidAccessKeyId` is simply what Wasabi returns when handed
+`REPLACE_ME_...` as an access key id — the audit's placeholder check tested for the bare literal
+`REPLACE_ME` and so misread a placeholder as a live credential. **Gate the check with
+`startswith("REPLACE_ME")`**, which is what `forge-backup-upload.py` itself uses. The underlying
+warning still stands on its own merits: a syntactically valid but wrong key is worse than a
+placeholder, because the placeholder check is what makes the nightly fail loudly and self-describingly
+instead of with a generic S3 error. Verify any populated key with a real `HeadBucket` before
+declaring item 6 unblocked.
 
 **Both Cloudflare API tokens in Doppler are invalid.** `CLOUDFLARE_API_TOKEN` and
 `CLOUDFLARE_EDGE_TOKEN` each fail `GET /user/tokens/verify` with
@@ -312,9 +320,40 @@ and the job exits immediately with the self-announcing error
 short-lived presigned PUT URL minted off-box, so no long-lived credential has ever reached forge-01
 — and none should until the scoped key exists.
 
-**Owner action required:** create a Wasabi sub-user scoped to the forge backup bucket from an account
-with IAM rights, store its key pair in Doppler, and write it into `/root/.forge-backup.env` on
-forge-01.
+**Owner action — DONE 2026-09-15 23:5xZ.** The owner signed in to Wasabi root and the console work was
+driven from there: customer-managed policy `arn:aws:iam::100000470445:policy/ForgeBackupWrite` and
+sub-user `forge-backup` (programmatic access only, no console login, policy attached directly rather
+than through a group). The real key pair was verified against the bucket **before** being written to
+Doppler prd and dev. Proven with that key: `HeadBucket` OK, `ListObjectsV2` OK,
+`CreateMultipartUpload` + `AbortMultipartUpload` OK, `PutObject` + `HeadObject` with SSE AES256 OK,
+`DeleteObject` **AccessDenied as designed**, and `platform-backups` / `grotapsourcecode` /
+`grotap-dr-backups` all denied. The verification left a 34-byte proof object at
+`forge-01/.permission-check-20260915T2352Z.txt` which only the root key can remove — it is not a
+nightly success either, so do not count it as one.
+
+**The policy needs five actions, not three.** `s3:PutObject`, `s3:GetObject` and `s3:ListBucket` are
+not sufficient: the 141 MB archive crosses boto3's 8 MB multipart threshold, so
+`s3:ListMultipartUploadParts` and `s3:AbortMultipartUpload` are both required — the abort path is
+what runs when a transfer fails, and without it a failed upload leaves an un-abortable multipart
+sitting in the bucket. `s3:DeleteObject` is deliberately excluded: retention pruning runs locally on
+forge-01, not in the bucket, so an attacker on that box cannot wipe backup history.
+
+**Wiring completed 2026-09-15 ~23:55Z.** `/root/.forge-backup.env` on forge-01 has been written with
+the scoped key pair and the whole path is proven end to end on a real archive. The bucket now reads,
+independently re-listed:
+
+| When | Size | Object |
+|---|---|---|
+| 18:11:11Z | 141,327,757 | `forge-01/2026/09/forge-20260915T180937Z.zip` — root-owned restore-drill artifact |
+| 23:53:18Z | 34 | `forge-01/.permission-check-20260915T2352Z.txt` — policy proof object, root-key-deletable only |
+| 23:55:12Z | 142,521,928 | `forge-01/2026/09/forge-20260915T235510Z.zip` — **first real upload through the scoped key** (3 s elapsed, `local_kept=2`) |
+
+**The item still FAILS, for exactly one reason: that upload was hand-run.** The pass condition is an
+*unattended* run — the timer firing on its own schedule and landing an object with no human in the
+loop. Next fire is 2026-09-16 04:22:20 UTC. Do not read "the env file is wired and a 142 MB archive
+uploaded" as this item passing, and equally do not read this item's FAIL as "the placeholder is still
+there" — that was true earlier on 2026-09-15 and is no longer true. The honest one-line status is
+**wiring proven, awaiting an unattended run.**
 
 **Pass:** the restore record above stands (satisfied), **and** the nightly has run unattended and
 uploaded on its own schedule at least once — that is, the placeholder is gone and a timer-fired run
@@ -457,7 +496,13 @@ field. Vercel's `PATCH /v9/projects/{id}` accepts a `link` only for `type: githu
 Forgejo/Gitea is not a supported provider on either platform.
 
 So "point the deploy trigger at the forge" is not an action that exists. What is achievable is one of
-two mechanisms, and the choice should be made explicitly:
+two mechanisms, and the choice should be made explicitly.
+
+**Owner decision, 2026-09-15: mechanism (A).** The forge becomes the push path; Forgejo push-mirrors
+to GitHub; Railway and Vercel keep building from GitHub exactly as they do today, untouched. No
+deploy-platform change is made, and rollback stays a `git remote set-url` away. The reverse push
+mirror is therefore the enabling work for this migration, and it does not exist yet on any repo.
+Mechanism (B) is not being pursued now; it is recorded below so the option is not re-derived later.
 
 - **(A) Forge is the push path; GitHub stays the deploy trigger.** Humans and agents push to
   `forge.grotap.com`; Forgejo **push-mirrors** to GitHub; Railway and Vercel keep building from
