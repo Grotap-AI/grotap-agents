@@ -133,6 +133,45 @@ have the correct access rights" — no user SSH key is registered on the Forgejo
 unproxied and Access does not touch it, so it *could* be the Access-immune path, but only once a public
 key is uploaded to the forge user. Until then HTTPS + service token is the only way in.
 
+### 0. The `forge_api` helper — use it for every forge call below
+
+**Headers alone are not a check.** Adding the Access headers makes a correct call work; it does not
+make an incorrect one fail visibly. A wrong or expired service token still yields a 302 to an HTML
+login page, `curl -sf` exits 0 because `-f` covers 4xx/5xx and not 3xx, and the JSON pipe downstream
+sees nothing — so the check reports a pass having never reached the forge. Every gate command below
+therefore goes through this helper, which pins redirects off, asserts the status is exactly 200, and
+asserts the body parses as JSON before returning it.
+
+```bash
+cat > /tmp/forge_api.sh <<'EOF2'
+# forge_api <api-path>   e.g. forge_api /repos/Grotap-AI/grotap-platform
+# Needs FORGE_URL, FORGE_API_TOKEN, FORGE_CF_ACCESS_CLIENT_ID,
+# FORGE_CF_ACCESS_CLIENT_SECRET (all four in Doppler grotap prd+dev).
+forge_api() {
+  local out code body
+  out=$(curl -sS --max-redirs 0 -w '\n%{http_code}' \
+    -H "Authorization: token $FORGE_API_TOKEN" \
+    -H "CF-Access-Client-Id: $FORGE_CF_ACCESS_CLIENT_ID" \
+    -H "CF-Access-Client-Secret: $FORGE_CF_ACCESS_CLIENT_SECRET" \
+    "$FORGE_URL/api/v1$1") || { echo "forge_api $1: curl failed" >&2; return 1; }
+  code=${out##*$'\n'}
+  body=${out%$'\n'*}
+  if [ "$code" != 200 ]; then
+    echo "forge_api $1: HTTP $code (302 = missing/expired Access service token)" >&2
+    return 1
+  fi
+  printf '%s' "$body" | python -c 'import json,sys; json.load(sys.stdin)' >/dev/null 2>&1 || {
+    echo "forge_api $1: body is not JSON - Access login page, not the API" >&2
+    return 1
+  }
+  printf '%s' "$body"
+}
+EOF2
+```
+
+**A missing Access credential is a 302, never a 401** — so no health check anywhere in this document,
+or in anything built from it, should key on 401 to detect an auth problem.
+
 ## Go / no-go checklist
 
 ### 1. Mirror head parity — the primary signal
@@ -144,10 +183,11 @@ A divergent head cannot hide that way.
 
 ```bash
 doppler run -p grotap -c prd -- bash -c '
+. /tmp/forge_api.sh
 for R in grotap-platform grotap-agents grotap-landing grotap-platform-docs; do
-  META=$(curl -sf -H "CF-Access-Client-Id: $FORGE_CF_ACCESS_CLIENT_ID" \n       -H "CF-Access-Client-Secret: $FORGE_CF_ACCESS_CLIENT_SECRET" \n       -H "Authorization: token $FORGE_API_TOKEN" "$FORGE_URL/api/v1/repos/Grotap-AI/$R")
+  META=$(forge_api "/repos/Grotap-AI/$R") || { echo "UNREACHABLE $R"; continue; }
   BR=$(printf "%s" "$META" | python -c "import sys,json;print(json.load(sys.stdin)[\"default_branch\"])")
-  FG=$(curl -sf -H "CF-Access-Client-Id: $FORGE_CF_ACCESS_CLIENT_ID" \n       -H "CF-Access-Client-Secret: $FORGE_CF_ACCESS_CLIENT_SECRET" \n       -H "Authorization: token $FORGE_API_TOKEN" "$FORGE_URL/api/v1/repos/Grotap-AI/$R/branches/$BR" \
+  FG=$(forge_api "/repos/Grotap-AI/$R/branches/$BR" \
        | python -c "import sys,json;print(json.load(sys.stdin)[\"commit\"][\"id\"])")
   GH=$(git ls-remote "https://github.com/Grotap-AI/$R.git" "refs/heads/$BR" | cut -f1)
   if [ "$GH" = "$FG" ]; then echo "OK       $R@$BR ${FG:0:9}"
@@ -193,8 +233,9 @@ SyncMirrors [repo: Grotap-AI/grotap-platform]: failed to update mirror repositor
 
 ```bash
 doppler run -p grotap -c prd -- bash -c '
+. /tmp/forge_api.sh
 for R in grotap-platform grotap-agents grotap-landing grotap-platform-docs; do
-  curl -sf -H "CF-Access-Client-Id: $FORGE_CF_ACCESS_CLIENT_ID" \n       -H "CF-Access-Client-Secret: $FORGE_CF_ACCESS_CLIENT_SECRET" \n       -H "Authorization: token $FORGE_API_TOKEN" "$FORGE_URL/api/v1/repos/Grotap-AI/$R" \
+  forge_api "/repos/Grotap-AI/$R" \
   | python -c "import sys,json,datetime as d;r=json.load(sys.stdin);t=d.datetime.strptime(r[\"mirror_updated\"],\"%Y-%m-%dT%H:%M:%SZ\");print(r[\"name\"], int((d.datetime.utcnow()-t).total_seconds()//60), \"min\")"
 done'
 ```
@@ -250,8 +291,8 @@ The canary already exists: `Grotap-AI/forge-smoke` on the forge, with `.github/w
 doing a checkout, a `setup-python`, and a host-execution proof. Do not create a second one.
 
 ```bash
-doppler run -p grotap -c prd -- bash -c 'curl -sf -H "CF-Access-Client-Id: $FORGE_CF_ACCESS_CLIENT_ID" \n       -H "CF-Access-Client-Secret: $FORGE_CF_ACCESS_CLIENT_SECRET" \n       -H "Authorization: token $FORGE_API_TOKEN" \
-  "$FORGE_URL/api/v1/repos/Grotap-AI/forge-smoke/actions/tasks?limit=5" \
+doppler run -p grotap -c prd -- bash -c '. /tmp/forge_api.sh
+  forge_api "/repos/Grotap-AI/forge-smoke/actions/tasks?limit=5" \
   | python -c "
 import sys,json
 for r in json.load(sys.stdin)[\"workflow_runs\"]:
@@ -708,19 +749,34 @@ deploy crons once afterwards and confirm they still succeed.
 
 ### 8. Edge access control in front, with runner CI still green behind it
 
-Cloudflare Zero Trust / Access is **not enabled on this account** — the API returns
-`access.api.error.not_enabled`, and enabling it is a dashboard action. The current equivalent is the
-zone WAF ruleset `833d63affc5d44be931d2ce74bf8f9fd`, which admits only the five worker boxes,
-forge-01 and the owner workstation. The owner has decided to enable Zero Trust, so this item accepts
-either control, provided CI survives it.
+**PASSED 2026-09-16 — Cloudflare Access is now LIVE in front of `forge.grotap.com`.** The earlier text
+here said Zero Trust was not enabled on the account, on the strength of an `access.api.error.not_enabled`
+response; that reading is superseded twice over, first because both Cloudflare API tokens later turned
+out to be invalid (so the negative answer was unreliable), and then because Access was actually enabled
+from the dashboard. Team domain `grotap.cloudflareaccess.com`.
+
+Policy 1 is a **Bypass** on the six fleet/forge IPv4 addresses plus all six IPv6 /64s, **on every
+path**. The "every path" part is load-bearing and was a deliberate choice: runner checkout traffic hits
+`/Grotap-AI/<repo>` and `git-upload-pack`, not just `/api/actions`, so a policy scoped to the actions
+API would have passed a canary and broken every runner clone. Everything else needs the service-token
+headers documented in §0. The zone WAF ruleset `833d63affc5d44be931d2ce74bf8f9fd` remains underneath as
+a second layer, and both `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_EDGE_TOKEN` are now a live
+account-owned token (`grotap-edge-20260916`) with Zone WAF write on `grotap.com` — so an emergency
+IPv6 /64 addition is an API call again rather than a dashboard trip.
+
+**The probe below now returns 302 for an allowed workstation origin, and that is the healthy result**,
+not a failure: Access redirects an unauthenticated browser-shaped request to the login page. Judge this
+item by the Bypass behaving (runners green) and by an authenticated `forge_api` call returning 200,
+not by the bare status code.
 
 ```bash
 # from an allowed origin
 curl -sS -o /dev/null -w '%{http_code}\n' -H 'User-Agent: curl/8.5.0' https://forge.grotap.com/
 ```
 
-**Pass:** an allowed origin gets 200 (or the Access login page once Zero Trust is on), a non-allowed
-origin is blocked, **and** item 3's canary is re-run *after* the edge change and comes back green.
+**Pass:** a fleet/forge origin (on the Bypass) gets 200, a workstation origin gets **302** to
+`grotap.cloudflareaccess.com` and 200 once it presents the service-token headers, a non-allowed origin
+is blocked, **and** item 3's canary is re-run *after* the edge change and comes back green.
 The allow list **must carry each box's IPv6 /64 as well as its IPv4 address** — the boxes prefer v6,
 and a v4-only list previously locked the runners out of their own forge with `failed to fetch task`.
 Verify v6 explicitly rather than assuming it was inherited.
