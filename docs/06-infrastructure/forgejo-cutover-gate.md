@@ -22,10 +22,34 @@ else, which is precisely the property cutover gives up. Treat "the forge is up a
 statement about the forge, never as a statement about the migration.
 
 Commands below run from the workstation in Git Bash. Secrets come from Doppler (`grotap` / `prd`)
-and are never typed inline. Two environmental gotchas will otherwise waste your time: the
-workstation and the five worker boxes are on the forge's edge allow list and anything else gets a
-Cloudflare block rather than an application error, and Cloudflare rejects a bare `urllib` user agent
-with a 403 (error 1010), so HTTP probes must send a real `User-Agent`.
+and are never typed inline.
+
+> **EVERY forge HTTPS command in this document needs two extra headers as of 2026-09-16.**
+> Cloudflare **Access is now live** in front of `forge.grotap.com`. A call from the workstation
+> without them gets a **302 to `grotap.cloudflareaccess.com`**, not an application error — so it
+> looks like a broken token or a dead API, and it is neither.
+>
+> ```
+> -H "CF-Access-Client-Id: $FORGE_CF_ACCESS_CLIENT_ID"
+> -H "CF-Access-Client-Secret: $FORGE_CF_ACCESS_CLIENT_SECRET"
+> ```
+>
+> Both live in Doppler `grotap` prd and dev, so they arrive through the `doppler run` wrapper the
+> commands already use. A forge call therefore now needs **three** things: a real `User-Agent`
+> (a bare `urllib` UA is refused with 403 / error 1010), `Authorization: token $FORGE_API_TOKEN`,
+> and the two Access headers. The commands below are written without the Access headers; **add them
+> to every `curl` that targets `$FORGE_URL`.**
+>
+> **Two paths are deliberately exempt and must not have the headers added:**
+> - **Git over SSH on `forge-ssh.grotap.com:2222`** — unproxied; Access cannot cover the SSH protocol.
+> - **Anything originating on a fleet box or forge-01** — a Bypass policy covers the six fleet/forge
+>   IPv4 addresses and all six IPv6 /64s on every path, which is what keeps runner clone and checkout
+>   traffic working (`/Grotap-AI/<repo>` and `git-upload-pack`, not merely `/api/actions`).
+>
+> The WAF ruleset still sits underneath Access as a second layer, and both `CLOUDFLARE_API_TOKEN` and
+> `CLOUDFLARE_EDGE_TOKEN` are now a live account-owned token (`grotap-edge-20260916`) with Zone WAF
+> write on `grotap.com` — so an emergency IPv6 /64 addition is an API call again rather than a
+> dashboard trip. Team domain: `grotap.cloudflareaccess.com`.
 
 ## Gate run of record — 2026-09-15, 23:20-23:34 UTC
 
