@@ -416,6 +416,18 @@ private key at all and never originate SSH. agent-04's `root` has no private key
 | `*/10 * * * *` | `reconcile_dispatch.py` -> `dispatch.sh` | same explicit `SSH_KEY=` in the cron line |
 | weekly (backup chain) | `scripts/backup/weekly-openreplay.sh` | `: "${OR_SSH_KEY:=/home/agent/.ssh/grotap_agents}"` |
 
+**The dependency that decides the whole retirement, and is invisible to a file grep.** Production
+fleet work does **not** reach the boxes through `agents/dispatch.sh`. A process-ancestry trace on
+agent-02 and agent-03 during live runs shows `claude -p` under `bash orchestrator-run.sh` under a
+detached launcher with **PPID 1**, no tmux involved. The runs are started by the orchestrator over
+SSH. So the SSH credential that carries production throughput is the **orchestrator's**, and the
+crons, the workstation scripts and `dispatch.sh` are all secondary to it.
+
+That means **the shared key cannot be retired until the orchestrator is deployed with per-host key
+resolution**, no matter what state the cron and script work is in. Retiring it earlier does not
+degrade the fleet, it stops it. Anyone reading the file-grep list below will conclude the opposite,
+because the orchestrator contributes only three unremarkable lines to it.
+
 **The blocker the earlier draft missed.** `orchestrator/src/config.ts:20-26` loads **one** key from
 Doppler (`SSH_PRIVATE_KEY_B64` / `SSH_PRIVATE_KEY`) and uses it for **every** host in `FLEET_HOSTS`.
 That secret *is* the shared farm key, and there is no per-host mechanism and no fallback. Deleting
@@ -469,6 +481,28 @@ and `/home/agent/.ssh/authorized_keys` on agent-02..05, and `Host agent-02..05` 
 All eight new keys were login-proven (`rc=0`, correct `hostname`/`whoami` as root on each target), and
 the shared key was re-proven working from both source users to all four targets afterwards. **Nothing
 was removed and sshd was not touched on any host.** The shared key remains live everywhere.
+
+#### Phase 2a complete — 2026-09-16 04:07Z, additive only
+
+All nine remaining hosts now have workstation per-host keys at `~/.ssh/grotap_<host>`, each proven by
+a real login, with the shared key re-proven working alongside. Public halves were appended only to
+`/root/.ssh/authorized_keys` — **none of the nine has a `/home/agent` account**, which is a genuine
+difference from agent-02..06 and matters when reasoning about who can reach what.
+
+The GPU box's key is `grotap_llm-gpu-02`, not `grotap_GEX131`: its actual hostname is `llm-gpu-02`,
+and the existing convention tracks hostnames (`agent-02`, `forge-01`) rather than Hetzner product
+labels. `GEX131` is the Hetzner label and appears in docs and scripts, but it is not an SSH identity.
+
+One wrinkle to know about before editing `~/.ssh/config` again: six of the nine (`agent-20`, `21`,
+`30`, `31`, `40`, `41`) already had named `Host` blocks pointing at `grotap_agents`. Rather than
+edit those blocks, a new block with the dedicated key was inserted **directly above** each one, which
+wins because OpenSSH takes the first matching value. The old blocks are now shadowed dead code, kept
+deliberately under the additive-only rule. They should be deleted in the same change that retires the
+shared key — not before, and not left behind after. Verify placement with
+`ssh -G <host> | grep -i identityfile`, which lists the winning file first.
+
+Backups: `~/.ssh/config.bak-20260916T040704Z` on the workstation, and
+`/root/.ssh/authorized_keys.bak-20260916T040704Z` on each of the nine hosts.
 
 Once that work is done, the gate itself is a sweep of every box:
 
