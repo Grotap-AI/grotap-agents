@@ -31,6 +31,14 @@ from any box or from `~/.ssh/config` until a later phase says so explicitly.
 - agent cron: `pipeline_failure_monitor.py` 10m · `deploy_freshness_watchdog.py` 5m · **review gate every 15 min** (`review-gate-cron.sh`; empty queue exits <5s).
 - Deploy Ops roles (trigger → role): merge-to-master → **Deploy Verifier**; verifier FAIL → **Deploy Executor**; before deploy-execute → **Env Validator**; every 5 min → **Health Monitor**; daily / after infra change → **DNS Watchdog**; verifier PASS → **Post-Deploy QA**. Escalate to human when deploy infra itself is broken; hotfix regressions route to agent-04/execute.
 
+> **Deleted team hosts (2026-09-16).** The Hetzner project `OpenAgents.grotapai` returns exactly
+> three servers — agent-20 (148646754), agent-30 (150155427), agent-40 (150671577). agent-21,
+> agent-31 and agent-41 no longer exist and their IPs time out. Hetzner recycles released IPs,
+> so those addresses may now belong to someone else: never SSH them. They are removed from
+> `TEAM_POOL` in `agents/config.sh` and from the IP map in `agents/scripts/ssh-key-for.sh`.
+> Each team therefore runs on ONE box (team4 and team5 share agent-40). Re-provision with
+> `agents/provision-team{2,3,4}.py` before re-adding any row above.
+
 ## Team 2 — open-model executors (Hetzner project **OpenAgents.grotapai**, token `HETZNER_FARM_API_TOKEN`)
 Provisioned 2026-07-07 for the Team 2 program (cases AA8CFD/F404F8/959C5E). Aider + OpenRouter runtime —
 NO claude CLI on these boxes by design. ⚠ NOT in the Team 1 dispatch pool: do not dispatch until the
@@ -39,7 +47,7 @@ NO claude CLI on these boxes by design. ⚠ NOT in the Team 1 dispatch pool: do 
 | Server | IP | Hardware / DC | Purpose | Execute slots |
 |---|---|---|---|---|
 | agent-20 | 87.99.148.22 | cpx21, Ashburn (id 148646754) | Team 2 open-model executor | 3 |
-| agent-21 | 5.161.243.18 | cpx21, Ashburn (id 148646760) | Team 2 open-model executor | 3 |
+| ~~agent-21~~ | ~~5.161.243.18~~ | **DELETED 2026-09-16** | gone from Hetzner; IP released (see note) | 0 |
 
 Baseline: Ubuntu 24.04, agent user, node 22, doppler CLI + `git-credential-doppler`, aider (pipx),
 4 GiB swap, `~/grotap-agents` + `~/grotap-platform` clones, `~/worktrees`. Scale Team 2 by adding
@@ -55,7 +63,7 @@ boxes cannot attach (single-zone rule). ⚠ NOT dispatchable until the `config.s
 | Server | IP | Private IP | Hardware / DC | Purpose | Execute slots |
 |---|---|---|---|---|---|
 | agent-30 | 167.233.59.142 | 10.0.2.1 | cpx22, FSN1 (id 150155427) | Team 3 Grok executor | 3 |
-| agent-31 | 167.233.194.57 | 10.0.2.2 | cpx22, FSN1 (id 150155432) | Team 3 Grok executor | 3 |
+| ~~agent-31~~ | ~~167.233.194.57~~ | — | **DELETED 2026-09-16** | gone from Hetzner; IP released (see note) | 0 |
 
 Baseline identical to Team 2 (agent user, node 22, doppler + `git-credential-doppler`, aider via
 pipx, 4 GiB swap, both repo clones, `~/worktrees`). Note: cpx21 is not offered in FSN1 — cpx22
@@ -74,7 +82,7 @@ Team 5 note: the Codex CLI runner experiment (case 8B9BFC) SHARES these two boxe
 | Server | IP | Hardware / DC | Purpose | Execute slots |
 |---|---|---|---|---|
 | agent-40 | 178.156.219.232 | cpx21, Ashburn (id 150671577) | Team 4 GPT-5.6 executor | 3 |
-| agent-41 | 178.156.220.48 | cpx21, Ashburn (id 150671582) | Team 4 GPT-5.6 executor | 3 |
+| ~~agent-41~~ | ~~178.156.220.48~~ | **DELETED 2026-09-16** | gone from Hetzner; IP released (see note) | 0 |
 
 Baseline identical to Team 2/3 (agent user, node 22, doppler + `git-credential-doppler`, aider
 via pipx, 4 GiB swap, docker + `grotap-sandbox:latest`, both repo clones, `~/worktrees`).
