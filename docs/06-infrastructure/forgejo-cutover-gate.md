@@ -101,6 +101,38 @@ modified by API.** If the allow list ever needs an emergency change — adding a
 fleet access after an IPv6 change — it is a dashboard action until a token is reissued. Fix the token
 before relying on item 8 either way.
 
+## Cloudflare Access — read this before running any check below
+
+Zero Trust was enabled on `forge.grotap.com` on 2026-09-16. **Every forge HTTP call now needs a
+Cloudflare Access service token in addition to the Forgejo API token**, and a call that omits it does
+not fail cleanly — it is answered with a **302 to the Access login page**. Measured:
+
+```
+Authorization: token $FORGE_API_TOKEN                          -> 302
+  + CF-Access-Client-Id + CF-Access-Client-Secret              -> 200 {"version":"13.0.5+gitea-1.22.0"}
+```
+
+`curl -sf` does **not** fail on a 302 — `-f` covers 4xx/5xx only — so curl exits 0, emits nothing, and
+the pipe into `python -c json.load` sees empty stdin. The check then errors out or quietly counts
+nothing. **An unauthenticated forge check looks like "no data", not like "denied".** That is the same
+failure family this document was written to catch, so it is called out here rather than left to be
+rediscovered.
+
+The service token is in Doppler prd as `FORGE_CF_ACCESS_CLIENT_ID` / `FORGE_CF_ACCESS_CLIENT_SECRET`;
+every command below already carries both.
+
+**`git` over HTTPS needs them too**, and fails even more quietly — `git push -q` to the forge without
+them reports nothing and lands nothing, because the redirect is swallowed. Working form:
+
+```bash
+doppler run -p grotap -c prd -- bash -c 'git   -c http.extraHeader="CF-Access-Client-Id: $FORGE_CF_ACCESS_CLIENT_ID"   -c http.extraHeader="CF-Access-Client-Secret: $FORGE_CF_ACCESS_CLIENT_SECRET"   ls-remote origin master'
+```
+
+**git over SSH is not a fallback today.** `ssh://git@forge-ssh.grotap.com:2222` returns "make sure you
+have the correct access rights" — no user SSH key is registered on the Forgejo account. That record is
+unproxied and Access does not touch it, so it *could* be the Access-immune path, but only once a public
+key is uploaded to the forge user. Until then HTTPS + service token is the only way in.
+
 ## Go / no-go checklist
 
 ### 1. Mirror head parity — the primary signal
@@ -113,9 +145,9 @@ A divergent head cannot hide that way.
 ```bash
 doppler run -p grotap -c prd -- bash -c '
 for R in grotap-platform grotap-agents grotap-landing grotap-platform-docs; do
-  META=$(curl -sf -H "Authorization: token $FORGE_API_TOKEN" "$FORGE_URL/api/v1/repos/Grotap-AI/$R")
+  META=$(curl -sf -H "CF-Access-Client-Id: $FORGE_CF_ACCESS_CLIENT_ID" \n       -H "CF-Access-Client-Secret: $FORGE_CF_ACCESS_CLIENT_SECRET" \n       -H "Authorization: token $FORGE_API_TOKEN" "$FORGE_URL/api/v1/repos/Grotap-AI/$R")
   BR=$(printf "%s" "$META" | python -c "import sys,json;print(json.load(sys.stdin)[\"default_branch\"])")
-  FG=$(curl -sf -H "Authorization: token $FORGE_API_TOKEN" "$FORGE_URL/api/v1/repos/Grotap-AI/$R/branches/$BR" \
+  FG=$(curl -sf -H "CF-Access-Client-Id: $FORGE_CF_ACCESS_CLIENT_ID" \n       -H "CF-Access-Client-Secret: $FORGE_CF_ACCESS_CLIENT_SECRET" \n       -H "Authorization: token $FORGE_API_TOKEN" "$FORGE_URL/api/v1/repos/Grotap-AI/$R/branches/$BR" \
        | python -c "import sys,json;print(json.load(sys.stdin)[\"commit\"][\"id\"])")
   GH=$(git ls-remote "https://github.com/Grotap-AI/$R.git" "refs/heads/$BR" | cut -f1)
   if [ "$GH" = "$FG" ]; then echo "OK       $R@$BR ${FG:0:9}"
@@ -162,7 +194,7 @@ SyncMirrors [repo: Grotap-AI/grotap-platform]: failed to update mirror repositor
 ```bash
 doppler run -p grotap -c prd -- bash -c '
 for R in grotap-platform grotap-agents grotap-landing grotap-platform-docs; do
-  curl -sf -H "Authorization: token $FORGE_API_TOKEN" "$FORGE_URL/api/v1/repos/Grotap-AI/$R" \
+  curl -sf -H "CF-Access-Client-Id: $FORGE_CF_ACCESS_CLIENT_ID" \n       -H "CF-Access-Client-Secret: $FORGE_CF_ACCESS_CLIENT_SECRET" \n       -H "Authorization: token $FORGE_API_TOKEN" "$FORGE_URL/api/v1/repos/Grotap-AI/$R" \
   | python -c "import sys,json,datetime as d;r=json.load(sys.stdin);t=d.datetime.strptime(r[\"mirror_updated\"],\"%Y-%m-%dT%H:%M:%SZ\");print(r[\"name\"], int((d.datetime.utcnow()-t).total_seconds()//60), \"min\")"
 done'
 ```
@@ -213,7 +245,7 @@ The canary already exists: `Grotap-AI/forge-smoke` on the forge, with `.github/w
 doing a checkout, a `setup-python`, and a host-execution proof. Do not create a second one.
 
 ```bash
-doppler run -p grotap -c prd -- bash -c 'curl -sf -H "Authorization: token $FORGE_API_TOKEN" \
+doppler run -p grotap -c prd -- bash -c 'curl -sf -H "CF-Access-Client-Id: $FORGE_CF_ACCESS_CLIENT_ID" \n       -H "CF-Access-Client-Secret: $FORGE_CF_ACCESS_CLIENT_SECRET" \n       -H "Authorization: token $FORGE_API_TOKEN" \
   "$FORGE_URL/api/v1/repos/Grotap-AI/forge-smoke/actions/tasks?limit=5" \
   | python -c "
 import sys,json
