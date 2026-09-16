@@ -504,6 +504,28 @@ shared key — not before, and not left behind after. Verify placement with
 Backups: `~/.ssh/config.bak-20260916T040704Z` on the workstation, and
 `/root/.ssh/authorized_keys.bak-20260916T040704Z` on each of the nine hosts.
 
+#### Phase 2c complete — 2026-09-16 04:11Z, the critical-path piece
+
+The orchestrator connects as the **`agent`** user (`sshUser: process.env.SSH_USER ?? "agent"`), not
+as root, so its credentials are a separate problem from every other strand. Per-host ed25519 keys were
+generated for each host in the real `FLEET_HOSTS` — read from Doppler rather than assumed, and it is
+exactly `agent-02:5.161.74.39:3, agent-03:5.161.81.193:3, agent-04:178.156.222.220:3,
+agent-05:5.161.73.195:3, agent-06:5.78.178.81:2`. Public halves went into
+`/home/agent/.ssh/authorized_keys` only (root's file untouched), backed up as
+`authorized_keys.bak-20260916T041135Z`. Private halves are in Doppler **prd and dev** as
+`SSH_PRIVATE_KEY_AGENT_02_B64` … `SSH_PRIVATE_KEY_AGENT_06_B64`, the names derived from the branch's
+own `normalizeHostEnvName` rather than guessed.
+
+Every one was proven by a real `agent@` login before being trusted, and the shared key was re-proven
+working alongside. A credential in Doppler that has never been proven against the box is the exact
+failure mode this whole exercise exists to remove. Note agent-05's hostname answers as
+`grotap-dev-agent`, which is correct and not a mis-target.
+
+**What remains before the shared key can be deleted** is now exactly two deploys and a sweep: merge
+and deploy the orchestrator branch, deploy the repointed fleet scripts, then prove every box and
+every cron works with the shared key already unused. Both deploys are deliberately held for a quiet
+window — the assign loop is back on at `max_inflight=14`.
+
 Once that work is done, the gate itself is a sweep of every box:
 
 ```bash
