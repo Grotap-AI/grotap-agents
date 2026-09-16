@@ -604,6 +604,27 @@ call, not only a named one.** Delete these globs in the same change as the key: 
 are today's working fallback, and not after, since they would keep a dead path alive and mask which
 scripts are still wrong.
 
+**The one test that catches every silent-fallback case at once: a bare-IP SSH to a host that has NO
+named `Host` block.** Three separate sites degrade to the shared key rather than failing, so each one
+passes any check that uses a hostname:
+
+- The two catch-all globs themselves (above).
+- `agents/scripts/fleet-load.sh:145,147` — it has a per-host-aware `key_for()` at `:118-126`, but the
+  call site is `[ -n "$KEY" ] && SSH_ARGS+=(-i "$KEY")`. When `key_for()` returns **empty** it connects
+  with no `-i` at all, by raw IP, and lands on a glob. The one script that looks per-host-aware still
+  has a silent shared-key path in it.
+- `agents/scripts/fleet-model-probe.sh:78` — `ssh -o ConnectTimeout=10 -o BatchMode=yes "$REMOTE_HOST"`
+  with no `-i` whatsoever and a comment at `:76` reading "key as that box resolves it". Entirely
+  dependent on config resolution.
+
+These two are also the only scripts that will not break outright on deletion — they will keep
+"working" against any host with a named block and silently stop working for the rest. That is the same
+false-green shape as the globs, which is why the sweep must include the bare-IP case explicitly.
+
+Not a dependency, recorded so nobody counts it: `agents/scripts/orchestrator-run.sh:358-367` names
+`Bash(ssh *)`, `Bash(scp *)` and `Read(**/id_rsa*)` in the agent sandbox **deny** list. It blocks
+agents from using SSH; it does not consume the key.
+
 Two smaller notes from the same sweep. `agents/scripts/fleet-load.sh:118-126` is the only script
 already per-host aware (`key_for()` prefers `$SSH_KEY_DIR/grotap_$1`) — its fallback becomes dead code,
 not a breakage. And `scripts/verify_slot_health.py:129,140-143` reads the base64 secret and writes a
