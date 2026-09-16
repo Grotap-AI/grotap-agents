@@ -197,9 +197,35 @@ done'
 
 Read the default branch from the API rather than assuming `master` — `grotap-landing` uses `main`.
 
-**Pass:** all four lines read `OK`, on two consecutive runs taken at least one mirror cycle (ten
-minutes) apart. The two-reading rule exists so that a push landing seconds before the check is not
-mistaken for a stalled mirror; a genuine stall stays divergent across the cycle boundary.
+**Pass:** all four lines read `OK` or `BEHIND`, and no line reads `DIVERGED`.
+
+**Do not use equality alone, and do not rely on the two-reading rule as the primary test.** Both were
+written when these repositories were quiet. They are not quiet now: a dozen concurrent sessions push
+to `master` every few minutes, so the forge is almost always a commit or two behind simply because the
+last ten-minute cycle predates the last push. Measured 2026-09-16 at 05:00Z, `grotap-agents` read
+`DIVERGED` on two consecutive runs — and was perfectly healthy, one commit behind, with
+`next_update_unix` correctly scheduled forward and zero failure lines in the log. Under a strict
+equality rule the primary go/no-go signal reports a fault more or less permanently, which trains
+whoever runs it to ignore it.
+
+**Distinguish "behind" from "diverged" with an ancestry test, which settles it in ONE reading.** If the
+forge head is an ancestor of the GitHub head, the mirror is merely lagging and will catch up on the
+next cycle. If it is not an ancestor, the histories have actually parted and that is the fault this
+item exists to catch:
+
+```bash
+# in a bare clone of the repo, or any clone with an up-to-date origin
+if git merge-base --is-ancestor "$FORGE_HEAD" "$GH_HEAD"; then
+  echo "BEHIND by $(git rev-list --count "$FORGE_HEAD".."$GH_HEAD") commit(s) - lag, not a fault"
+else
+  echo "DIVERGED - histories have parted, read the mirror log"
+fi
+```
+
+Worked example from that 05:00Z reading: forge `e83ab8381`, GitHub `656efcd58`, ancestor test true,
+one commit behind — lag. The two-reading rule remains useful as a **secondary** check for a mirror that
+is behind and *stays* behind across several cycles without the gap closing, which is a stall that the
+ancestry test alone will not distinguish from ordinary lag.
 
 The last verified clean parity, each repository against its **own** default branch, was at 18:19Z on
 2026-09-15 and all four equalled GitHub at that moment:
