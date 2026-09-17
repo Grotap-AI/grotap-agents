@@ -171,4 +171,44 @@
 #   corrections) plus the forge push-mirror procedure docs.
 #   Per step 5 this rotation commit is itself unblessed — hosts alternate
 #   between the pinned tree and the tip until a follow-up rotation pins it.
-176aefd9154b966c6ff1c0a09fc9d319b55dc230
+#
+#   Rotated 2026-09-17 (4th rotation of the day; the "(N of 3)" labels above
+#   were written when three were expected) from
+#   176aefd9154b966c6ff1c0a09fc9d319b55dc230 to
+#   0906e4b024ce502fa84448501e76a9574ff6f275, the live master tip resolved from
+#   the REMOTE with
+#     git ls-remote https://github.com/Grotap-AI/grotap-agents.git refs/heads/master
+#   and confirmed a strict descendant of the outgoing pin with
+#     git merge-base --is-ancestor 176aefd9 0906e4b0   (exit 0)
+#   Reviewed before blessing: 3 commits (176aefd9..0906e4b0) --
+#     4a40518 chore(fleet): rotate the bootstrap pin to master tip, and make the header true
+#     c76e88e feat(claudecode): detect stale evidence mechanically, not in prose
+#     0906e4b lesson(fleet-ops): git cherry is not the check for "is this on master"
+#   Files touched in the range: agents/BOOTSTRAP_SHA, agents/lessons/fleet-ops.md,
+#   .claude/settings.json, scripts/claudecode/session-start-hook.sh and the new
+#   scripts/claudecode/stale-evidence-guard.py. The two script changes are
+#   WORKSTATION-side Claude Code hooks (a SessionStart freshness report and a
+#   PreToolUse stale-evidence guard, both self-disabling when their file is
+#   absent); they are not on the fleet runner path.
+#   agents/scripts/orchestrator-run.sh is UNTOUCHED in this range, so the runner
+#   behaviour that pushes completed agent work before reporting a failed gate is
+#   carried forward byte-identical. Neither BOOTSTRAP.md nor agents/GLOBAL.md is
+#   touched (verified with `git diff --name-only 176aefd9..0906e4b0 --
+#   BOOTSTRAP.md agents/GLOBAL.md`, empty), so no model instruction changes with
+#   this rotation.
+#   WHY THIS ROTATION: 0906e4b REMOVES a refuted line from
+#   agents/lessons/fleet-ops.md that told agents `git cherry origin/master
+#   origin/case-<id>` is the check for whether content is on master. It is not --
+#   git cherry compares PATCH-IDs, so any later amend or follow-up fix on master
+#   changes the patch-id and the original commit reads `+` (absent) forever.
+#   Acting on that `+` nearly re-introduced three fleet-stopping defects today
+#   (a case_id regex rejecting 620 of 4,607 live ids, a shared-SSH-key default
+#   export making per-host resolution inert, and a bootstrap pin false on every
+#   box after any push). Lessons are read from the PINNED tree
+#   (agents/review-pipeline.sh cats $BOOTSTRAP_REPO/agents/lessons/..., and the
+#   clone is left DETACHED at this SHA), so until this pin moved, every agent
+#   still read the refuted line. This rotation is what retires it.
+#   Per step 5 this rotation commit is itself unblessed -- the commit that
+#   records a SHA cannot contain its own SHA, so the tip again sits one commit
+#   past the pin. That is the known steady state, not a fault to chase.
+0906e4b024ce502fa84448501e76a9574ff6f275
