@@ -782,7 +782,46 @@ fi
 # review node + human gate see exactly what passed.
 VALID_ERR=""
 VERIFY_CHECKS=""   # newline-separated "name: pass|FAIL|warn|skipped"
-CHANGED="$(git diff --name-only origin/master 2>/dev/null; git diff --cached --name-only 2>/dev/null)"
+
+# ── Changed-file set — scopes every check below ──────────────────────────────
+# Each check runs only for the package this branch actually touched. That
+# matters most for tests: frontend's `test` script is `vitest run`, i.e. the
+# WHOLE unit suite, so an unrelated package's (or a pre-existing master) red
+# must never decide this branch's verdict.
+#
+# Scoping is only safe while the changed set is TRUSTWORTHY. It is derived from
+# origin/master, so a missing/unfetched ref used to yield an EMPTY list, which
+# silently skipped every check — a gate that never runs is a worse failure than
+# a gate that runs too much. So: three independent sources, and if none of them
+# succeeds (or they yield nothing) while commits exist, fall back to verifying
+# EVERY package — never to verifying none.
+_c_rc=1
+_c1="$(git diff --name-only origin/master 2>/dev/null)"       && _c_rc=0
+_c2="$(git diff --cached --name-only 2>/dev/null)"            && _c_rc=0
+_c3="$(git diff --name-only origin/master..HEAD 2>/dev/null)" && _c_rc=0
+CHANGED="$(printf '%s\n%s\n%s\n' "$_c1" "$_c2" "$_c3" | grep -v '^[[:space:]]*$' | sort -u)"
+
+# Commits present? (same expression as the no-commits guard below.) Without
+# commits there is nothing to verify and nothing to preserve, so the empty
+# changed set is CORRECT there and must not trigger the verify-everything
+# fallback — that run fails on the no-commits guard moments later anyway.
+HAS_COMMITS=0
+if git rev-parse --verify HEAD >/dev/null 2>&1 \
+   && [ -n "$(git log origin/master..HEAD --oneline 2>/dev/null)" ]; then
+  HAS_COMMITS=1
+fi
+
+CHANGED_TRUSTED=1
+if [ "$HAS_COMMITS" = "1" ] && { [ "$_c_rc" -ne 0 ] || [ -z "$CHANGED" ]; }; then
+  CHANGED_TRUSTED=0
+fi
+
+# Did $1 change? An untrusted changed set answers YES for every package, which
+# is exactly the unscoped pre-2026-09-16 behaviour.
+pkg_changed() {
+  [ "$CHANGED_TRUSTED" = "1" ] || return 0
+  printf '%s\n' "$CHANGED" | grep -q "^$1/"
+}
 
 add_check() { VERIFY_CHECKS="${VERIFY_CHECKS:+$VERIFY_CHECKS
 }$1"; }
@@ -791,10 +830,17 @@ add_fail()  { VALID_ERR="${VALID_ERR:+$VALID_ERR
 }### $1:
 $(printf '%s' "$2" | tail -c 2000)"; }
 
+# Make the fallback visible in the evidence the review node + human gate read,
+# so "everything was verified" is never confused with "nothing was".
+if [ "$CHANGED_TRUSTED" != "1" ]; then
+  log "WARN: changed-file list unavailable — verifying ALL packages (scoping off)"
+  add_check "changed-file scoping: unavailable (verifying all packages)"
+fi
+
 # Hard build/tsc verification for a changed TS package. mode = build|tsc.
 verify_ts() {
   local pkg="$1" mode="$2"
-  echo "$CHANGED" | grep -q "^${pkg}/" || return 0
+  pkg_changed "$pkg" || return 0
   [ -f "${pkg}/package.json" ] || return 0
   # Self-heal deps so verification actually runs fleet-wide (node_modules coverage
   # varies per server). npm ci needs the lockfile; an install failure degrades to
@@ -840,7 +886,7 @@ verify_ts orchestrator tsc
 verify_ts ingestion-worker tsc
 
 # Soft signal: frontend lint (recorded, never blocks — style ≠ correctness).
-if echo "$CHANGED" | grep -q '^frontend/' && [ -d frontend/node_modules ]; then
+if pkg_changed frontend && [ -d frontend/node_modules ]; then
   if (cd frontend && timeout 180 npm run lint >/dev/null 2>&1); then
     add_check "frontend lint: pass"
   else
@@ -866,9 +912,11 @@ while IFS= read -r pyf; do
   fi
 done < <(echo "$CHANGED" | grep '\.py$')
 
-# Run a package `test` script if one exists (future-proof; most have none today).
+# Run a package `test` script if one exists, for CHANGED packages only. The
+# frontend script is `vitest run` (the whole suite), so an unscoped loop let one
+# red test on master fail every concurrent branch that touched frontend/.
 for pkg in frontend agent-worker orchestrator ingestion-worker backend; do
-  echo "$CHANGED" | grep -q "^${pkg}/" || continue
+  pkg_changed "$pkg" || continue
   [ -f "${pkg}/package.json" ] && [ -d "${pkg}/node_modules" ] || continue
   if node -e "process.exit((require('./${pkg}/package.json').scripts||{}).test?0:1)" 2>/dev/null; then
     log "Running ${pkg} tests..."
@@ -899,9 +947,17 @@ if ! git rev-parse --verify HEAD >/dev/null 2>&1 || [ -z "$(git log origin/maste
   emit "failed" "$BRANCH" 1 "${DENY_NOTE:+$DENY_NOTE }No commits produced on $BRANCH" "Agent made no committed changes" "$TOKENS" "$(build_verify_json 0)"
 fi
 
-if [ -n "$VALID_ERR" ]; then
-  emit "failed" "$BRANCH" 1 "$VALID_ERR" "Verification failed" "$TOKENS" "$(build_verify_json 0)"
-fi
+# Record the verdict — do NOT exit on it yet. A failing gate used to call emit()
+# here, and emit() EXITS, so the push below never ran and the agent's committed
+# work stayed on the box with no preservation path (CASE-20260914-E01AB5: a
+# complete 8-file implementation stranded on agent-04; the strike cap then parks
+# the case for good). The commit must always reach origin — the same intent as
+# dispatch.sh's api_exhausted branch, which pushes partial work before reporting
+# the failure, and the same order the platform repo's copy of this runner uses
+# (record result → push → emit). The VERDICT is unchanged: a failed
+# verification is still reported "failed", with VALID_ERR intact.
+VERIFY_PASSED=1
+[ -n "$VALID_ERR" ] && VERIFY_PASSED=0
 
 # ── Push branch (orchestrator decides on merge later, after human gate) ──────
 repo_lock  # pushes update shared remote-tracking refs — same race as fetch
@@ -913,11 +969,33 @@ repo_lock  # pushes update shared remote-tracking refs — same race as fetch
 # gate-deleted branch → 'stale info' on every retry).
 git fetch origin "+refs/heads/$BRANCH:refs/remotes/origin/$BRANCH" >> "$LOG" 2>&1 \
   || git update-ref -d "refs/remotes/origin/$BRANCH" >> "$LOG" 2>&1 || true
-if ! git push -u origin "$BRANCH" --force-with-lease >> "$LOG" 2>&1; then
-  repo_unlock
-  emit "failed" "$BRANCH" 1 "git push failed" "Could not push branch" "$TOKENS" "$(build_verify_json 1)"
-fi
+# --force-with-lease is still correct on the preserve-on-failure path: the lease
+# basis was just refreshed above, and every attempt rebuilds $BRANCH from
+# origin/master in a fresh worktree, so the only thing this can overwrite is an
+# EARLIER ATTEMPT OF THIS SAME CASE — which is only ever retried because it
+# failed, and whose successor carries its prior_errors. It can never reach
+# master, and a passing attempt is never followed by another attempt on the same
+# branch. (Plain --force would be unsafe; do not weaken this to that.)
+PUSH_OK=1
+git push -u origin "$BRANCH" --force-with-lease >> "$LOG" 2>&1 || PUSH_OK=0
 repo_unlock
+
+if [ "$PUSH_OK" -ne 1 ]; then
+  # Push failed: report that, but never drop the verification errors — a retry
+  # must see the real cause, not just "git push failed".
+  log "=== Push FAILED case=$CASE_ID branch=$BRANCH verify_passed=$VERIFY_PASSED ==="
+  emit "failed" "$BRANCH" 1 "${VALID_ERR:+$VALID_ERR
+
+}### git push failed:
+Could not push $BRANCH to origin — see $LOG on $(hostname)" \
+    "Could not push branch" "$TOKENS" "$(build_verify_json "$VERIFY_PASSED")"
+fi
+
+if [ "$VERIFY_PASSED" -ne 1 ]; then
+  # Work is safe on origin; the case still fails, with the real errors.
+  log "=== Verification FAILED case=$CASE_ID branch=$BRANCH PUSHED (work preserved) checks=[$VERIFY_CHECKS] ==="
+  emit "failed" "$BRANCH" 1 "$VALID_ERR" "Verification failed" "$TOKENS" "$(build_verify_json 0)"
+fi
 
 log "=== Success case=$CASE_ID branch=$BRANCH tokens=$TOKENS checks=[$VERIFY_CHECKS] ==="
 emit "success" "$BRANCH" 0 "" "$RESULT_TEXT" "$TOKENS" "$(build_verify_json 1)"
