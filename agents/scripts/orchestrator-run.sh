@@ -106,26 +106,40 @@ HELPER
 }
 
 # ── Bootstrap pin (P1-B) ─────────────────────────────────────────────────────
-# ~/grotap-agents is reset --hard to origin/master on every run and THIS FILE is
-# executed from it, so whatever is on that branch runs as the agent user on every
-# fleet host. It was taken on trust. agents/BOOTSTRAP_SHA records a blessed
-# commit and this checks against it.
+# ~/grotap-agents is refreshed from origin on every run and THIS FILE is
+# executed out of it, so whatever that tree holds runs as the agent user on
+# every fleet host (and grotap-platform's dispatch.sh cats BOOTSTRAP.md and
+# agents/GLOBAL.md out of the same tree straight into the model prompt).
+# agents/BOOTSTRAP_SHA records the blessed commit, and this function decides
+# what is put on disk.
 #
-# SELF-REFERENCE. The pin file lives in the repo it pins, so an exact pin can
-# never be written: the commit that records a SHA cannot contain its own SHA.
-# Hence two enforcing modes, and the default is the one that survives normal
-# development:
+# MODES (ORCH_BOOTSTRAP_PIN):
+#   detach  (DEFAULT — `on` and `pin` are aliases). A REAL pin. The pinned
+#     commit must exist in the fetched repo; the runner then checks it out
+#     DETACHED and confirms HEAD equals it. Master may have moved on; the fleet
+#     runs the blessed tree regardless. A stale pin therefore degrades to
+#     "agents read a slightly older BOOTSTRAP.md", never to "no agents run".
+#     That is exactly the property the old exact-match pin lacked: it asserted
+#     "master tip == hardcoded SHA", which is false on every box at once after
+#     any routine push, and every abort burned a retry strike because nothing
+#     caps dispatch strikes.
+#     ROTATION IS MANDATORY: nothing pushed to grotap-agents master reaches an
+#     agent until agents/BOOTSTRAP_SHA names it. See that file's ROTATION
+#     section.
+#   ancestor — the legacy DETECTOR: verify the tip descends from the pin, then
+#     run the TIP. Catches a force-push/rewrite but does not control what runs.
+#     Kept as a one-env-var rollback.
+#   exact — the fetched tip must EQUAL the pin (and is then what runs). A
+#     lockdown window only: it stops the fleet the moment master moves.
+#   off (also 0/false/no) — no check, loud warning. Emergency bypass.
+#   Anything unrecognised is treated as `detach` with a warning: a typo in an
+#   env var must not silently switch the control off.
 #
-#   ORCH_BOOTSTRAP_PIN=ancestor  (DEFAULT) — the target commit must BE the pin
-#     or a DESCENDANT of it. Catches a force-push, a history rewrite, a reset to
-#     an unrelated tree, or a remote swapped for a different repo. Does NOT catch
-#     a malicious commit appended on top of master by someone who already has
-#     push access — say so out loud rather than calling this "the repo is
-#     verified". Rotating the pin forward is what shrinks that window.
-#   ORCH_BOOTSTRAP_PIN=exact — the target must equal the pin exactly. Full
-#     control, and it stops the fleet the moment grotap-agents master moves until
-#     the pin is rotated. Use it for a lockdown window, not as a steady state.
-#   ORCH_BOOTSTRAP_PIN=off — no check, loud warning. Emergency bypass.
+# ANCESTRY IS KEPT AS AN ADDITIONAL SIGNAL. In detach mode a pin that is not an
+# ancestor of the tip still means a force-push or a history rewrite, so it gets
+# a distinct, louder line — but it does NOT abort, because the tree that runs is
+# the blessed commit either way, and aborting there would hand anyone with push
+# access a fleet-wide kill switch.
 #
 # Absent or malformed pin file on a host that has NEVER verified a pin => loud
 # warning and continue, NOT a brick: this file reaches hosts by the very
@@ -135,31 +149,37 @@ HELPER
 # difference is $HOME/.grotap_bootstrap_pin_seen, stamped on every successful
 # verify and living outside the git tree so a push cannot clear it. Without that
 # distinction, one ordinary commit deleting agents/BOOTSTRAP_SHA would switch
-# rewrite detection off permanently, for every actor, with nothing louder than a
-# log line — turning "we cannot catch one malicious append" into "one malicious
-# append disables the control".
+# the control off permanently, for every actor, with nothing louder than a log
+# line.
 BOOTSTRAP_PIN_FAIL=""
+BOOTSTRAP_PIN_SHA=""   # set only in detach mode: the commit to check out
 verify_bootstrap_pin() {
   local mode target pinned
-  mode="$(printf '%s' "${ORCH_BOOTSTRAP_PIN:-ancestor}" | tr '[:upper:]' '[:lower:]')"
-  if [ "$mode" = "off" ] || [ "$mode" = "0" ] || [ "$mode" = "false" ] || [ "$mode" = "no" ]; then
-    log "WARNING: bootstrap pin DISABLED (ORCH_BOOTSTRAP_PIN=$mode) — ~/grotap-agents is UNVERIFIED"
-    return 0
-  fi
+  BOOTSTRAP_PIN_SHA=""
+  mode="$(printf '%s' "${ORCH_BOOTSTRAP_PIN:-detach}" | tr '[:upper:]' '[:lower:]')"
+  case "$mode" in
+    off|0|false|no)
+      log "WARNING: bootstrap pin DISABLED (ORCH_BOOTSTRAP_PIN=$mode) — ~/grotap-agents is UNVERIFIED"
+      return 0
+      ;;
+    detach|on|pin|"") mode="detach" ;;
+    ancestor|exact)   ;;
+    *)
+      log "WARNING: unrecognised ORCH_BOOTSTRAP_PIN='$mode' — enforcing the default 'detach' mode (a typo must not disable the pin)"
+      mode="detach"
+      ;;
+  esac
 
   # The pin lives INSIDE the repo it pins, so anyone with ordinary push access
-  # can delete or corrupt it with one legitimate commit. `ancestor` mode passes
-  # that commit — a disclosed gap — but the side effect is far larger than the
-  # gap itself: every SUBSEQUENT run would see "no pin file", warn, and proceed,
-  # so one append would permanently switch rewrite detection off for every actor
-  # thereafter. The seen-marker lives OUTSIDE the git tree, where a push cannot
-  # reach it, and turns that into a fail-closed error. A genuinely fresh host has
-  # no marker and keeps the deliberate fail-open, so this does not brick a box
-  # whose script is newer than its pin file.
+  # can delete or corrupt it with one legitimate commit. The seen-marker lives
+  # OUTSIDE the git tree, where a push cannot reach it, and turns that into a
+  # fail-closed error. A genuinely fresh host has no marker and keeps the
+  # deliberate fail-open, so this does not brick a box whose script is newer
+  # than its pin file.
   #
   # WHERE THE PIN IS READ FROM, and why it is not the working tree.
-  # The verify runs BEFORE `reset --hard origin/master`, so the on-disk file is
-  # the PREVIOUS run's copy. If a bad value is ever committed -- a trailing
+  # The verify runs BEFORE the incoming tree is put on disk, so the on-disk file
+  # is the PREVIOUS run's copy. If a bad value is ever committed -- a trailing
   # space, a CRLF from a Windows edit, an abbreviated SHA -- it lands on all
   # five boxes on run N and fails every run from N+1, and the corrected push can
   # never take effect, because updating the tree is downstream of the check that
@@ -176,34 +196,35 @@ verify_bootstrap_pin() {
   fi
   if [ ! -f "$pin_file" ] && [ -z "$pin_text" ]; then
     if [ -f "$seen_marker" ]; then
-      BOOTSTRAP_PIN_FAIL="bootstrap pin WENT MISSING: $pin_file is absent but this host has verified a pin before ($seen_marker). A commit deleted the pin file — that disables rewrite detection for every later run, so this is refused rather than warned. Restore agents/BOOTSTRAP_SHA, or set ORCH_BOOTSTRAP_PIN=off deliberately."
+      BOOTSTRAP_PIN_FAIL="bootstrap pin WENT MISSING: $pin_file is absent but this host has verified a pin before ($seen_marker). A commit deleted the pin file — that disables the control for every later run, so this is refused rather than warned. Restore agents/BOOTSTRAP_SHA, or set ORCH_BOOTSTRAP_PIN=off deliberately."
       log "ERROR: $BOOTSTRAP_PIN_FAIL"
       return 1
     fi
     log "WARNING: no $pin_file — bootstrap tree UNPINNED (P1-B still open on this host)"
     return 0
   fi
+  # Strip CR so a Windows-edited pin file still parses; keep line structure so
+  # the 40-hex match stays anchored to a line of its own. (Deleting newlines
+  # here instead would fold the whole commented file onto ONE line, no line
+  # would ever match ^[0-9a-f]{40}$, and the pin would silently read as absent.)
   if [ -n "$pin_text" ]; then
-    pinned="$(printf '%s
-' "$pin_text" | tr -d '
-' | grep -oE '^[0-9a-f]{40}$' | head -1)"
+    pinned="$(printf '%s\n' "$pin_text" | tr -d '\r' | grep -oE '^[0-9a-f]{40}$' | head -1)"
   else
-    pinned="$(tr -d '
-' < "$pin_file" 2>/dev/null | grep -oE '^[0-9a-f]{40}$' | head -1)"
+    pinned="$(tr -d '\r' < "$pin_file" 2>/dev/null | grep -oE '^[0-9a-f]{40}$' | head -1)"
   fi
   log "Bootstrap pin source: $pin_src"
   if [ -z "$pinned" ]; then
     if [ -f "$seen_marker" ]; then
-      BOOTSTRAP_PIN_FAIL="bootstrap pin CORRUPT: $pin_file holds no bare 40-hex SHA, but this host has verified a pin before ($seen_marker). Treated as tampering, not as a fresh host. Restore agents/BOOTSTRAP_SHA, or set ORCH_BOOTSTRAP_PIN=off deliberately."
+      BOOTSTRAP_PIN_FAIL="bootstrap pin CORRUPT: $pin_src holds no bare 40-hex SHA on a line of its own, but this host has verified a pin before ($seen_marker). Treated as tampering, not as a fresh host. Restore agents/BOOTSTRAP_SHA, or set ORCH_BOOTSTRAP_PIN=off deliberately."
       log "ERROR: $BOOTSTRAP_PIN_FAIL"
       return 1
     fi
-    log "WARNING: $pin_file holds no bare 40-hex SHA — bootstrap tree UNPINNED"
+    log "WARNING: $pin_src holds no bare 40-hex SHA — bootstrap tree UNPINNED"
     return 0
   fi
 
-  # What we are about to trust: the fetched remote tip when the fetch worked,
-  # otherwise whatever is already checked out.
+  # The tip we would otherwise have run: the fetched remote when the fetch
+  # worked, otherwise whatever is already checked out.
   if [ "${_BS_FETCH_OK:-1}" = "1" ]; then
     target="$(git -C "$HOME/grotap-agents" rev-parse origin/master 2>/dev/null || echo "")"
   else
@@ -215,6 +236,39 @@ verify_bootstrap_pin() {
     return 1
   fi
 
+  # Does the blessed commit exist here at all? Missing means the history was
+  # rewritten, the remote is a different repository, or the pin names a commit
+  # that was never pushed. Refuse in every enforcing mode — there is nothing
+  # blessed to run.
+  if ! git -C "$HOME/grotap-agents" cat-file -e "${pinned}^{commit}" 2>/dev/null; then
+    local fetch_state="fetch OK"
+    [ "${_BS_FETCH_OK:-1}" = "1" ] || fetch_state="fetch FAILED"
+    BOOTSTRAP_PIN_FAIL="bootstrap pin: pinned commit $pinned does not exist in ~/grotap-agents ($fetch_state) — the history was rewritten, the remote is not the repo this pin was taken from, or the pin names a commit that was never pushed. Rotate agents/BOOTSTRAP_SHA to a commit that IS on the remote; ORCH_BOOTSTRAP_PIN=off is the emergency bypass."
+    log "ERROR: $BOOTSTRAP_PIN_FAIL"
+    return 1
+  fi
+
+  # Cheap, and still meaningful in detach mode as a rewrite signal.
+  local descends="no"
+  git -C "$HOME/grotap-agents" merge-base --is-ancestor "$pinned" "$target" 2>/dev/null && descends="yes"
+
+  if [ "$mode" = "detach" ]; then
+    if [ "$descends" != "yes" ] && [ "$target" != "$pinned" ]; then
+      log "SECURITY WARNING: pinned $pinned is NOT an ancestor of $target — force-push or history rewrite on grotap-agents master. The PINNED tree is what runs, so dispatch continues rather than handing push access a fleet-wide kill switch. Investigate the remote before rotating the pin."
+    fi
+    BOOTSTRAP_PIN_SHA="$pinned"
+    if [ "$target" = "$pinned" ]; then
+      log "Bootstrap tree VERIFIED at pinned $pinned (mode=detach; the pin IS the current tip)"
+    else
+      local ahead
+      ahead="$(git -C "$HOME/grotap-agents" rev-list --count "${pinned}..${target}" 2>/dev/null || echo "?")"
+      log "Bootstrap tree PINNED at $pinned (mode=detach) — tip $target is $ahead commit(s) ahead and will NOT be run. Rotate agents/BOOTSTRAP_SHA to ship it."
+    fi
+    : > "$seen_marker" 2>/dev/null || true
+    return 0
+  fi
+
+  # ── Legacy modes: verify only, then run whatever the tip is ────────────────
   if [ "$target" = "$pinned" ]; then
     log "Bootstrap tree VERIFIED at pinned $pinned (mode=$mode)"
     : > "$seen_marker" 2>/dev/null || true
@@ -222,25 +276,46 @@ verify_bootstrap_pin() {
   fi
 
   if [ "$mode" = "exact" ]; then
-    BOOTSTRAP_PIN_FAIL="bootstrap pin MISMATCH (exact): ~/grotap-agents is at $target, agents/BOOTSTRAP_SHA pins $pinned. Rotate the pin or set ORCH_BOOTSTRAP_PIN=ancestor."
+    BOOTSTRAP_PIN_FAIL="bootstrap pin MISMATCH (exact): ~/grotap-agents is at $target, agents/BOOTSTRAP_SHA pins $pinned. Rotate the pin, or drop ORCH_BOOTSTRAP_PIN to get the default detach mode, which RUNS the pin instead of refusing."
     log "ERROR: $BOOTSTRAP_PIN_FAIL"
     return 1
   fi
 
   # ancestor mode
-  if ! git -C "$HOME/grotap-agents" cat-file -e "${pinned}^{commit}" 2>/dev/null; then
-    BOOTSTRAP_PIN_FAIL="bootstrap pin: pinned commit $pinned does not exist in ~/grotap-agents — the history was rewritten, or the remote is not the repo this pin was taken from."
-    log "ERROR: $BOOTSTRAP_PIN_FAIL"
-    return 1
-  fi
-  if git -C "$HOME/grotap-agents" merge-base --is-ancestor "$pinned" "$target" 2>/dev/null; then
-    log "Bootstrap tree OK: $target descends from pinned $pinned (mode=ancestor)"
+  if [ "$descends" = "yes" ]; then
+    log "Bootstrap tree OK: $target descends from pinned $pinned (mode=ancestor) — running the TIP, not the pin"
     : > "$seen_marker" 2>/dev/null || true
     return 0
   fi
-  BOOTSTRAP_PIN_FAIL="bootstrap pin BROKEN: $target does not descend from pinned $pinned — force-push or history rewrite on grotap-agents master. Refusing to reset --hard onto it. Rotate agents/BOOTSTRAP_SHA only after reading what changed; ORCH_BOOTSTRAP_PIN=off is the emergency bypass."
+  BOOTSTRAP_PIN_FAIL="bootstrap pin BROKEN: $target does not descend from pinned $pinned — force-push or history rewrite on grotap-agents master. Refusing to run it. Rotate agents/BOOTSTRAP_SHA only after reading what changed; ORCH_BOOTSTRAP_PIN=off is the emergency bypass."
   log "ERROR: $BOOTSTRAP_PIN_FAIL"
   return 1
+}
+
+# Put the blessed commit on disk and PROVE it landed. Every failure here is
+# "we could not establish the tree we are required to run", which is an infra
+# abort — NOT the stale-pin case. A stale pin never reaches this function's
+# error paths: it simply checks out an older commit and the agents read an older
+# BOOTSTRAP.md, so a routine push to grotap-agents can never brick the fleet.
+checkout_bootstrap_pin() {
+  local sha="$BOOTSTRAP_PIN_SHA" now
+  [ -z "$sha" ] && return 0
+  if ! git -C "$HOME/grotap-agents" checkout --quiet --force --detach "$sha" >> "$LOG" 2>&1; then
+    BOOTSTRAP_PIN_FAIL="bootstrap pin: could not check out pinned commit $sha in ~/grotap-agents (git checkout --detach failed — see $LOG). The blessed tree was NOT put on disk, so the run is refused instead of executing an unverified tree."
+    log "ERROR: $BOOTSTRAP_PIN_FAIL"
+    return 1
+  fi
+  now="$(git -C "$HOME/grotap-agents" rev-parse HEAD 2>/dev/null || echo "")"
+  if [ "$now" != "$sha" ]; then
+    BOOTSTRAP_PIN_FAIL="bootstrap pin: HEAD is '$now' after checking out pinned $sha — refusing to run a bootstrap tree that is not the blessed commit."
+    log "ERROR: $BOOTSTRAP_PIN_FAIL"
+    return 1
+  fi
+  # checkout --force already restored tracked files; this makes the index agree
+  # and clears anything a killed earlier run left staged.
+  git -C "$HOME/grotap-agents" reset --quiet --hard "$sha" >> "$LOG" 2>&1 || true
+  log "Bootstrap tree CHECKED OUT detached at pinned $sha"
+  return 0
 }
 
 # ── Ensure platform repo exists and is current ───────────────────────────────
@@ -254,24 +329,32 @@ ensure_repo() {
   # backup branch, never discarded.
   _BS_FETCH_OK=1
   if git -C "$HOME/grotap-agents" fetch origin +refs/heads/master:refs/remotes/origin/master -q >> "$LOG" 2>&1; then
-    # ── P1-B: verify the incoming bootstrap tree BEFORE reset --hard puts it
+    # ── P1-B: verify the incoming bootstrap tree BEFORE anything of it lands
     # on disk. This is not prompt hygiene: the next run executes this very
-    # file out of ~/grotap-agents, so an unverified reset --hard is remote
-    # code execution on every fleet host, one run later.
+    # file out of ~/grotap-agents, so an unverified checkout is remote code
+    # execution on every fleet host, one run later.
     if ! verify_bootstrap_pin; then
       return 1
     fi
     if [ -n "$(git -C "$HOME/grotap-agents" log --oneline origin/master..HEAD 2>/dev/null)" ]; then
       git -C "$HOME/grotap-agents" branch -f "backup/local-$(date -u +%Y%m%d-%H%M%S)" HEAD >> "$LOG" 2>&1 || true
     fi
-    git -C "$HOME/grotap-agents" reset --hard origin/master -q >> "$LOG" 2>&1 || true
+    if [ -n "$BOOTSTRAP_PIN_SHA" ]; then
+      # Default (detach) mode: run the BLESSED commit, not the tip.
+      checkout_bootstrap_pin || return 1
+    else
+      # Legacy/off modes: the tip is what runs.
+      git -C "$HOME/grotap-agents" reset --hard origin/master -q >> "$LOG" 2>&1 || true
+    fi
   else
     # Fetch failed: nothing new lands, but the tree on disk still executes, so
-    # it is still checked — against HEAD rather than the unavailable remote.
+    # it is still checked — against HEAD rather than the unavailable remote —
+    # and still moved onto the pin when the pinned commit is already here.
     _BS_FETCH_OK=0
     if ! verify_bootstrap_pin; then
       return 1
     fi
+    checkout_bootstrap_pin || return 1
   fi
   if [ ! -d "$PLATFORM_DIR/.git" ]; then
     log "Cloning grotap-platform..."

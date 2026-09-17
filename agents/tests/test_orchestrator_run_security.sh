@@ -20,11 +20,17 @@
 #     T5  no denial → no denial noise
 #
 #   Bootstrap pin (ORCH_BOOTSTRAP_PIN) — P1-B
-#     T6  ancestor mode, pin is an ancestor of the incoming tip → proceeds
-#     T7  ancestor mode, history rewritten so the tip does NOT descend from the
-#         pin → ABORT before reset --hard, run never reaches the model
-#     T8  exact mode, tip moved → ABORT
-#     T9  off → loud warning, proceeds
+#     T6   DEFAULT (detach): the PINNED commit is checked out and run, the tip
+#          is not, and the staleness is logged
+#     T6b  detach, pin IS the tip → VERIFIED, nothing moves
+#     T6c  ancestor mode (legacy detector) → descent verified, TIP is what runs
+#     T6d  an unrecognised mode falls back to detach with a warning
+#     T7   detach, history rewritten → SECURITY WARNING, blessed tree still
+#          runs (a force-push must not become a fleet-wide kill switch)
+#     T7b  ancestor mode, history rewritten → ABORT, run never reaches the model
+#     T7c  pinned commit absent from the repo → ABORT
+#     T8   exact mode, tip moved → ABORT
+#     T9   off → loud warning, proceeds
 #     T10 pin file absent → loud warning, proceeds (a host must not be bricked)
 #
 # No SSH, no network, no Anthropic API, no fleet host. Everything runs against a
@@ -261,22 +267,81 @@ run CLAUDE_PERMISSION_MODE=acceptEdits
 assert_eq "T5 silent" "$(logged 'TOOL DENIED BY THE RUNNER PERMISSION POLICY')" "0"
 
 # ═══ Bootstrap pin ══════════════════════════════════════════════════════════
-echo "T6: ancestor mode, tip descends from the pin → proceeds"
+# The DEFAULT is now `detach`: the runner checks the PINNED commit out and runs
+# it, instead of verifying ancestry and then running the tip. The mock repo has
+# PIN_BASE (first commit, carries agents/one.txt) and AGENTS_TIP (second commit,
+# adds agents/two.txt), so "did the pin actually decide what is on disk?" is
+# answerable from the working tree: pinned at PIN_BASE => two.txt must NOT exist.
+bhead() { git -C "$FAKEHOME/grotap-agents" rev-parse HEAD 2>/dev/null; }
+
+echo "T6: DEFAULT (detach), pin behind the tip → the PIN is checked out, not the tip"
 build_home t6; printf '%s\n' "$PIN_BASE" > "$PIN_FILE"
 run
-assert_eq "T6 descent logged" "$(atleast1 "$(logged 'descends from pinned')")" "yes"
-assert_eq "T6 model still ran" "$([[ -f "$TMP/state/claude.argv" ]] && echo yes || echo no)" "yes"
+assert_eq "T6 HEAD is the pinned commit" "$(bhead)" "$PIN_BASE"
+assert_eq "T6 tip content is NOT on disk" \
+  "$([[ -f "$FAKEHOME/grotap-agents/agents/two.txt" ]] && echo present || echo absent)" "absent"
+assert_eq "T6 says it is pinned and names the staleness" \
+  "$(atleast1 "$(logged 'Bootstrap tree PINNED at')")" "yes"
+assert_eq "T6 detach is logged" "$(atleast1 "$(logged 'CHECKED OUT detached at pinned')")" "yes"
+# The sandbox cannot complete a real run on Windows (the runner fails later at
+# "Could not trust worktree"), so assert the PIN did not abort it, not that the
+# whole run succeeded.
+assert_eq "T6 the pin did NOT abort the run" "$(printf '%s' "$(rfield errors)" | grep -c 'bootstrap pin')" "0"
 
-echo "T7: ancestor mode, history rewritten → ABORT before reset --hard"
+echo "T6b: DEFAULT (detach), pin IS the tip → verified, nothing moves"
+build_home t6b
+printf '%s\n' "$AGENTS_TIP" > "$PIN_FILE"
+run
+assert_eq "T6b HEAD is the pinned tip" "$(bhead)" "$AGENTS_TIP"
+assert_eq "T6b VERIFIED line names detach mode" \
+  "$(atleast1 "$(logged 'VERIFIED at pinned .* (mode=detach')")" "yes"
+
+echo "T6c: ORCH_BOOTSTRAP_PIN=ancestor → legacy detector, runs the TIP"
+build_home t6c; printf '%s\n' "$PIN_BASE" > "$PIN_FILE"
+run ORCH_BOOTSTRAP_PIN=ancestor
+assert_eq "T6c descent logged" "$(atleast1 "$(logged 'descends from pinned')")" "yes"
+assert_eq "T6c HEAD is the TIP, not the pin" "$(bhead)" "$AGENTS_TIP"
+
+echo "T6d: an unrecognised mode falls back to detach, loudly (a typo must not disable the pin)"
+build_home t6d; printf '%s\n' "$PIN_BASE" > "$PIN_FILE"
+run ORCH_BOOTSTRAP_PIN=ancestorr
+assert_eq "T6d warns about the unrecognised value" \
+  "$(atleast1 "$(logged 'unrecognised ORCH_BOOTSTRAP_PIN')")" "yes"
+assert_eq "T6d still enforced the pin" "$(bhead)" "$PIN_BASE"
+
+echo "T7: detach mode, history rewritten → the BLESSED tree still runs, loudly"
+# A force-push cannot be allowed to stop the fleet: what runs is the pinned
+# commit, which the rewrite did not change. It must be flagged, not obeyed.
 build_home t7; printf '%s\n' "$PIN_BASE" > "$PIN_FILE"
 rewrite_agents_history
-rm -f "$TMP/state/claude.argv"
 run
-assert_eq "T7 status failed" "$(rfield status)" "failed"
-assert_eq "T7 names the broken pin" "$(printf '%s' "$(rfield errors)" | grep -c 'bootstrap pin')" "1"
-assert_eq "T7 model NEVER ran" "$([[ -f "$TMP/state/claude.argv" ]] && echo yes || echo no)" "no"
+assert_eq "T7 rewrite is called out as a SECURITY WARNING" \
+  "$(atleast1 "$(logged 'SECURITY WARNING')")" "yes"
+assert_eq "T7 HEAD is the pinned commit, not the rewrite" "$(bhead)" "$PIN_BASE"
 assert_eq "T7 bootstrap tree NOT reset onto the rewrite" \
   "$(cat "$FAKEHOME/grotap-agents/agents/one.txt")" "one"
+assert_eq "T7 dispatch was NOT bricked by someone else's force-push" "$(printf '%s' "$(rfield errors)" | grep -c 'bootstrap pin')" "0"
+
+echo "T7b: ancestor mode, history rewritten → ABORT before anything lands"
+build_home t7b; printf '%s\n' "$PIN_BASE" > "$PIN_FILE"
+rewrite_agents_history
+rm -f "$TMP/state/claude.argv"
+run ORCH_BOOTSTRAP_PIN=ancestor
+assert_eq "T7b status failed" "$(rfield status)" "failed"
+assert_eq "T7b names the broken pin" "$(printf '%s' "$(rfield errors)" | grep -c 'bootstrap pin')" "1"
+assert_eq "T7b model NEVER ran" "$([[ -f "$TMP/state/claude.argv" ]] && echo yes || echo no)" "no"
+assert_eq "T7b bootstrap tree NOT reset onto the rewrite" \
+  "$(cat "$FAKEHOME/grotap-agents/agents/one.txt")" "one"
+
+echo "T7c: pinned commit does not exist here at all → ABORT (nothing blessed to run)"
+build_home t7c
+printf '%s\n' "0123456789abcdef0123456789abcdef01234567" > "$PIN_FILE"
+rm -f "$TMP/state/claude.argv"
+run
+assert_eq "T7c status failed" "$(rfield status)" "failed"
+assert_eq "T7c says the pinned commit does not exist" \
+  "$(printf '%s' "$(rfield errors)" | grep -c 'does not exist')" "1"
+assert_eq "T7c model NEVER ran" "$([[ -f "$TMP/state/claude.argv" ]] && echo yes || echo no)" "no"
 
 echo "T8: exact mode, tip moved past the pin → ABORT"
 build_home t8; printf '%s\n' "$PIN_BASE" > "$PIN_FILE"
@@ -291,13 +356,14 @@ build_home t9; printf '%s\n' "$PIN_BASE" > "$PIN_FILE"
 rewrite_agents_history   # even with a broken pin, off must not block
 run ORCH_BOOTSTRAP_PIN=off
 assert_eq "T9 warns" "$(atleast1 "$(logged 'bootstrap pin DISABLED')")" "yes"
-assert_eq "T9 model ran" "$([[ -f "$TMP/state/claude.argv" ]] && echo yes || echo no)" "yes"
+assert_eq "T9 nothing is pinned — the tree follows origin" \
+  "$(cat "$FAKEHOME/grotap-agents/agents/one.txt")" "pwned"
 
 echo "T10: pin file absent → warn, proceed (host must not be bricked)"
 build_home t10   # no pin file written
 run
 assert_eq "T10 warns UNPINNED" "$(atleast1 "$(logged 'UNPINNED')")" "yes"
-assert_eq "T10 model ran" "$([[ -f "$TMP/state/claude.argv" ]] && echo yes || echo no)" "yes"
+assert_eq "T10 tree follows origin (nothing detached)" "$(bhead)" "$AGENTS_TIP"
 # The negative half of T11, and the one that protects the fresh host: the
 # fail-open path must NOT stamp the seen-marker. If it did, a first run on an
 # unpinned host would stamp, and the NEXT run — pin file still absent for the
@@ -305,25 +371,21 @@ assert_eq "T10 model ran" "$([[ -f "$TMP/state/claude.argv" ]] && echo yes || ec
 # fail-open exists to protect.
 assert_eq "T10 fail-open does NOT stamp the marker"   "$([[ -f "$FAKEHOME/.grotap_bootstrap_pin_seen" ]] && echo yes || echo no)" "no"
 run   # second run, pin still absent: must STILL warn-and-proceed, not brick
-assert_eq "T10 second run still proceeds" "$([[ -f "$TMP/state/claude.argv" ]] && echo yes || echo no)" "yes"
+assert_eq "T10 second run still proceeds" "$(printf '%s' "$(rfield errors)" | grep -c 'bootstrap pin')" "0"
 
 echo "T10b: ORCH_BOOTSTRAP_PIN=off must not stamp either"
-build_home t10b; printf '%s
-' "$PIN_BASE" > "$PIN_FILE"
+build_home t10b; printf '%s\n' "$PIN_BASE" > "$PIN_FILE"
 run ORCH_BOOTSTRAP_PIN=off
 assert_eq "T10b off does NOT stamp the marker"   "$([[ -f "$FAKEHOME/.grotap_bootstrap_pin_seen" ]] && echo yes || echo no)" "no"
 
 echo "T11: successful verify stamps the seen-marker outside the git tree"
-build_home t11; printf '%s
-' "$PIN_BASE" > "$PIN_FILE"
+build_home t11; printf '%s\n' "$PIN_BASE" > "$PIN_FILE"
 run
 assert_eq "T11 marker created" "$([[ -f "$FAKEHOME/.grotap_bootstrap_pin_seen" ]] && echo yes || echo no)" "yes"
 assert_eq "T11 marker is outside the repo"   "$([[ -e "$FAKEHOME/grotap-agents/.grotap_bootstrap_pin_seen" ]] && echo inside || echo outside)" "outside"
-assert_eq "T11 model ran" "$([[ -f "$TMP/state/claude.argv" ]] && echo yes || echo no)" "yes"
 
 echo "T12: pin DELETED after a previous verify → fail closed (not warn-and-proceed)"
-build_home t12; printf '%s
-' "$PIN_BASE" > "$PIN_FILE"
+build_home t12; printf '%s\n' "$PIN_BASE" > "$PIN_FILE"
 run                                   # first run verifies and stamps the marker
 assert_eq "T12 marker present after first run"   "$([[ -f "$FAKEHOME/.grotap_bootstrap_pin_seen" ]] && echo yes || echo no)" "yes"
 rm -f "$PIN_FILE"                     # one ordinary commit deletes the pin
@@ -334,16 +396,56 @@ assert_eq "T12 says WENT MISSING" "$(printf '%s' "$(rfield errors)" | grep -c 'W
 assert_eq "T12 model NEVER ran" "$([[ -f "$TMP/state/claude.argv" ]] && echo yes || echo no)" "no"
 
 echo "T13: pin CORRUPTED after a previous verify → fail closed"
-build_home t13; printf '%s
-' "$PIN_BASE" > "$PIN_FILE"
+build_home t13; printf '%s\n' "$PIN_BASE" > "$PIN_FILE"
 run
 rm -f "$TMP/state/claude.argv"
-printf 'not-a-sha
-' > "$PIN_FILE"
+printf 'not-a-sha\n' > "$PIN_FILE"
 run
 assert_eq "T13 status failed" "$(rfield status)" "failed"
 assert_eq "T13 says CORRUPT" "$(printf '%s' "$(rfield errors)" | grep -c 'CORRUPT')" "1"
 assert_eq "T13 model NEVER ran" "$([[ -f "$TMP/state/claude.argv" ]] && echo yes || echo no)" "no"
+
+# ─── Pin PARSING against a realistic file ───────────────────────────────────
+# Every test above writes a pin file that is one bare SHA and nothing else. The
+# file that actually ships is ~100 lines of comment header with the SHA last,
+# and a reader that folds it onto a single line (tr -d '\n' instead of '\r')
+# finds NO line matching ^[0-9a-f]{40}$ and silently reports "UNPINNED" — the
+# control off, with nothing louder than a log line. These two bind the parser to
+# a file shaped like the real one, on both source paths.
+_write_realistic_pin() {   # $1 = path, $2 = SHA, $3 = lf|crlf
+  local path="$1" sha="$2" kind="${3:-lf}"
+  local l1='# agents/BOOTSTRAP_SHA — supply-chain pin (P1-B)'
+  local l2='#'
+  local l3='# ROTATION: resolve the tip from the remote, review the diff,'
+  local l4='# replace the SHA line below, commit, push. Modes: detach/ancestor/exact/off.'
+  if [[ "$kind" == "crlf" ]]; then
+    printf '%s\r\n%s\r\n%s\r\n%s\r\n%s\r\n' "$l1" "$l2" "$l3" "$l4" "$sha" > "$path"
+  else
+    printf '%s\n%s\n%s\n%s\n%s\n'           "$l1" "$l2" "$l3" "$l4" "$sha" > "$path"
+  fi
+}
+
+echo "T14: a real commented pin file (CRLF) parses from the working tree"
+build_home t14
+_write_realistic_pin "$PIN_FILE" "$PIN_BASE" crlf
+run
+assert_eq "T14 not reported as unpinned" "$(logged 'UNPINNED')" "0"
+assert_eq "T14 the commented CRLF pin was enforced" "$(bhead)" "$PIN_BASE"
+
+echo "T15: a real commented pin file COMMITTED to master parses from origin/master"
+build_home t15
+_write_realistic_pin "$PIN_FILE" "$PIN_BASE" lf
+(
+  cd "$FAKEHOME/grotap-agents"
+  git add agents/BOOTSTRAP_SHA >/dev/null 2>&1
+  git commit -q -m "pin" >/dev/null 2>&1
+  git push -q origin master >/dev/null 2>&1
+)
+run
+assert_eq "T15 read from the fetched remote, not the working tree" \
+  "$(atleast1 "$(logged 'Bootstrap pin source: origin/master')")" "yes"
+assert_eq "T15 not reported as unpinned" "$(logged 'UNPINNED')" "0"
+assert_eq "T15 the commented pin was enforced" "$(bhead)" "$PIN_BASE"
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
