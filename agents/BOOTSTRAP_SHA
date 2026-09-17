@@ -113,5 +113,23 @@
 #   runner commits 2ba895b/2c7ff4e that introduced this pin. Neither BOOTSTRAP.md
 #   nor agents/GLOBAL.md is touched in that range (verified with
 #   `git diff --name-only 02ef30d6..d4238b3d -- BOOTSTRAP.md agents/GLOBAL.md`,
-#   empty), so no model instruction changes with this rotation.
-d4238b3d9095473f0820029eae75577ba7b883ee
+#   empty), so no model instruction changes with this rotation.#
+#   Rotated 2026-09-17 from d4238b3d to dbbbb047, the commit that makes this
+#   pin a REAL pin (detach) rather than an ancestry detector. This is the
+#   MANDATORY second rotation described in step 5: the commit that changes the
+#   pin cannot contain its own SHA, so the tip moves one commit past the pin
+#   until a follow-up blesses it. That follow-up is this line.
+#   Reviewed before blessing: 6 commits (d4238b3d..dbbbb047) — four
+#   agents/lessons/*.md, agents/BOOTSTRAP_SHA, two dispatch task files, the
+#   runner and its two test files. Neither BOOTSTRAP.md nor agents/GLOBAL.md is
+#   touched in that range (verified with `git diff --name-only
+#   d4238b3d..dbbbb047 -- BOOTSTRAP.md agents/GLOBAL.md`, empty), so no model
+#   instruction changes with this rotation.
+#
+#   WHY THIS ONE MATTERS: production runner logs on agent-03 and agent-05 on
+#   2026-09-17 both read "BOOTSTRAP_SHA holds no bare 40-hex SHA — bootstrap
+#   tree UNPINNED". The CR strip read `tr -d '<newline>'` instead of
+#   `tr -d ''`, folding this whole commented file onto one line so nothing
+#   could ever match ^[0-9a-f]{40}$. The pin had NEVER engaged on the live
+#   path. dbbbb047 is the commit that fixes that.
+dbbbb047bccc36c6841b142cc60d5f77f971c1fe
