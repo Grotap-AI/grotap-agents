@@ -129,7 +129,8 @@
 #   WHY THIS ONE MATTERS: production runner logs on agent-03 and agent-05 on
 #   2026-09-17 both read "BOOTSTRAP_SHA holds no bare 40-hex SHA — bootstrap
 #   tree UNPINNED". The CR strip read `tr -d '<newline>'` instead of
-#   `tr -d ''`, folding this whole commented file onto one line so nothing
+#   `tr -d '
+'`, folding this whole commented file onto one line so nothing
 #   could ever match ^[0-9a-f]{40}$. The pin had NEVER engaged on the live
 #   path. dbbbb047 is the commit that fixes that.
-dbbbb047bccc36c6841b142cc60d5f77f971c1fe
+3f04d6e42b5a99d098db13598ea17ff670cc1114
