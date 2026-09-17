@@ -1,10 +1,16 @@
 # Forge Push-Mirror Procedure — inverting the mirror direction for one repository
 
-**Status: READ-ONLY PREPARATION.** Nothing in this document has been executed. No mirror, repository,
-webhook, token, branch or setting was created, deleted or modified on Forgejo or GitHub to produce it.
-Every claim below is either a direct API/tool result captured on 2026-09-16, a quote from Forgejo's own
-documentation/API schema, or is explicitly flagged as inferred. This is a procedure to be run later,
-not a change log of work already done.
+**Status: EXECUTED ON THE CANARY, 2026-09-17. This is no longer a plan.** Owner approved the canary
+cutover that day; §5 steps 1-6 were run end to end against `grotap-platform-docs` and **only** that
+repository. `grotap-platform`, `grotap-agents` and `grotap-landing` were not touched and remain
+GitHub -> Forgejo pull mirrors. The irreversible conversion in step 3 has happened: the canary is a
+normal repository on the forge and can never again auto-pull from GitHub through the API.
+See §7 for the execution record, the corrections it forced on this document, and the window clock.
+
+The body below (§0-§6) is preserved as written on 2026-09-16, because it is what was reviewed and
+approved. Where execution contradicted it, §7 says so explicitly rather than editing the claim away.
+Every claim in §0-§6 is either a direct API/tool result captured on 2026-09-16, a quote from Forgejo's
+own documentation/API schema, or is explicitly flagged as inferred.
 
 **Scope.** Mechanism (A), owner-approved 2026-09-15 (`forgejo-cutover-gate.md`): `forge.grotap.com`
 becomes the push path, Forgejo **push-mirrors** to GitHub, Railway and Vercel keep building from GitHub
@@ -450,3 +456,182 @@ retirement is still blocked on an orchestrator deploy). Neither blocks the canar
 but both should read clean before `grotap-platform`'s push path moves, since that is the point at which
 a forge outage or a credential compromise stops being "some CI experiments" and starts being the
 platform's own source of truth.
+
+---
+
+## 7. Execution record — canary inverted 2026-09-17
+
+Owner approved the canary cutover on 2026-09-17. §5 steps 1-6 were executed against
+`grotap-platform-docs` and no other repository. All timestamps UTC, all values read back from the
+live APIs or the forge's own SQLite database.
+
+### 7.1 Blocker cleared first — the workstation IP had rotated off two allow lists
+
+`GET /api/v1/version` from the workstation returned a Cloudflare **403 WAF block page** (`CF-RAY
+a3c8dec95eae1421-SEA`), not the 302-to-Access-login §0 describes — with *and* without the Access
+headers, so it was not an Access problem at all. The WAF sits in front of Access and was refusing the
+request before Access ever saw it.
+
+Cause: the workstation's public IPv4 is now **98.97.42.231**; both allow lists still carried the
+previous lease **98.97.42.234**. `98.97.42.231/32` was added to each, and nothing else was changed:
+
+- Zone WAF ruleset `833d63affc5d44be931d2ce74bf8f9fd` (`forge-access-lock`), rule
+  `52f22e14dedb4990b5d5779d42046117` — ruleset version 2 -> 3 at `2026-09-17T14:42:00Z`. The six
+  fleet/forge IPv4 addresses and six IPv6 `/64` prefixes are unchanged.
+- Hetzner firewall `forge-fw` (id `11628446`) — the same `/32` added to the three rules that carried
+  the workstation: `tcp/22`, `icmp`, `tcp/2222`. The Cloudflare-only `tcp/80` and `tcp/443` rules were
+  not touched. Without this, `ssh forge-01` also timed out, so step 2's backup was unreachable.
+
+**Verification after the change:** `/api/v1/version` returns `{"version":"13.0.5+gitea-1.22.0"}` with
+the token + both `CF-Access-*` headers + a real User-Agent, and **302** without the Access headers —
+exactly the behaviour §0 documents. `ssh forge-01` connects.
+
+**Left as-is deliberately, flag for cleanup:** the stale `98.97.42.234/32` was **not** removed from
+either list. It is a dynamic residential address that may now belong to somebody else on the same ISP.
+Removing it is a separate, narrow change; it was not made here because the brief was to add the current
+IP without widening or otherwise editing the policy.
+
+### 7.2 Pre-state captured before the irreversible step (step 1)
+
+| Fact | Value at 2026-09-17T14:42Z |
+|---|---|
+| `push_mirrors` on all four repos | `[]` — unchanged from 2026-09-16 |
+| Canary repo `id` | `4` |
+| `mirror` / `mirror_interval` | `true` / `10m0s` |
+| `original_url` | `https://github.com/Grotap-AI/grotap-platform-docs.git` |
+| `private` / `default_branch` | `true` / `master` |
+| `has_issues` / `has_wiki` / `has_pull_requests` / `has_actions` | `true` / `true` / `false` / `false` |
+| Forge refs | one branch `master` @ `88812af393be7b3b7317adcb995a86e3e8f39e5f`, **no tags** |
+| GitHub refs | `88812af393be7b3b7317adcb995a86e3e8f39e5f refs/heads/master`, nothing else |
+| Head parity | MATCH |
+| `mirror` table row (repo_id 4) | `interval=600000000000` (10m in ns), `enable_prune=1`, `lfs_enabled=0`, `remote_address=https://github.com/Grotap-AI/grotap-platform-docs.git` |
+| Repo git config | `remote.origin.mirror=true`, `remote.origin.tagopt=--no-tags`, `remote.origin.fetch=+refs/*:refs/*` and `+refs/tags/*:refs/tags/*`, credential embedded in `remote.origin.url` |
+
+That table is the rebuild-by-hand record: everything needed to re-migrate this repo as a fresh pull
+mirror if the rollback in step 3 ever has to be taken.
+
+### 7.3 Backup taken (step 2)
+
+Run via the existing `/usr/local/bin/forge-backup.sh` rather than a bare `forgejo dump`, because that
+script also verifies the archive's contents and re-reads the uploaded object to compare sizes:
+
+```
+2026-09-17T14:44:08Z OK ts=20260917T144404Z key=forge-01/2026/09/forge-20260917T144404Z.zip size=178301763 elapsed=4s local_kept=2
+```
+
+**Correction to `forgejo-cutover-gate.md` item 6:** that document records that the nightly backup timer
+had never completed an **unattended** run. It has now — `forge-backup.timer` fired on its own at
+`2026-09-16T04:26:35Z` (143,068,543 B) and `2026-09-17T04:20:10Z` (174,289,387 B), both logged `OK`
+with a verified upload, next scheduled `2026-09-18T04:21:25Z`. The remaining half of item 6 — a restore
+performed from an **in-window** backup — is still outstanding and is part of the 14-day gate.
+
+### 7.4 The irreversible conversion (step 3)
+
+`POST /api/v1/repos/Grotap-AI/grotap-platform-docs/convert` -> **HTTP 200** at
+**`2026-09-17T14:44:40Z`**. Read back immediately:
+
+- Repo object: `"mirror": false`, `"mirror_interval": ""`. `original_url`, `default_branch`, `private`,
+  `has_issues`, `has_wiki` all unchanged — the §1 inference that the conversion is metadata-only held
+  for every field this repo actually had.
+- `select * from mirror;` now returns **three** rows — `grotap-platform`, `grotap-agents`,
+  `grotap-landing`. The `repo_id = 4` row is gone. That is the direct proof the 10-minute pull schedule
+  stopped for the canary, and that the other three were untouched.
+- Re-verified by API: the other three still read `"mirror": true, "mirror_interval": "10m0s"` and
+  `push_mirrors == []`.
+
+### 7.5 Push mirror created and synced (steps 4-5)
+
+Created at `2026-09-17T14:44:59Z` with `branch_filter: master`, `interval: 10m0s`,
+`sync_on_commit: true`, `remote_username: x-access-token`, password = Doppler `GITHUB_TOKEN`.
+
+> **CORRECTION to §4's rollback command.** Forgejo did **not** name the remote after the host. The
+> assigned `remote_name` is **`remote_mirror_MMfyFXpzGq`**, a generated identifier. The delete path is
+> therefore `.../push_mirrors/remote_mirror_MMfyFXpzGq`, not `.../push_mirrors/github.com`. Always read
+> `remote_name` from the GET before constructing a DELETE.
+
+Forced sync at `2026-09-17T14:45:08Z` -> HTTP 200, `last_error: ""` — the intended no-op push against
+an already-matching head.
+
+### 7.6 Round trip proven (step 6) — over HTTPS, not SSH
+
+`GET /api/v1/user/keys` still returns `[]`, so §0's SSH correction still stands and the test was done
+over HTTPS with the credential in the URL plus both Access headers set as `http.extraHeader`:
+
+1. Cloned the canary from `https://forge.grotap.com/Grotap-AI/grotap-platform-docs.git`.
+2. Appended a line to `PUSH_MIRROR_CANARY.md`, committed, pushed to the **forge**:
+   `88812af..9f470be  master -> master`.
+3. Forge API re-read: `master = 9f470be51d046fa6d309ae1c1ebd5076f17a7ffb` — the push **stuck**, which
+   is the thing a pull mirror would have silently reverted within ten minutes.
+4. `sync_on_commit` fired by itself; push-mirror `last_update` = `2026-09-17T14:45:35Z`,
+   `last_error: ""`.
+5. GitHub `refs/heads/master` = `9f470be51d046fa6d309ae1c1ebd5076f17a7ffb` by `14:45:44Z` — **under 30
+   seconds end to end, with no manual sync call.**
+6. A fresh clone **from GitHub** carries 3 commits, 80 files, and the canary line intact — GitHub still
+   holds a complete, current copy, which is the standing rollback condition.
+
+**On the "Bypassed rule violations" question in §4:** it did not arise here.
+`GET /repos/Grotap-AI/grotap-platform-docs/rules/branches/master` returns `200 []`, the mirror's
+`last_error` is empty, and the forge log shows no rule text. So this canary says **nothing** about
+whether the org-level "changes must be made through a pull request" rule covers `grotap-platform`.
+§6's requirement for an explicit owner sign-off at that point is unchanged and unanswered.
+
+### 7.7 Direction is now asymmetric — the new standing hazard
+
+Until today a mistake on the forge was erased within ten minutes by the pull sync. That safety net is
+gone for this repo, and the asymmetry is the opposite of what people's habits expect:
+
+- **forge -> GitHub:** automatic, on every commit, within seconds.
+- **GitHub -> forge:** **does not happen at all any more.** Nothing pulls.
+
+So a commit pushed **directly to GitHub** on `grotap-platform-docs` will not reach the forge, and the
+next push-mirror sync will **force it out of existence on GitHub** — the mirror pushes the forge's
+`master` over it. That force-overwrite path has deliberately **not** been exercised; it is an inference
+from the `--mirror`/branch-filter semantics in §2, and it should stay unexercised. Treat
+`forge.grotap.com` as the only place this repository is written.
+
+### 7.8 The 14-day boring window
+
+**Window start: `2026-09-17T14:44:40Z`** (the moment of conversion). **Earliest close:
+`2026-10-01T14:44:40Z`**, and only if all four criteria below read clean.
+
+| Criterion (from `forgejo-cutover-gate.md`) | Measured against |
+|---|---|
+| Parity check ran daily, never diverged | forge `master` SHA == GitHub `master` SHA for `grotap-platform-docs`, once per day, 14 days |
+| **20 Actions runs completed green**, zero infrastructure-caused failures | Baseline at window start: `select count(*) from action_run` = **4**, `max(id)` = **4**, latest `created` = `2026-09-16 04:23:53`, all four `status=1` (success). The criterion is **20 runs with `id > 4`** created inside the window at `status=1`. A failing test is acceptable; a runner that cannot fetch a task is not. All five runners (`agent-02`..`agent-06`) were online at window start. **These runs must be produced deliberately — the canary repo has `has_actions=false` and carries no workflows, so ambient traffic will produce zero of them.** |
+| No unplanned forge restart | `forgejo` container was `Up 45 hours` at window start; `caddy` `Up 46 hours` |
+| One in-window backup restored and verified | No restore has been performed inside the window yet. `forge-20260917T144404Z.zip` is the first in-window artifact available to restore from |
+
+Only after that window closes clean does `grotap-platform` move, and then in the two steps §6
+describes — push path first, deploy trigger later.
+
+### 7.9 What still hardcodes GitHub in the fleet path (survey only, nothing edited)
+
+Confirmed against `origin/master` of both repositories on 2026-09-17. **`agents/` ownership splits per
+file, not per repo** — `dispatch.sh` and `dispatch-poller.sh` live only in `grotap-platform`, while
+`orchestrator-run.sh` and `review-gate-cron.sh` exist in **both** repos as two separate live copies
+that must be changed together. The line numbers in `forgejo-cutover-gate.md` have drifted; current
+values:
+
+**`grotap-platform` @ origin/master**
+
+| File | Lines | What it does |
+|---|---|---|
+| `agents/dispatch.sh` | 450, 785, 1169 | `git clone https://github.com/Grotap-AI/grotap-agents.git` — bootstrap, three copies in three heredoc'd blocks (gate doc said 328/613/945) |
+| `agents/run-task.sh` | 53 | same bootstrap clone — **not listed in the gate doc** |
+| `agents/scripts/orchestrator-run.sh` | 334 (code), 78 + 393 (rotation instructions in comments/stderr) | bootstrap clone of `grotap-agents` (gate doc said 224) |
+| `agents/scripts/review-gate-cron.sh` | 311 | clones `grotap-platform` (gate doc said 291) |
+| `agents/scripts/dispatch-poller.sh` | 19, 31-32, 49, 85 | **GitHub REST Contents API** — `GITHUB_TOKEN` from Doppler (19), `AGENTS_REPO`/`TASK_PATH` constants (31-32), two `PUT`/read calls to `api.github.com/repos/.../contents/...` (49, 85). Line numbers still exact. Needs a Forgejo Contents-API equivalent, not a hostname swap |
+| `agents/watchdog.sh` | 48 | `api.github.com/repos/${GITHUB_REPO}/commits?sha=...` freshness probe — **not listed in the gate doc** |
+| `agents/setup-server.sh` | 9, 48, 54 | `REPO_URL`, the `x-access-token` clone and a `git remote set-url` back to GitHub — **not listed in the gate doc** |
+
+**`grotap-agents` @ origin/master** (the second copies)
+
+| File | Lines | What it does |
+|---|---|---|
+| `agents/scripts/orchestrator-run.sh` | 361 | clones **`grotap-platform`** — note this copy differs from the `grotap-platform` copy, which clones `grotap-agents` |
+| `agents/scripts/review-gate-cron.sh` | 249 | clones `grotap-platform` |
+| `agents/scripts/deploy-execute.sh` | 34 | clones `grotap-platform` — **not listed in the gate doc** |
+
+Adjacent, outside the fleet run path but same dependency: `scripts/monitoring/deploy_freshness_watchdog.py:71`,
+`scripts/backup/semimonthly-source.sh:72`, `scripts/claudecode/seed-secrets.sh:87`,
+`scripts/verify_github_pat_scope.py:32` (all `grotap-platform`).

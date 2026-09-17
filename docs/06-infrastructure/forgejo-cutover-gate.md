@@ -15,6 +15,14 @@ refreshing every ten minutes. CI is real: `forgejo-runner` v13.1.0 runs on agent
 in host-execution mode as an unprivileged `forge-runner` user, and a signed webhook receiver
 (`POST /api/v1/forgejo/pipeline-sync`) is live in production.
 
+> **UPDATE 2026-09-17 — the canary is cut over.** `grotap-platform-docs` was converted from a pull
+> mirror to a normal repository and given a push mirror to GitHub (owner-approved; full execution
+> record in `forge-push-mirror-procedure.md` §7). For that ONE repository the paragraph below is no
+> longer true: the forge is the push path, mirroring runs forge -> GitHub, and nothing pulls back.
+> The 14-day boring window started `2026-09-17T14:44:40Z` and can close no earlier than
+> `2026-10-01T14:44:40Z`. `grotap-platform`, `grotap-agents` and `grotap-landing` are untouched and
+> everything below still describes them exactly.
+
 **GitHub is still the source of truth and nothing has been cut over.** Mirroring runs in exactly one
 direction, GitHub → Forgejo. Railway and Vercel both still build from GitHub. Every human and every
 agent still pushes to GitHub. Today a total forge outage costs us some CI experiments and nothing
