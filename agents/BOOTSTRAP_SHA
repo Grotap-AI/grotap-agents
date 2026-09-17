@@ -113,24 +113,62 @@
 #   runner commits 2ba895b/2c7ff4e that introduced this pin. Neither BOOTSTRAP.md
 #   nor agents/GLOBAL.md is touched in that range (verified with
 #   `git diff --name-only 02ef30d6..d4238b3d -- BOOTSTRAP.md agents/GLOBAL.md`,
-#   empty), so no model instruction changes with this rotation.#
-#   Rotated 2026-09-17 from d4238b3d to dbbbb047, the commit that makes this
-#   pin a REAL pin (detach) rather than an ancestry detector. This is the
+#   empty), so no model instruction changed with that rotation.
+#
+#   Rotated 2026-09-17 (1 of 3) from d4238b3d to dbbbb047, the commit that makes
+#   this pin a REAL pin (detach) rather than an ancestry detector. That was the
 #   MANDATORY second rotation described in step 5: the commit that changes the
 #   pin cannot contain its own SHA, so the tip moves one commit past the pin
-#   until a follow-up blesses it. That follow-up is this line.
+#   until a follow-up blesses it.
 #   Reviewed before blessing: 6 commits (d4238b3d..dbbbb047) — four
 #   agents/lessons/*.md, agents/BOOTSTRAP_SHA, two dispatch task files, the
 #   runner and its two test files. Neither BOOTSTRAP.md nor agents/GLOBAL.md is
 #   touched in that range (verified with `git diff --name-only
 #   d4238b3d..dbbbb047 -- BOOTSTRAP.md agents/GLOBAL.md`, empty), so no model
-#   instruction changes with this rotation.
+#   instruction changed with that rotation.
 #
-#   WHY THIS ONE MATTERS: production runner logs on agent-03 and agent-05 on
+#   WHY dbbbb047 MATTERED: production runner logs on agent-03 and agent-05 on
 #   2026-09-17 both read "BOOTSTRAP_SHA holds no bare 40-hex SHA — bootstrap
 #   tree UNPINNED". The CR strip read `tr -d '<newline>'` instead of
 #   `tr -d '
 '`, folding this whole commented file onto one line so nothing
 #   could ever match ^[0-9a-f]{40}$. The pin had NEVER engaged on the live
-#   path. dbbbb047 is the commit that fixes that.
-3f04d6e42b5a99d098db13598ea17ff670cc1114
+#   path. dbbbb047 is the commit that fixed that.
+#
+#   Rotated 2026-09-17 (2 of 3) from dbbbb047 to 3f04d6e4 by commit 425649c,
+#   "chore(fleet): bump the bootstrap pin to the gate fix". That commit moved
+#   the bare SHA line but did NOT update this prose, so for a day the header
+#   narrated dbbbb047 while the line below read 3f04d6e4 — anyone reading the
+#   header instead of the line got the wrong answer. Corrected here. THE BARE
+#   LINE AT THE BOTTOM IS THE ONLY THING THE RUNNER PARSES; this prose is a
+#   record of why each SHA was blessed, and it is worthless when it drifts.
+#
+#   Rotated 2026-09-17 (3 of 3) from 3f04d6e42b5a99d098db13598ea17ff670cc1114
+#   to 176aefd9154b966c6ff1c0a09fc9d319b55dc230, the live master tip resolved
+#   from the REMOTE with
+#     git ls-remote https://github.com/Grotap-AI/grotap-agents.git refs/heads/master
+#   and confirmed a strict descendant of the outgoing pin with
+#     git merge-base --is-ancestor 3f04d6e4 176aefd9   (exit 0)
+#   Reviewed before blessing: 7 commits (3f04d6e4..176aefd9) —
+#     425649c chore(fleet): bump the bootstrap pin to the gate fix
+#     9dae392 docs(forge): canary inverted, grotap-platform-docs now pushes to GitHub
+#     b6e47ea lesson(sql-migrations): brief-named table needs its migration first
+#     515a19a docs(lessons): agent-questions exemption closed, record the ORDER
+#     5993c33 lesson(fleet-ops): a commit's author/message are self-reported
+#     2de4bf5 lesson(fleet-ops): correct this line's own inferred actor
+#     176aefd docs(lessons): four frontend lessons from the Road Map outage
+#   NOTHING EXECUTABLE CHANGES in that range. The only files touched are
+#   agents/BOOTSTRAP_SHA, four agents/lessons/*.md and two markdown files under
+#   docs/06-infrastructure/. agents/scripts/orchestrator-run.sh is UNTOUCHED, so
+#   the runner behaviour that pushes completed agent work before reporting a
+#   failed gate is carried forward byte-identical. Neither BOOTSTRAP.md nor
+#   agents/GLOBAL.md is touched (verified with `git diff --name-only
+#   3f04d6e4..176aefd9 -- BOOTSTRAP.md agents/GLOBAL.md`, empty), so no model
+#   instruction changes with this rotation.
+#   WHAT THIS RELEASES TO THE FLEET: four lesson files agents could not read
+#   under the old pin (frontend.md +5 lessons from the Road Map outage,
+#   sql-migrations.md CASE-20260917-F076A1, fleet-ops.md and auth-security.md
+#   corrections) plus the forge push-mirror procedure docs.
+#   Per step 5 this rotation commit is itself unblessed — hosts alternate
+#   between the pinned tree and the tip until a follow-up rotation pins it.
+176aefd9154b966c6ff1c0a09fc9d319b55dc230
