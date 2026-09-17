@@ -57,6 +57,49 @@ fi
 # --- Readiness report (all environments) ------------------------------------
 say "[bootstrap] repo: $(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || echo unknown) on $(git -C "$ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?') ($(uname -s 2>/dev/null || echo unknown))"
 
+# --- Staleness of THIS checkout vs origin/master (all environments) ---------
+# The local Windows tree is shared between concurrent sessions and drifts far
+# behind master; a file:line quoted from it is then fiction. Measure it once at
+# session start and say it out loud.
+#
+# The PreToolUse guard (scripts/claudecode/stale-evidence-guard.py) owns its own
+# cache ENTIRELY: there is no longer any shared-cache contract with this script,
+# and nothing here parses or writes the guard's JSON.
+#
+# NOTE: this fetch does NOT pull. The Windows tree is shared (platform
+# CLAUDE.md "Shared-Tree Git Etiquette") and must never be moved from here.
+# It is SKIPPED outright when no `timeout` mechanism exists -- an unbounded fetch
+# can hang forever on a network stall or a credential prompt, and a SessionStart
+# hook must never block. Interactive prompting is disabled either way so git
+# fails fast instead of waiting on a terminal nobody is watching.
+if git -C "$ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+  ST_FETCH="skipped"
+  if command -v timeout >/dev/null 2>&1; then
+    GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=echo SSH_ASKPASS=echo SSH_ASKPASS_REQUIRE=never \
+      GCM_INTERACTIVE=never timeout 20 git -C "$ROOT" fetch -q origin master 2>/dev/null \
+      && ST_FETCH="ok" || ST_FETCH="failed"
+  fi
+  ST_TOP="$(git -C "$ROOT" rev-parse --show-toplevel 2>/dev/null || echo '')"
+  ST_BEHIND="$(git -C "$ROOT" rev-list --count HEAD..origin/master 2>/dev/null || echo '')"
+  ST_AHEAD="$(git -C "$ROOT" rev-list --count origin/master..HEAD 2>/dev/null || echo 0)"
+  ST_BRANCH="$(git -C "$ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?')"
+  ST_DIRTY="$(git -C "$ROOT" status --porcelain 2>/dev/null | grep -c . || true)"
+  [ -n "${ST_DIRTY:-}" ] || ST_DIRTY=0
+  if [ "$ST_FETCH" != "ok" ]; then
+    say "[bootstrap] freshness: fetch $ST_FETCH -- the counts below are against the origin/master ref AS IT ALREADY IS on disk (only as fresh as the last successful fetch)."
+  fi
+  if [ -n "$ST_BEHIND" ] && [ -n "$ST_TOP" ]; then
+    if [ "$ST_BEHIND" -eq 0 ] 2>/dev/null; then
+      say "[bootstrap] freshness: CURRENT with origin/master (0 behind, $ST_AHEAD ahead, $ST_DIRTY dirty) on $ST_BRANCH"
+    else
+      say "[bootstrap] !! STALE CHECKOUT: $ST_BEHIND commits BEHIND origin/master ($ST_AHEAD ahead, $ST_DIRTY dirty paths) on branch '$ST_BRANCH' -- $ST_TOP"
+      say "[bootstrap] !! RULE: never quote a file:line from this tree in a report, a correction or an argument without re-reading it via \`git show origin/master:<path>\` (prefix MSYS_NO_PATHCONV=1 when the path starts with a dot)."
+    fi
+  else
+    say "[bootstrap] freshness: unknown (no origin/master ref here -- counts unavailable)"
+  fi
+fi
+
 DBPY=""
 if   [ -f "$ROOT/scripts/db.py" ];          then DBPY="scripts/db.py"
 elif [ -f "$ROOT/platform/scripts/db.py" ]; then DBPY="platform/scripts/db.py"

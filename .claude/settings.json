@@ -22,6 +22,17 @@
             "statusMessage": "competitor-name guard"
           }
         ]
+      },
+      {
+        "matcher": "Bash|Grep|Read|Glob",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'F=\"${CLAUDE_PROJECT_DIR:-.}/scripts/claudecode/stale-evidence-guard.py\"; [ -f \"$F\" ] || exit 0; P=$(command -v python 2>/dev/null || command -v python3 2>/dev/null) || exit 0; exec \"$P\" \"$F\"'",
+            "timeout": 10,
+            "statusMessage": "stale-evidence guard"
+          }
+        ]
       }
     ]
   },
