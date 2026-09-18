@@ -4,6 +4,30 @@
 points a push path or a deploy trigger at `forge.grotap.com` instead of GitHub. Every item is
 written as a command with a threshold, because a gate nobody can run is not a gate.*
 
+## 2026-09-17 — this gate no longer holds product work
+
+The owner opened the product priority gate on 2026-09-17: the five-surface ordering in
+`platform/CLAUDE.md` is in force from that date, on the reading that the owner's start condition was
+the Forgejo **infrastructure** upgrade (forge, runners, HMAC route, dispatch admission control,
+per-host SSH keys, Cloudflare Access — all live) and not the **deploy-path cutover**, which the same
+directive always called a separate owner-gated step. So: ScanTap platform web work proceeds now, and
+everything in this document runs as a background infrastructure track.
+
+Nothing else in this document changes. It is still the go/no-go checklist for moving a push path or
+a deploy trigger, it still reads NO-GO, and the canary window below still applies to the cutover
+decision — it just does not gate product any more.
+
+Two criteria in the canary window will not satisfy themselves by waiting, and both are the reason a
+calendar date is not a plan:
+- **20 green Actions runs** measures against baseline `action_run` `max(id)` 4 and needs 20 runs with
+  `id > 4` inside the window. The canary repo `grotap-platform-docs` has `has_actions=false` and no
+  workflows, so ambient traffic yields **zero**. Produce the runs deliberately, or re-point the
+  criterion at a repo that actually runs CI, and say in this document which was done.
+- **A restored, verified backup taken inside the window** is blocked by item 6 below: the Wasabi
+  credential is still the `REPLACE_ME_` placeholder and the timer has never once succeeded. Until
+  that is fixed there is no in-window backup to restore, so the window cannot close clean however
+  long it runs.
+
 ## Status — what is live, and what is emphatically not cut over
 
 `forge-01` (Hetzner cpx21, Ashburn, `178.156.246.81`) runs **Forgejo 13.0.5** behind Caddy in a
