@@ -1,5 +1,11 @@
 """Provision agent-30/agent-31 (Team 3 — Grok 4.5 executors) in OpenAgents.grotapai.
 
+DORMANT since 2026-09-20: BOTH boxes this script provisions have been deleted from Hetzner
+(agent-31 on 2026-09-16, agent-30 on 2026-09-20) and their IPs released, so Team 3 currently
+has no servers. The script stays because it is the rebuild recipe — it creates servers from
+scratch and never reads a stored address, so nothing here can reach a recycled IP. Running it
+is a decision to re-open Team 3, not a repair. See agents/SERVERS.md.
+
 Owner-approved 2026-07-12: 2x cpx22 in FSN1 (same DC as GEX131-1 / llm-gpu-02) so they
 (cpx21 is not offered in FSN1 — cpx22 2c/4GB EUR22.99/mo is the closest; EU premium)
 can attach to the pre-staged team2-llm-lan Cloud Network (id 12438415, eu-central) —

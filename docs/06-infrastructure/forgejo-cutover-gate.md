@@ -627,6 +627,13 @@ Retiring the key without minting keys for these nine removes all SSH access to t
 `agent-31` 167.233.194.57, `agent-40` 178.156.219.232, `agent-41` 178.156.220.48,
 `GEX131`/`llm-gpu-02` 178.63.124.99, `maps-01` 5.161.107.80, `claudecode-01` 178.156.209.112.
 
+> **Correction 2026-09-20.** That sweep is a dated snapshot and four of the nine are now
+> gone: `agent-21`, `agent-31` and `agent-41` were deleted in Hetzner on 2026-09-16 and
+> `agent-30` on 2026-09-20. All four addresses above are RELEASED, and Hetzner recycles
+> released addresses — never SSH them and never mint a key for them. Five hosts remain
+> in scope for the key work: `agent-20`, `agent-40`, `GEX131`/`llm-gpu-02`, `maps-01`,
+> `claudecode-01`.
+
 **Thirteen workstation scripts each duplicate the same fallback line** — `agents/dispatch.sh:30`
 plus `install-dispatcher.sh:22`, `config.sh:6`, `watchdog.sh:19`, `monitor.sh:3`,
 `monitor-loop.sh:7`, `collect-reviews.sh:19`, `review-pipeline.sh:13`, `server-status.sh:7`,

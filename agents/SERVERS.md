@@ -51,9 +51,13 @@ GEX131 (llm-gpu-02) and attached to Cloud Network `team2-llm-lan` (12438415) —
 boxes cannot attach (single-zone rule). ⚠ NOT dispatchable until the `config.sh` team3 registry
 (case A5CE1C) merges and pilot cases are tagged `case_data.team=team3`.
 
-| Server | IP | Private IP | Hardware / DC | Purpose | Execute slots |
-|---|---|---|---|---|---|
-| agent-30 | 167.233.59.142 | 10.0.2.1 | cpx22, FSN1 (id 150155427) | Team 3 Grok executor | 3 |
+> **Team 3 has NO servers. Retired 2026-09-20:** `agent-30` (150155427) was deleted from Hetzner
+> and its IP `167.233.59.142` released, for the same reason its sibling `agent-31` went on
+> 2026-09-16. Verified 2026-09-20 against every Hetzner token in Doppler
+> (`HETZNER_API_TOKEN`, `_CLAUDECODE_`, `_COBROWSE_`, `_FARM_`): no server in any project holds
+> that address, and `server_connections` has no agent-30 row. Hetzner recycles released IPs, so
+> the address now belongs to a stranger — never SSH it, never map it to a fleet host name, never
+> put it in a firewall allowlist. Re-provision with `agents/provision-team3.py` before re-adding.
 
 Baseline identical to Team 2 (agent user, node 22, doppler + `git-credential-doppler`, aider via
 pipx, 4 GiB swap, both repo clones, `~/worktrees`). Note: cpx21 is not offered in FSN1 — cpx22
@@ -79,8 +83,9 @@ via pipx, 4 GiB swap, docker + `grotap-sandbox:latest`, both repo clones, `~/wor
 > **Retired 2026-09-16:** `agent-21` (148646760), `agent-31` (150155432) and `agent-41`
 > (150671582) were deleted from Hetzner. Each had ZERO rows in `pipeline_dispatch_log` for its
 > entire life; verified empty first (no tmux, no worktrees, clones clean, load 0.00). Their
-> siblings agent-20/30/40 carry the work and stay. `TEAM_POOL` in `agents/config.sh` is now
-> single-host for team2/3/4/5 (grotap-platform `5226d7fc9`). Rebuild specs: cpx21 (cpx22 for
+> siblings agent-20/40 carry the work and stay (agent-30 followed them on 2026-09-20).
+> `TEAM_POOL` in `agents/config.sh` is now single-host for team2/4/5 (grotap-platform
+> `5226d7fc9`) and EMPTY for team3 since 2026-09-20. Rebuild specs: cpx21 (cpx22 for
 > team3/FSN1), ubuntu-24.04, labels `role=<open-model|grok|gpt>-executor`, `team=team<N>`;
 > provision scripts `agents/provision-team{2,3,4}.py`.
 
