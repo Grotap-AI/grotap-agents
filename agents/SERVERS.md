@@ -1,5 +1,28 @@
 # agents/SERVERS.md — Fleet roster (single source of truth; loaded at bootstrap after GLOBAL.md)
 
+## Provisioning rule — ASHBURN ONLY (owner, 2026-09-20)
+
+Every **new** Hetzner server for the fleet is created in **`ash`** (Ashburn, VA). No FSN1, NBG1,
+HEL1, HIL or SIN for new capacity. Existing non-Ashburn boxes get moved or retired on a schedule.
+
+Why: the control plane moved to Neon `aws-us-east-1` on 2026-09-20, and fleet-to-database TCP
+connect measures **4.2 ms** from Ashburn against **81.0 ms** from the old us-west-2 pairing.
+Team 3's FSN1 box also proved the second cost of EU placement — grok-4.5 is xAI-region-blocked
+from EU egress, which is why that team had to run a different, weaker model ladder.
+
+Enforced in the grotap-platform repo by `agents/scripts/require-ashburn.sh`, which both
+provisioners call before they POST to `/v1/servers`. It refuses any location other than `ash`,
+**and refuses an empty one** — the Hetzner API reads a missing location as "any datacenter with
+capacity", which is how you land in the EU without anyone choosing it. Covered by
+`agents/tests/test_require_ashburn.sh` (grotap-platform).
+
+A default is not a constraint: both scripts already *defaulted* to `ash`, yet
+`LOCATION=fsn1 bash agents/setup-claude-app-runner.sh` still built in Germany until the guard
+landed.
+
+Deliberate exception: `ALLOW_NON_ASHBURN=1 <command>`, which warns loudly on stderr. Record the
+reason here, so the next reader can tell an exception from a mistake.
+
 ## Active dispatch pool
 
 | Server | IP | Hardware / DC | Roles (→ load roles/<module>/MODULE.md + ROLE.md per GLOBAL load order) | Execute slots |
