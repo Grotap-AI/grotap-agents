@@ -1,160 +1,54 @@
-# agents/GLOBAL.md — Load order: GLOBAL.md → SERVERS.md → MODULE.md → ROLE.md → handoff.md
-# Max 200 lines enforced by session-init. Dated incident ledgers: agents/LESSONS-ARCHIVE.md (not auto-loaded).
+# agents/GLOBAL.md — Load order: GLOBAL.md then (on demand) SERVERS.md then MODULE.md then ROLE.md then handoff.md
+# Keep SMALL. Ledgers: agents/LESSONS-ARCHIVE.md (never auto-load). FAIL essays: agents/lessons/always-on-fail-detail.md (on demand).
 
 ## Platform
-grotap — multi-tenant AI-powered SaaS. Every feature = discrete app. Tenants subscribe to apps.
-Code: `platform/` | Docs: `docs/` | Tasks: `agents/tasks/` | Fleet scripts: platform repo `agents/*.sh`
+grotap — multi-tenant AI SaaS. Every feature = discrete app; tenants subscribe.
+Code: `platform/` | Docs: `docs/` | Tasks: `agents/tasks/` | Fleet scripts: platform `agents/*.sh`
 
 ## Stack
-Frontend React+Vercel `platform/frontend/` · Backend FastAPI+Railway `platform/backend/` · Auth WorkOS JWT · DB Neon Postgres (pooled shards + FORCE RLS; dedicated project = premium; control `green-rice-76766370`) · Jobs INNGEST + Agents LangGraph/LangSmith (TS only) `platform/agent-worker/`
-· Storage Cloudflare R2 · Billing Stripe metering (all 3rd-party via `app/providers/*`) · Mobile Expo `platform/mobile/` · Session replay self-hosted OpenReplay `lib/openreplay.ts` · Secret scan GitGuardian MCP
+React+Vercel `platform/frontend/` · FastAPI+Railway `platform/backend/` · WorkOS JWT · Neon Postgres (pooled + FORCE RLS; dedicated = premium) · Inngest + LangGraph/LangSmith TS `platform/agent-worker/` · R2 · Stripe via `app/providers/*` · Expo · OpenReplay `lib/openreplay.ts` · GitGuardian MCP
 
-## ⛔ Absolute Rules — All Agents, No Exceptions
+## Absolute Rules — All Agents, No Exceptions
 | # | Rule |
 |---|---|
-| 1 | **DOPPLER ONLY** — No `.env` in CI, no GitHub secrets (except `DOPPLER_SERVICE_TOKEN`). Local: `doppler run -- <cmd>`. Update secrets in Doppler (`grotap` prd/dev). NEVER tell a human to update GitHub secrets. **NEVER put secret VALUES in chat/prompts/task files/logs/commits.** Humans supply secrets via the Doppler dashboard or a terminal OUTSIDE any AI session. |
+| 1 | **DOPPLER ONLY** — No `.env` in CI; no GitHub secrets except `DOPPLER_SERVICE_TOKEN`. Local: `doppler run -- <cmd>`. Never put secret VALUES in chat/prompts/tasks/logs/commits. |
 | 2 | **NO PYTHON FOR AGENTS** — TypeScript/JS only. Python = FastAPI backend only. |
-| 3 | **NO DIRECT 3RD-PARTY CALLS** — All SDK calls via `app/providers/` wrappers. |
-| 4 | **NO CROSS-TENANT DATA** — Every DB query scoped to the tenant. No cross-tenant reads. |
-| 5 | **TENANT ISOLATION VIA RLS** — Default placement is POOLED: tenants share a Neon shard, isolated by FORCE RLS keyed on `current_setting('app.current_tenant_id')::uuid` (set per-connection by `tenant_db.py`). Dedicated Neon project = premium/override path. Never bypass RLS or weaken a policy. |
+| 3 | **NO DIRECT 3RD-PARTY CALLS** — All SDKs via `app/providers/` wrappers. |
+| 4 | **NO CROSS-TENANT DATA** — Every query tenant-scoped. |
+| 5 | **TENANT ISOLATION VIA RLS** — FORCE RLS on `current_setting('app.current_tenant_id')::uuid` via `tenant_db.py`. Never bypass/weaken. |
 | 6 | **NO SKIPPING COMPLIANCE** — GitGuardian MCP + compliance node before every deploy. |
-| 7 | **NO MERGE WITHOUT 4-REVIEWER SIGN-OFF** — Build Validator + Logic + Security + Perf = all PASS. From platform repo root: `./agents/review-pipeline.sh <branch>` then `./agents/collect-reviews.sh --wait <branch>`. ANY FAIL = branch blocked. |
-| 8 | **AppShell MANDATORY** — All apps render `AppShell`. Session replay/support = self-hosted OpenReplay, SDK only via `lib/openreplay.ts`. **Cobrowse.io is REMOVED (July 2026) — never add, restore or propose it.** |
+| 7 | **NO MERGE WITHOUT 4-REVIEWER SIGN-OFF** — Build+Logic+Security+Perf PASS. `./agents/review-pipeline.sh <branch>` then `./agents/collect-reviews.sh --wait <branch>`. |
+| 8 | **AppShell MANDATORY** — OpenReplay only via `lib/openreplay.ts`. Cobrowse removed — never restore. |
 
-## ⚠ Common FAIL Causes — Check Before Committing
-
-### SQL & migrations
-- Control-plane DDL goes ONLY in `backend/db/migrations/control_plane/vNNN_*.sql` — idempotent, one file per txn, FK children after parents. Never inline DDL in `backend/app` (CI guard blocks it); never the retired `backend/migrations/` path. App schemas: repo-root `migrations/apps/<slug>/vNNN_*.sql` AND copy each file to `ingestion-worker/migrations/apps/<slug>/` (its Docker image only ships its own dir; a registered-but-absent file = `schema_status='failed'` on first subscription).
-- Pick the next FREE `vNNN` — grep the dir AND `git ls-tree origin/master` AND peer case branches (parallel cases both took v037). Two branches must never both CREATE a table or claim the same number — declare the dependency and let ONE branch own the table's canonical schema; reviewer confirms distinct versions on any ≥2-migration batch.
-- Grep the real migration for schema-qualified table + column names before writing SQL — never invent columns. Need a new column? Ship `ADD COLUMN IF NOT EXISTS` + backfill FIRST. Consuming a sibling case's schema? grep ITS migration for the real names.
-- A migration recorded in prod's `schema_migrations` is FROZEN — every byte (a one-word seed tweak trips the startup checksum guard and blocks ALL deploys; f661e2f0). NEVER amend an applied migration file — the runner skips recorded filenames, so amended DDL silently never runs; cut a new vNNN, mirror it in BOTH dirs, keep manifest updates ADDITIVE. Any script executing SQL as "proof" must `assert_not_prod(dsn)` (`backend/scripts/_lib_guard.py`).
-- asyncpg: JSONB binds = `json.dumps(value)` + `$N::jsonb` (no codec); `->>` text vs `->` jsonb. Never `.get()` on Records — `dict(r)` first (recurred 3BA7FB). An error POISONS the open transaction — `to_regclass()` checks or savepoints for optional tables; NEVER swallow schema errors (`except: log-and-continue` hides missing columns).
-- `pipeline_cases` tenant column is `org_id`; `tenants.tenant_id` UUID but `tenant_users.tenant_id` TEXT (`str()` first); WorkOS ids (`org_01…`/`user_01…`) are TEXT — never UUID columns or `uuid.UUID()`. RLS policies keyed EXACTLY on `current_setting('app.current_tenant_id')::uuid` — any other GUC name silently returns zero rows. No tenant-specific seed rows in shared app migrations (they run on EVERY tenant).
-- UNIQUE with COALESCE is invalid — `CREATE UNIQUE INDEX`; a new unique/invariant index ships WITH its dedupe migration; enforce invariants in every write path, not just backfill. No `SELECT SUM(...) FOR UPDATE` (invalid) — lock the parent row or advisory lock. Dynamic UPDATE SET builders: never hardcode a column AND loop it.
-- Schema rename on an existing tenant: `ALTER SCHEMA … RENAME` (guard `to_regnamespace`) + re-GRANT — never re-CREATE; rotate role creds via `ALTER ROLE … WITH PASSWORD`, never `DROP ROLE`. `GENERATED ALWAYS AS` needs IMMUTABLE expressions (42P17 otherwise) — plain column + app sync. A migration remapping live values updates EVERY consumer query in the SAME change — grep first.
-
-### Auth & security
-- `request.state.organization_id` (NOT `tenant_id` → AttributeError → 500). Real WorkOS access tokens carry NO `email` claim (test JWTs do) — middleware backfills it, but probe new email-gated logic with a claim-less JWT.
-- Status fields need explicit allowlist validation. UPDATEs carry the same scope as their SELECT (`session_id`, org). A DELETE feature covers EVERY delete path with the same org/tenant scope — grep every `DELETE FROM <table>` and router delete before done.
-- PUBLIC_PATHS covers ALL non-JWT auth (OAuth callbacks, webhooks, shared-secret internal RPC) — TenantAuthMiddleware 401s them and callers silently mis-default. Webhooks: verify signature, dedup on event id, non-2xx on transient failure, survive out-of-order/duplicate delivery.
-- Security gates FAIL CLOSED in prd (missing key = block + log critical, never silently pass) — and a fail-closed consumer gate requires closing EVERY producer path of that state in the same change (provision-or-cleanup, not warn-and-continue). A key/token FORMAT validator must match what the minting path actually issues — grep the mint endpoint before writing the regex (8BC416).
-- `require_company_role` checks the caller's role in their OWN tenant only — money-movement and cross-brand endpoints must verify ownership of the specific resource or gate grotap-admin.
-- A connect/OAuth flow requests the scopes its CONSUMER case needs — trace the whole feature across split cases. Rebasing onto a hardened master must preserve auth guards master added; never re-add a provider wrapper that already exists.
-- NEVER pass user-submitted strings to readFile/exec/path APIs — resolve against an allowlisted root, reject absolute paths and `..`, cap read size (a raw `readFile(source_doc)` would have exfiltrated orchestrator secrets into agent context). This includes FastAPI query params flowing into `Path(...)` (print-cloud `download_agent(version=…)`) — allowlist-regex the value first.
-
-### Wiring & contracts
-- Importing/creating ≠ wiring: a new router is dead until `include_router` lands in main.py; an imported helper needs a real call site; every UI action needs an endpoint that EXISTS (grep the router — extend it if the task is "UI-only" and it's missing). Verify referenced modules/pages exist before wiring routes; check master before re-building landed work.
-- Frontend + backend built in separate runs: PROVE the wire contract — hit the real endpoint, diff field names/shapes/enum casing against the TS types; map DB rows→UI in ONE api layer. A frontend-only branch consuming a NEW endpoint silently 404s if the backend isn't on master — grep master backend for the route and land the backend sibling FIRST; a case marked `done` may never have merged (`git branch -r --contains`).
-- 3rd-party integrations: prove WE emit the key you filter by (current format, current master); probe the REAL artifact's export shape (2-min headless `typeof`/constructability check) before coding against it — never trust docs-memory or in-repo "precedent" unexercised, and surface `err.message` in SDK-init catches. A contract SPIKE must include ONE live end-to-end proof that every remote call it depends on SETTLES (resolve or reject) — `ctx.setTool()` was type-correct yet never acked (0/24); cosmetic calls are best-effort with a deadline, never a hard gate (61c63fc0).
-- A JSON contract quoted verbatim in the task prompt is LAW: emit EVERY contract key with the EXACT names (additive extras fine; renames/omissions are defects — `key_facts` vs contract `notable_facts` left the Leads dossier viewer half-empty, CASE-20260714-9F95A6). Reviewers: diff the emitted keys against the prompt's contract before approving.
-- Config VALUES quoted in the task (URLs, repo slugs, schema shapes mirroring a verified environment) are LAW the same way — copy them byte-exact, never reconstruct from memory; and a "verify" step must assert the VALUES (grep exact strings, parse + type-check shapes), not just syntax/`json.load` — syntax-only checks passed three hallucinated values into master (JSP-1, CASE-20260715-2F8C3D).
-- "Most recent N": verify ORDER BY delivers recency (sort AND limit window). Unbounded endpoints paginate BEFORE ship (limit/offset + stable tie-breaker); grids get server-side filters; escape ILIKE metachars (`% _ \`).
-- Post-query row injection (companion tiles, synthetic defaults) must re-apply EVERY filter the base query applied — hidden-apps set, visibility, tenant scope — or user prefs are silently undone on every response (Scan M pairing re-added a hidden companion, CASE-20260710-1D7D90).
-- App slugs: verify against the `apps` table, copy slug facts from the task VERBATIM. `pipeline` (📋) ≠ `agent-pipeline` (⚡); `document-upload` displays as "AI Knowledge Base".
-- Anthropic Messages API: any request whose messages contain `tool_use`/`tool_result` blocks MUST still pass the `tools` param — a "final answer" fallback that strips tools 400s on tool-bearing transcripts; use `tool_choice={"type":"none"}` instead (found in CASE-20260706-8F1C60).
-- A test/probe/load harness must PROVE it hit the real target before its numbers count: assert content-type/JSON shape, never bare status==200 — the brand Vercel frontends rewrite EVERY path to /index.html with HTTP 200, so API calls aimed at apps.grotap.com "passed" while testing static HTML (loadtest smoke, fixed 1039fde6). Same run: `gather(return_exceptions=True)` + a bare `except: pass` let ALL 20 users die at login while the run exited 0 with an empty metrics file — swallowed failures must still emit an error event/metric, and a harness whose output is EMPTY must exit non-zero. A semaphore held for a worker's full lifetime means only the first N workers ever run — bound each holder's session so the pool turns over.
-
-### Frontend
-- Global `body` CSS is DARK (`#0f0f0f`/white) — every light surface sets its OWN text `color` (grids `#374151`); e2e asserts VISIBILITY (computed-style luminance), not DOM presence.
-- New event domain → NEW BroadcastChannel (existing listeners have bare `onmessage` refetch handlers, no type filter).
-- `window.open(url, '_blank', 'noopener…')` returns NULL even when the popup opens — an `if (!popup)` fallback then ALSO navigates the current tab (double-open, opener lost). Internal same-origin popups: plain `window.open(url, '_blank')`.
-- Optimistic-UI reconcile (dropping a local temp message once its server copy lands) must match ONLY rows persisted by THIS turn — never content-match against pre-existing history: a message textually identical to an older one + a failure before the server insert = the user's pending message silently deleted. Row-REUSE flows (re-send of a failed turn) may count an existing row as this turn's copy only with positive evidence of reuse (e.g. no OLD assistant reply after it in the refetch), never just "last user row matches" (F5F1C1 gate REJECT 2026-07-08).
-
-### State machines & jobs
-- A failure path releases everything the happy path claimed (status, slot, lock, row) in the SAME transaction — "nobody un-claims it" = a leak that starves the pipeline. Auto-retry needs backoff or a circuit breaker; infra-caused failures are `failed_infra`, not `failed` (don't burn case strikes).
-- Background loops register in `background_loops.py::start_leader_locked_loops()` — never raw `asyncio.create_task` in lifespan (leader lock prevents web+worker double-execution).
-- Never re-enter LangGraph threads paused at the human gate: detect with `snapshot.next?.includes('human_gate')`, NEVER `next.length>0`; re-invoking a live thread re-executes finished work.
-- Billing idempotency keys are deterministic (derive from stable ids like `invoice-{brand_id}-{period}`) — never `uuid4()` per call.
-
-### Build & ship
-- `py_compile` misses import-time crashes — boot-test `python -c "import app.main"` before any backend push, and check the REAL exit code (`… | tail` reports tail's status, hiding the failure; recurred 2026-07-19: manage_accounts 204 assert shipped, prod deploys failed until hand-fixed). FastAPI 0.115: bodyless status codes (204) need `response_model=None` — `from __future__ import annotations` makes a `-> None` hint resolve to NoneType (truthy response_model) and assert at route registration.
-- Actually RUN `tsc --noEmit` + `py_compile` — "it compiles" is a command, not a claim (recurred TWICE in one day, D7A410/8DC100: a frontend deliverable is done only when the UI renders AND calls its endpoints). Unused TS imports = `noUnusedLocals` hard errors. Grep your diff for conflict markers (`^<<<<<<<`). `| head -n 4`, never `| head -4`.
-- A "re-land with integrated fixes" means fixes actually INTEGRATED — byte-identical = auto re-reject (49C9DD). Any rebuild/re-push is a FRESH landing: rebase onto CURRENT master right before the final push, DROP hunks master now owns (357E52), and PRESERVE master-side surface — `git grep` every symbol/endpoint you deleted or renamed for master consumers (2533BA). Before finalizing, re-diff against CURRENT master: master already landed/rewrote the region → adapt or report-and-stop, never commit a stale copy of a hot file. Verify APIs exist in the PINNED lib version; Dockerfiles that `npm run build` need devDeps (`npm ci` then prune).
-- Rename/refactor: `git grep <old>` returns zero (minus shims) AND app-catalog seeds updated (`seed_apps.sql`, `seed_brands_apps.sql`, `control_plane.py`). NAMING (legal, owner 2026-09-10): the competitor RFID vendor whose tags Manor View's stock carries is NEVER named in code, comments, docs, commit/PR/release text or artifacts — write "Competitor RFID Software" (hooks rewrite/refuse it; `source_system` key stays until its data migration). Stay in scope: no `npm install`/lockfile edits/dep bumps unless the task IS an upgrade.
-- `railway up` is not done until `railway status --json` shows latestDeployment SUCCESS (failed healthcheck leaves the OLD image live); use `RAILWAY_API_TOKEN`. No `--build-arg` flag — inject Dockerfile ARGs as service variables; verify new CLI flags against `--help`. Railway env vars are STATIC — after any Doppler rotation run `platform/scripts/railway_secret_audit.py` (runbook: `docs/SECRET_ROTATION_RUNBOOK.md`).
-- Frontend `npm run build` needs ~3 GB heap since AG Grid Enterprise (2026-07-06): vite OOMs at node's default ~2 GB during "computing gzip size" on 4 GB fleet boxes — tsc passes, all modules transform, THEN fatal OOM, so verify fails on good code. Keep `--max-old-space-size=3072` in frontend package.json `build` + `build.reportCompressedSize:false` in vite.config.ts; never revert to bare `vite build`. Verify error text is NOT persisted to any DB table — reproduce in the preserved `/home/agent/worktrees/CASE-*` on the failing box.
-- `ON CONFLICT (col)` can NOT use a PARTIAL unique index unless the predicate is repeated verbatim: `ON CONFLICT (col) WHERE <index predicate> DO UPDATE`. Without it every execute raises at runtime — and mock tests that assert the SQL string contains "ON CONFLICT" won't catch it. Check `pg_indexes` for a WHERE clause before writing the upsert.
-- CI installs `-r requirements.txt -r requirements-dev.txt`. Tests import the production code they verify (no reimplemented formulas/tautologies); mock fixture types match REAL return types; daemon/loop tests mock `sleep`, cap iterations, run bounded (`timeout 300`); per-file isolation = pytest-forked as a CI-only flag (never in `pytest.ini` — `os.fork` breaks Windows); "unconfigured provider" tests monkeypatch env EMPTY + mock transport or ambient Doppler creds send a real SMS.
-- **Forked-suite isolation + who verifies it (2026-07-24):** any test that stubs `app.*` or a 3rd-party module in `sys.modules` MUST do it in setUp/`setUpClass`/fixture WITH a teardown that restores the registry — never at module scope (SCA002 guard fails fast on module-level injection; a bare package stub without `__path__` left at collection time poisons EVERY `--forked` fork → `ModuleNotFoundError: app.routers.X` in a `setUpClass` that fresh-imports a real router). `backend/conftest.py` restores each file's clean snapshot BEFORE class/module setup runs. A fleet agent CANNOT self-verify `pytest --forked` (~27 min > its turn budget — it commits while "the suite is still buffering"), so a forked-suite / "make CI green" fix is NOT proven by an agent's "done": the gate keeper verifies via a real `--forked` run (CI or a dedicated long run) and merges only on a green summary. NEVER green CI by skip/xfail/delete/quarantine/weakened asserts. While an agent runs, master advances — diff its commit against its OWN base (two-dot `base..tip`), then re-baseline onto current `origin/master`, taking master's copy where a concurrent commit already fixed a file.
-- A connectivity feature (WebRTC, WebSocket, live socket) is NOT proven by an e2e that mocks its transport — a mocked `RTCPeerConnection` driven to "connected" verifies UI chrome only. 964525 shipped call controls whose offer was never SENT (no signaling path); the spec passed the gate green. Gate rule: connect-to-something features need ONE unmocked proof the two ends actually exchange data, or the review states the gap explicitly (C0TURN).
-- Verification/gate tasks (no code expected) report success without commits — say so in the task file. Never relax a mandatory safeguard off ONE anecdotal survival — `git grep` master to confirm the fixes it waits on actually landed (3B0DEB).
-- Reviewer conduct rules (judge the REAL branch not the diff artifact; verify deliverable SUBSTANCE against scope; machine-visible BLOCK first) live in platform repo `agents/reviews/COMMON.md` — auto-prepended to every reviewer prompt by review-pipeline.sh; edit THERE, not here.
-- Task text marked VERBATIM is copied byte-for-byte, never regenerated from memory — and reviewers DIFF the deliverable against spec-supplied text: CASE-20260709-152165 shipped invented triage recipes (a different failure than the documented incident) plus a symlink "exception" contradicting the spec's own NEVER rule, and passed 4/4 reviewers. Fix: CASE-20260709-EAF6B0.
-- Visibility/authz changes cover EVERY read+write path (list, my-apps, subscribe, vote, brands…) in ONE case; scope to the owning TENANT, not the creator user. One owner per hot file. Appending to a shared init hunk: use your OWN `pool.execute` block; don't re-ADD siblings' columns.
-- One owner per hot FUNCTION and DISJOINT files per sibling (05572B+8584FE both rewrote `record_answer_from_hold`; 357E52 duplicated its sibling's hunks with a WEAKER variant) — check whether a sibling's branch already adds the helper (`git ls-remote` + `git show`) and wire to its interface; coalesce onto one sequential branch when in doubt. A shared NEW file must be created by exactly ONE subtask — both shipping full versions = add/add structural conflict, not union-mergeable (255A13/152345). At dedup, diff BOTH versions against the spec and keep the compliant one — spec said `secrets`, survivor used `random` (E8600B).
-- **ONE-TOUCH HUMAN STEPS** — owner time is the scarcest resource. Before any HI hold that puts a human in a console: derive the COMPLETE end-state from the consumer's actual code + the verbatim error (every field, permission, scope), deliver ALL steps in ONE message, state what NOT to touch, and batch every other pending item for that console into the visit. Verify against reality, not memory.
-- **REBOOT WATCHDOG — 5-MINUTE RULE (owner directive 2026-07-09)** — after ANY expected reboot/reset/restart of a server or service, poll max 5 minutes (normal boot ≈1 min). No ping/SSH at the 5-min mark → IMMEDIATELY file an HI hold (`human_holds`, priority high, one-touch recovery steps: console reset, rescue mode, credential procedure) + push-notify the owner + state the blocker in chat. Silent multi-hour ping-watch loops are FORBIDDEN as the primary response — a background watch may run only IN ADDITION to the alert (GEX44 kernel brick sat overnight because escalation came at min 45 instead of min 5).
-- **SCREEN-CONTEXT DOCS (owner directive 2026-07-13)** — a branch that adds/renames a route or screen, or materially changes what a screen does (grid columns, actions, data flow), MUST update the matching `docs/screen-contexts/<app_slug>/<screen>.md` (Capabilities / Data Mechanics / Common Edge Cases) in the SAME branch — and once `scripts/sync_screen_contexts.py` exists (SCTX-C), run it so the `screen_contexts` index row follows. Enrich seeded skeletons, never delete them. These files are injected into the live AI-support agent's system prompt: a stale doc = the agent confidently wrong in front of a customer.
+## Common FAIL Causes — SHORT (detail: `agents/lessons/always-on-fail-detail.md`)
+- SQL: control-plane DDL only in `backend/db/migrations/control_plane/vNNN_*.sql`; app schemas in BOTH `migrations/apps/<slug>/` and `ingestion-worker/migrations/apps/<slug>/`; never amend applied migrations; asyncpg JSONB=`json.dumps`+`::jsonb`; RLS GUC name exact.
+- Auth: `request.state.organization_id`; PUBLIC_PATHS for all non-JWT; fail closed in prd; allowlist paths for file reads.
+- Wiring: `include_router` required; prove FE/BE contract on real endpoint; task JSON contract keys are LAW.
+- Frontend: AppShell; no dead UI actions; enums match API.
+- State/jobs: idempotent webhooks; no poison txn swallow.
+- Fleet: no `git add -A`; master not main; task not done until merged+deployed.
+- Before commit: Read matching `agents/lessons/*.md` by trigger only — never cat all lessons into the prompt.
 
 ## Key IDs
-- Control plane Neon: `green-rice-76766370`
-- Grotap tenant Neon: `proud-union-74070434` / ID: `c7d02593-955c-4ff4-8117-3b2bb267f518`
-- Railway project: `f9bf333c-f929-413e-a95c-7923e10b5777`
+Control Neon `green-rice-76766370` · Grotap tenant Neon `proud-union-74070434` · Railway `f9bf333c-f929-413e-a95c-7923e10b5777`
 
-## Fleet (full roster, hardware, Hetzner accounts: agents/SERVERS.md)
-- Dispatch pool = **agent-02…06** (02–05: Execute ×3 slots + reviewer roles; 06: Deploy Ops + pipeline monitoring + Execute ×2 — its crons must always run: review gate 4h, deploy/health watchdogs, dispatch reconciler, Wasabi backups).
-- **Not in the pool, never dispatch:** `grotap-cobrowse-01` (5.161.189.143 — recycled old agent-01 IP; OpenReplay AI support runner) and the Lane C model engine `LLM-LOCAL-02`. agent-01/07/08 DELETED; agent-09/10/11 cancelled in Hetzner Robot (awaiting wipe).
-- SSH: always `ssh agent-NN` aliases, never raw IP. Key `~/.ssh/grotap_agents`; support-runner box (`grotap-cobrowse-01`, legacy name) `User agent`, others `User root`. Max 3 tasks/server via worktrees.
-- Git auth on exec servers: `credential.helper = /home/agent/bin/git-credential-doppler` (fetches `GITHUB_TOKEN` per call). NEVER set a static token in `~/.env`; if git auth fails, check `doppler me` as the `agent` user first.
-- No unbounded concurrent SSH to one host — pool, serialize, backoff (sshd MaxStartups drops stampedes).
+## Fleet / Dispatch / Review / Deploy
+Roster+SSH: `agents/SERVERS.md` (do **not** auto-load into coding prompts).
+Dispatch continuous; teams/routing: `agents/SERVERS.md` + platform `agents/config.sh`.
+Review: `/codex:review` then Rule 7 pipeline. Deploy: Vercel FE on master; Railway BE gated on green CI.
+Git: master; stage named paths only; tsc before commit; one app to one branch.
 
-## Dispatch — CONTINUOUS
-Backend loop assigns every 3 min + completion-webhook refill; the LangGraph orchestrator (Railway)
-owns run lifecycle and SSHes dispatches to the fleet. Manual one-off (from platform repo root):
-```bash
-bash agents/dispatch.sh <task.md> <server-ip> <session>   # manual
-bash agents/dispatch-execute.sh <task.md> <session>       # auto-route (most free slots)
-```
-- **Dispatch fast-fail signatures** (API-limit $0/90s deaths · inode exhaustion/EMPTY branch · node_modules symlink sabotage): full triage recipes in platform repo `agents/PIPELINE_TRIAGE.md` § "Dispatch fast-fail signatures" — read them BEFORE decomposing or re-queuing a failed run. node_modules symlinks from the shared clone into a worktree remain FORBIDDEN, no exceptions.
-- **"Approve breakdown:" holds are AUTOPILOT — never a human task (owner rule 2026-07-15).** The answer is always yes; the backend-worker 60s loop auto-approves P2–P4 decomposition holds with the standing answer (`pipeline_autopilot.py`, dual gates `PIPE_AUTO_BREAKDOWN` env + `pipeline_automation.auto_breakdown_enabled` — both LIVE since 2026-07-15). A breakdown hold pending >10 min = the autopilot is broken (worker deploy / env gate / org flag) — fix the loop, don't hand-answer. P0/P1 decompositions still page a human BY DESIGN.
-
-## Agent Teams (dispatch routing — TEAM2-DISPATCH contract, owner-approved 2026-07-07)
-- **team1** = existing Claude agents (agent-02…06 pool, `orchestrator-run.sh`), the default. **team2** = open-model agents (aider via OpenRouter, default qwen-2.5-coder-32b + escalation ladder, `agents/team-run.sh`, pool agent-20/21; inactive until provisioned in platform repo `agents/config.sh`).
-- Routing: explicit `case_data.team` > `DEFAULT_TEAM` env (default team1); team registry in platform `agents/config.sh`. Cutover knob = `DEFAULT_TEAM=team2`; rollout: provision agent-20/21 → config.sh pool → a few P3 cases via `case_data.team=team2` → evaluate → widen. Daily cap `TEAM2_DAILY_CAP` (default 10). Disable: `DEFAULT_TEAM=team1`/unset + no `case_data.team` = byte-identical pre-teams dispatch.
-- **Model availability is per-EGRESS-REGION — verify from the executor box, never from local/bench** (2026-07-12 team3 kickoff: `x-ai/grok-4.5` benched fine from US egress but xAI 403s "not available in your region" from FSN1/EU, so team3's primary rung could never succeed on its own agent-30/31 boxes while `grok-4.20-multi-agent` worked; fix CASE-20260712-05BF08). Before registering a team model or routing lane: `curl` the model once from EACH pool box (`ssh <box> ... doppler run -- curl openrouter.../chat/completions`), and re-verify when a pool changes DC/region.
-- Fallback: a team2 run that exhausts its ladder emits `status=failed_open_model` → dispatcher re-queues the SAME task to team1, tagged `meta.team_fallback=true` in dispatch_log.
-- Coding Pilot (`CODING_PILOT=1`, default OFF, owner approval required) = back-compat alias for team2 routing, `simple` tasks only, never P0/P1; full parameters: platform repo `agents/GLOBAL.md` + agents/LESSONS-ARCHIVE.md.
-
-## Code Review
-`/codex:review` before every commit (mandatory; separate from Rule 7 pipeline), then the Rule 7 review pipeline. ANY reviewer FAIL = branch blocked. No exceptions.
-The moment a reviewer/gate decides BLOCK, make it machine-visible FIRST — flip the dispatch row to `rejected` and/or park the case BEFORE writing any report; a prose-only block gets auto-merged by the approve cron (EA3E8D).
-
-## Deployment
-Frontend (Vercel) via CI on push to `master` (paths `frontend/**`). Backend Railway GitHub auto-deploy WORKS but GATES ON GREEN CI (RLWAY1 root cause, confirmed 2026-07-12: 3 days of "silent skips" were a red Backend CI, not a webhook fault) — after a backend push, check the Backend CI run first; if CI is red, fix the tests (never bypass), then verify `/health` git_sha updates. Manual fallback only if CI is green and no build appears: `doppler run -- railway up --service grotap-backend --detach` from `backend/`. Orchestrator: GitHub Actions `deploy-railway.yml` runs `railway up` on master pushes touching `orchestrator/**` (tip-commit detection only until CASE-20260705-C29667 lands — multi-commit pushes may silently skip; verify, fall back to manual `railway up`). Agents on Hetzner: push branch → request merge+deploy from coordinator.
-- **Orchestrator redeploy kills in-flight fleet runs (2026-07-07):** a redeploy severs every live SSH run (silent deaths, stale dispatch rows). Before ANY master push: `git diff --name-only origin/master..HEAD -- orchestrator/` — non-empty → drain in-flight runs (or pause automation) first. Full story: agents/LESSONS-ARCHIVE.md.
-
-## Git Discipline
-| # | Rule |
+## Lessons (on-demand only)
+| File | When |
 |---|---|
-| 1 | Branch is `master` — not `main`. `git pull origin master --rebase` before pushing. |
-| 2 | Branch from CURRENT master; always push YOUR case branch (stale bases → monster diffs; no branch → unreviewable). |
-| 3 | Never `git add -A` or `git add .` — stage specific files by name, and stage every NEW file you create (verify with `git status`; an uncommitted imported module crashes the backend on startup — #1 cause of broken merges). |
-| 4 | Task NOT done until merged to master and deployed. Pushed ≠ done. Reviewed ≠ done. |
-| 5 | Task files are gitignored — `agents/tasks/pending/active/done/archive/` not tracked. |
-| 6 | Type-check before commit — `cd frontend && npx tsc --noEmit`. Fix errors first. |
-| 7 | ONE app changed at once = ONE branch, built in sequence. Separate branches only for genuinely independent apps/subsystems. |
+| `lessons/decomposition-gate.md` | decompose / review / merge gate / fan-out |
+| `lessons/sql-migrations.md` | SQL/migrations/RLS |
+| `lessons/wiring-contracts.md` | endpoints/events/contracts |
+| `lessons/build-ship.md` | tests/signatures/startup/CI |
+| `lessons/frontend.md` | frontend/mobile/UI enums |
+| `lessons/auth-security.md` | auth/secrets/fail-closed |
+| `lessons/state-jobs.md` | status/webhooks/idempotency |
+| `lessons/fleet-ops.md` | dispatch/orchestrator/fleet |
+| `lessons/always-on-fail-detail.md` | debugging a FAIL mode in depth |
 
-## 📚 Lessons — READ THE FILES THAT MATCH YOUR DIFF (mandatory)
-
-Every line in these files is a defect that ALREADY SHIPPED. They live beside this file at
-`$BOOTSTRAP_REPO/agents/lessons/` (cloned on every fleet box). **Before you commit, Read every
-file whose trigger matches your diff** — skipping a matching file is how these defects recur.
-`decomposition-gate.md` is pushed into decomposer/reviewer/gate prompts automatically; the rest
-you Read on demand.
-
-| File | Read it when |
-|---|---|
-| `lessons/decomposition-gate.md` | you are DECOMPOSING a case into subtasks, REVIEWING a branch, or running the MERGE GATE. Also read it before you fan any work out in parallel. |
-| `lessons/sql-migrations.md` | your diff touches any `*.sql`, `backend/db/migrations/`, `migrations/apps/`, a tenant/control-plane pool, RLS, or you are writing/reading SQL from Python. |
-| `lessons/wiring-contracts.md` | you add or consume an endpoint, event, payload field, storage key, config key, or any contract another case/component depends on. |
-| `lessons/build-ship.md` | you add or change tests, change a function/handler signature, rename a module, touch app startup, or the suite/CI is red. |
-| `lessons/frontend.md` | your diff touches `frontend/`, `mobile/`, React/TS components, routes, or an enum/slug the UI renders. |
-| `lessons/auth-security.md` | your diff touches auth middleware, secrets, tokens, allow-lists, bypass flags, or a fail-closed gate. |
-| `lessons/state-jobs.md` | your diff touches a status transition, webhook/event handler, idempotency guard, background loop, or a two-sided protocol. |
-| `lessons/fleet-ops.md` | your diff touches dispatch, the orchestrator, team routing, a runbook, a fleet box, or case lifecycle state. |
-
-**Appending a new lesson:** it goes in the matching `lessons/*.md`, NEVER in this file.
-This file is the constitution (rules + always-on FAIL causes) and is byte-capped by
-`.claude-session-init.sh`. A lesson that is not surface-specific and applies to EVERY agent
-may be folded into a `### Common FAIL Causes` line above — by generalizing an existing line,
-not by adding one.
+Append new lessons to matching `lessons/*.md`. NEVER grow this file with incident essays.
