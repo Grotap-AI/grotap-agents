@@ -211,4 +211,39 @@
 #   Per step 5 this rotation commit is itself unblessed -- the commit that
 #   records a SHA cannot contain its own SHA, so the tip again sits one commit
 #   past the pin. That is the known steady state, not a fault to chase.
-0906e4b024ce502fa84448501e76a9574ff6f275
+#
+#   Rotated 2026-09-22 from 0906e4b024ce502fa84448501e76a9574ff6f275 to
+#   4d0be2d4db6947d64c26a6d8c9c0b3b5f8e17000. Confirmed a strict descendant
+#   of the outgoing pin and of origin/master (d1425c9) with
+#     git merge-base --is-ancestor 0906e4b0 4d0be2d   (exit 0)
+#     git merge-base --is-ancestor d1425c9  4d0be2d   (exit 0)
+#   This SHA is the content commit on cursor/plan-go-live-bootstrap-7621,
+#   not a ls-remote of master: the commit that records a SHA cannot contain
+#   its own SHA (§ROTATION step 5). It is reachable from origin/master only
+#   after this branch lands as a MERGE COMMIT. Squash or rebase drops
+#   4d0be2d from refs/heads/master; verify_bootstrap_pin then hard-fails
+#   every host that has ~/.grotap_bootstrap_pin_seen, because fetch is
+#   refs/heads/master only.
+#   Reviewed before blessing: 16 commits (0906e4b0..4d0be2d).
+#   agents/scripts/orchestrator-run.sh is UNTOUCHED in that range, so the
+#   runner is carried forward byte-identical.
+#   Model instructions that DO change:
+#     13d5f05 already on master — GLOBAL.md slimmed; FAIL essays moved to
+#       agents/lessons/ (PR #1). The previous pin still checked out the
+#       pre-slim file, so this rotation is what releases that cut.
+#     4d0be2d — GLOBAL.md rules 9–11 (Jev is the SD judge when JEV_ENABLED;
+#       agentic execution security; plan MD go-live). BOOTSTRAP.md step 4
+#       gains one line: implemented-plan pointers live in GLOBAL. New
+#       docs/PLAN-GO-LIVE.md (not loaded into prompts).
+#   Also in the already-merged span, read because the whole tree runs:
+#   ssh-key-for.sh canonicalizes the target before key lookup and drops
+#   released Hetzner IPs (agent-30 and earlier retirements); SERVERS.md
+#   Ashburn-only rule and the agent-30 scrub; provision-team3.py marked
+#   dormant; lesson files under agents/lessons/. No new secret material.
+#   Mirror this same SHA into grotap-platform agents/BOOTSTRAP_SHA after
+#   this commit is on origin/master. Until that mirror, the two runners
+#   disagree about the blessed tree.
+#   Per step 5 this rotation commit is itself unblessed. Hosts run
+#   4d0be2d, which contains the GLOBAL rules. That is the known steady
+#   state, not a fault to chase.
+4d0be2d4db6947d64c26a6d8c9c0b3b5f8e17000
