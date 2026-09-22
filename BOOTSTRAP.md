@@ -4,7 +4,7 @@
 1. `git pull origin master` + `git rev-parse HEAD` → record as SESSION_COMMIT
 2. `./.claude-session-init.sh --validate` → STOP if fails, report error
 3. `/codex:setup` → verify Codex CLI ready. WARN if unavailable (non-blocking).
-4. Load context in order: `agents/GLOBAL.md` → `agents/SERVERS.md` → `roles/{module}/MODULE.md` → `roles/{module}/{role}/ROLE.md` → `state/handoffs/handoff-{ticketId}-*.md`
+4. Load context in order: `agents/GLOBAL.md` → `agents/SERVERS.md` → `roles/{module}/MODULE.md` → `roles/{module}/{role}/ROLE.md` → `state/handoffs/handoff-{ticketId}-*.md`. Implemented-plan must-obey pointers live in `agents/GLOBAL.md`; do not load full plan novels.
 5. Check handoff `generated_at_commit` vs SESSION_COMMIT: 1-5 commits = flag STALE; 6+ = stop, request human review; missing field = reject, request regeneration
 6. Output: `BOOTSTRAP COMPLETE | Commit: {SESSION_COMMIT} | Role: {role} | Server: {server} | Codex: {ready|unavailable}`
 
