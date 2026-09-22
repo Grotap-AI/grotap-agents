@@ -19,6 +19,9 @@ React+Vercel `platform/frontend/` · FastAPI+Railway `platform/backend/` · Work
 | 6 | **NO SKIPPING COMPLIANCE** — GitGuardian MCP + compliance node before every deploy. |
 | 7 | **NO MERGE WITHOUT 4-REVIEWER SIGN-OFF** — Build+Logic+Security+Perf PASS. `./agents/review-pipeline.sh <branch>` then `./agents/collect-reviews.sh --wait <branch>`. |
 | 8 | **AppShell MANDATORY** — OpenReplay only via `lib/openreplay.ts`. Cobrowse removed — never restore. |
+| 9 | **JEV IS THE SD JUDGE** — When `JEV_ENABLED`, Jev (platform/orchestrator Decisions via OpenRouter; not chat completions) is the only judge/router for assign, done-ship, and monitor. Never LLM-as-judge. Low confidence → `human_review`. Full: platform `docs/JEV_HARNESS.md`. |
+| 10 | **AGENTIC EXECUTION SECURITY** — Agents propose; platform APIs are source of truth. No admin/commerce write keys on agent boxes to finish the job. Re-verify truth at commit; fail closed. Full: platform `docs/AGENTIC-EXECUTION-SECURITY-PLAN.md`. |
+| 11 | **PLAN MD GO-LIVE** — Desktop `*.md` are drafts. Implemented plans live in git (platform `docs/` or this repo’s `docs/`). Must-obey text is a short pointer here; do not load plan novels into prompts. Playbook: `docs/PLAN-GO-LIVE.md`. |
 
 ## Common FAIL Causes — SHORT (detail: `agents/lessons/always-on-fail-detail.md`)
 - SQL: control-plane DDL only in `backend/db/migrations/control_plane/vNNN_*.sql`; app schemas in BOTH `migrations/apps/<slug>/` and `ingestion-worker/migrations/apps/<slug>/`; never amend applied migrations; asyncpg JSONB=`json.dumps`+`::jsonb`; RLS GUC name exact.
