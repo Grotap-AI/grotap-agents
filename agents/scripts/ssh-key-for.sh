@@ -70,21 +70,23 @@ fi
 SHARED_KEY="$HOME/.ssh/grotap_agents"
 
 # --- IP -> canonical fleet host name (see header comment) -------------------
-# Canonical names match agents/SERVERS.md after the 2026-09-21 Cloud rename
-# and the 2026-09-23 GO rename of the jumpbox to prompt-01-claude.
-# Per-host key FILES on disk still use the pre-rename basenames
-# (grotap_from06_agent-02, grotap_claudecode-01, …). _SSH_KEY_FOR_LEGACY
-# below finds those files. Do not map a released IP: Hetzner recycles them.
-# Stale and unmapped: agent-06 Hillsboro 5.78.178.81; deleted agent-21/31/41,
-# agent-30 (167.233.59.142), llm-gpu-02 (178.63.124.99).
-# prompt-01-astra and agent-team-01-astra have no IP yet — do not add a row.
-# Do not add agent-11-codex.
+# Canonical names are Hetzner Cloud names in agents/SERVERS.md.
+# Short aliases agent-01..agent-06 are the SAME IP as agent-01-claude..agent-06-claude.
+# Do not map agent-02 onto agent-01-claude. Jumpbox is prompt-01-claude
+# at 178.156.209.112 (former claudecode-01 / claude-code-01).
+# 5.78.178.81 is agent-05-claude (off).
+# 5.161.243.18 is prompt-01-astra. Do not add agent-11-codex.
+# Deleted and unmapped: agent-31/41, agent-30 (167.233.59.142),
+# llm-gpu-02 (178.63.124.99).
 declare -A _SSH_KEY_FOR_HOST_BY_IP=(
-  ["5.161.74.39"]="agent-02-claude"
-  ["5.161.81.193"]="agent-03-claude"
-  ["178.156.222.220"]="agent-04-claude"
-  ["5.161.73.195"]="agent-05-claude"
+  ["5.161.74.39"]="agent-01-claude"
+  ["5.161.81.193"]="agent-02-claude"
+  ["178.156.222.220"]="agent-03-claude"
+  ["5.161.73.195"]="agent-04-claude"
+  ["5.78.178.81"]="agent-05-claude"
   ["5.161.53.103"]="agent-06-claude"
+  ["5.161.243.18"]="prompt-01-astra"
+  ["5.161.80.75"]="agent-team-01-astra"
   ["87.99.148.22"]="agent-10-codex"
   ["178.156.219.232"]="monitor-01-deepseek"
   ["5.161.107.80"]="maps-01"
@@ -100,11 +102,14 @@ declare -A _SSH_KEY_FOR_HOST_BY_IP=(
 # and also to a name that arrived via the IP table (the table is already
 # canonical, so this is a no-op for those).
 declare -A _SSH_KEY_FOR_ALIAS=(
+  ["agent-01"]="agent-01-claude"
   ["agent-02"]="agent-02-claude"
   ["agent-03"]="agent-03-claude"
   ["agent-04"]="agent-04-claude"
   ["agent-05"]="agent-05-claude"
   ["agent-06"]="agent-06-claude"
+  ["agent-06-ash"]="agent-06-claude"
+  ["grotap-agent-06-ash"]="agent-06-claude"
   ["agent-20"]="agent-10-codex"
   ["agent-40"]="monitor-01-deepseek"
   ["claudecode-01"]="prompt-01-claude"
@@ -117,6 +122,7 @@ declare -A _SSH_KEY_FOR_ALIAS=(
 
 # Canonical name → basename of the key file minted before the rename.
 declare -A _SSH_KEY_FOR_LEGACY=(
+  ["agent-01-claude"]="agent-01"
   ["agent-02-claude"]="agent-02"
   ["agent-03-claude"]="agent-03"
   ["agent-04-claude"]="agent-04"
@@ -190,6 +196,10 @@ if [[ -n "$from_suffix" ]]; then
   fi
   if [[ "$canon" == "prompt-01-claude" ]]; then
     _ssh_key_for_use "$HOME/.ssh/grotap_from${from_suffix}_claude-code-01"
+    _ssh_key_for_use "$HOME/.ssh/grotap_from${from_suffix}_claudecode-01"
+  fi
+  if [[ "$canon" == "agent-06-claude" ]]; then
+    _ssh_key_for_use "$HOME/.ssh/grotap_from${from_suffix}_grotap-agent-06-ash"
   fi
 fi
 
@@ -210,6 +220,10 @@ if [[ -n "$legacy" ]]; then
 fi
 if [[ "$canon" == "prompt-01-claude" ]]; then
   _ssh_key_for_use "$HOME/.ssh/grotap_claude-code-01"
+  _ssh_key_for_use "$HOME/.ssh/grotap_claudecode-01"
+fi
+if [[ "$canon" == "agent-06-claude" ]]; then
+  _ssh_key_for_use "$HOME/.ssh/grotap_grotap-agent-06-ash"
 fi
 
 printf '%s\n' "$SHARED_KEY"

@@ -14,7 +14,7 @@
 # Usage:
 #   bash fleet-model-probe.sh                 # probe using the workstation's Doppler (prd)
 #   bash fleet-model-probe.sh --config dev    # probe the dev config's key
-#   bash fleet-model-probe.sh --host agent-02-claude # probe with the key as that BOX resolves it
+#   bash fleet-model-probe.sh --host agent-01-claude # probe with the key as that BOX resolves it
 #   bash fleet-model-probe.sh --quiet         # exit status only, for cron/CI use
 #   FLEET_PROBE_MODEL=<id> bash fleet-model-probe.sh    # override the pinned model
 #

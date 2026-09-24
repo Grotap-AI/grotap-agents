@@ -8,9 +8,9 @@
 
 | Host | Action | Model / role |
 |------|--------|----------------|
-| `prompt-01-astra` | New Ashburn Hetzner | GPT-6 Astra — Prompt Option |
-| `agent-team-01-astra` | New Ashburn Hetzner | GPT-6 Astra — Agent Team |
-| `prompt-01-claude` | Rename from `claude-code-01` | Claude jump seat (Prompt Option Claude path) |
+| `prompt-01-astra` | Live Ashburn `5.161.243.18` (cpx31, Hetzner id 167204705) | GPT-6 Astra — Prompt Option. Outside the Team Claude pool |
+| `agent-team-01-astra` | Live Ashburn `5.161.80.75` (cpx31, Hetzner id 167204706) | GPT-6 Astra — Agent Team. Outside the Team Claude pool |
+| `prompt-01-claude` | Live `178.156.209.112`. Former `claudecode-01` / `claude-code-01`. DNS `claudecode.grotap.com` may still point here | Claude jump seat (Prompt Option Claude path) |
 
 ## Rules
 

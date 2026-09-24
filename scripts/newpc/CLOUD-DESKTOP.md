@@ -593,7 +593,7 @@ routes are both working)
 **The work**
 
 - [ ] `doppler run -p grotap -c prd -- python scripts/db.py "select 1 as ok"` against Neon.
-- [ ] `ssh agent-02-claude` with the restored fleet key.
+- [ ] `ssh agent-01-claude` with the restored fleet key.
 - [ ] One **real** dispatch plus a `/codex` review, end to end. Not a smoke test.
 - [ ] A restore drill recorded as passed: what was restored, and how long it took.
 

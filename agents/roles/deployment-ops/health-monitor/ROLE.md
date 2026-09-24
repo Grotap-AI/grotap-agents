@@ -1,5 +1,5 @@
 # agents/roles/deployment-ops/health-monitor/ROLE.md
-# Role: Health Monitor | Server: agent-06-claude | Module: deployment-ops
+# Role: Health Monitor | Server: agent-05-claude (Hillsboro, OFF) | Module: deployment-ops
 # Trigger: scheduled (every 5 min) OR task.type == 'health-check'
 
 ## Role Purpose
@@ -28,11 +28,12 @@ prolonged undetected downtime in the past.
 ### Agent Server SSH Checks (roster: `agents/SERVERS.md`)
 | Server | IP | Check |
 |---|---|---|
-| agent-02-claude | 5.161.74.39 | SSH port 22 open |
-| agent-03-claude | 5.161.81.193 | SSH port 22 open |
-| agent-04-claude | 178.156.222.220 | SSH port 22 open |
-| agent-05-claude | 5.161.73.195 | SSH port 22 open |
-| agent-06-claude | 5.161.53.103 | localhost (self). Hillsboro 5.78.178.81 is stale |
+| agent-01-claude | 5.161.74.39 | SSH port 22 open |
+| agent-02-claude | 5.161.81.193 | SSH port 22 open |
+| agent-03-claude | 178.156.222.220 | SSH port 22 open |
+| agent-04-claude | 5.161.73.195 | SSH port 22 open. Running |
+| agent-05-claude | 5.78.178.81 | Hillsboro ops box. OFF / unreachable |
+| agent-06-claude | 5.161.53.103 | Ashburn. Linux hostname still grotap-agent-06-ash |
 
 ### DNS Resolution Checks
 Resolve each domain and compare to MODULE.md "Expected DNS" (canonical table).
@@ -54,10 +55,11 @@ HTTP:
 - agents.grotap.ai: {status} ({response_time}ms)
 
 Agents:
-- agent-02-claude (5.161.74.39): REACHABLE | UNREACHABLE
-- agent-03-claude (5.161.81.193): REACHABLE | UNREACHABLE
-- agent-04-claude (178.156.222.220): REACHABLE | UNREACHABLE
-- agent-05-claude (5.161.73.195): REACHABLE | UNREACHABLE
+- agent-01-claude (5.161.74.39): REACHABLE | UNREACHABLE
+- agent-02-claude (5.161.81.193): REACHABLE | UNREACHABLE
+- agent-03-claude (178.156.222.220): REACHABLE | UNREACHABLE
+- agent-04-claude (5.161.73.195): REACHABLE | UNREACHABLE
+- agent-05-claude (5.78.178.81): REACHABLE | UNREACHABLE
 - agent-06-claude (5.161.53.103): REACHABLE | UNREACHABLE
 
 DNS:
@@ -71,6 +73,6 @@ Status: ALL OK | DEGRADED | DOWN
 ALL OK → none (terminal)
 DEGRADED → deploy-executor (attempt recovery)
 DOWN → human escalation + deploy-executor
-next_server: agent-06-claude
+next_server: agent-05-claude
 next_role: deploy-executor
 priority: critical
