@@ -1,5 +1,5 @@
 # agents/roles/enforcement/change-reviewer/ROLE.md
-# Role: Change Reviewer | Server: Agent-04 | Module: enforcement
+# Role: Change Reviewer | Server: agent-04-claude | Module: enforcement
 # Trigger: task.type == 'change-review'
 
 ## Role Purpose
@@ -29,6 +29,6 @@ Missing items (in plan, not implemented):
 ```
 
 ## Handoff
-Routes: PASS → agent-04 / build-validator
-FAIL → agent-03 / planner (re-plan required)
+Routes: PASS → agent-04-claude / build-validator
+FAIL → agent-03-claude / planner (re-plan required)
 Output fields: see `agents/roles/shared/handoff-schema.md` → change-reviewer

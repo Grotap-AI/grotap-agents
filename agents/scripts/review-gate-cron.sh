@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Review gate — runs Claude unattended against the change_review backlog.
 #
-# Installed on agent-06 as systemd review-gate.timer -> review-gate.service,
+# Installed on agent-06-claude as systemd review-gate.timer -> review-gate.service,
 # every 15 min (empty queue exits in <5s, so the only real cost is when there
 # is actually something to review). The name still says "cron" for continuity
 # with every log line and hold that references it.
@@ -70,7 +70,7 @@ trap 'rm -f "$LOCK"' EXIT
 fail_hold() {
   curl -s -X POST https://api.grotap.com/human-intervention/ -H "Content-Type: application/json" -d "{
     \"task_id\": \"review-gate-failure-$(date -u +%F)\",
-    \"task_title\": \"Review gate cron FAILED on agent-06\",
+    \"task_title\": \"Review gate cron FAILED on agent-06-claude\",
     \"category\": \"manual_verification\", \"priority\": \"high\", \"created_by\": \"review-gate-cron\",
     \"description\": $(printf '%s' "$1" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()[:2500]))')
   }" >/dev/null || true
@@ -301,7 +301,7 @@ if [ "$RC" -ne 0 ]; then
         git reset --hard origin/master -q
       fi
     ' _ "$PLATFORM_REPO"
-  fail_hold "review-gate claude run exited rc=$RC after up-to-2h. Local unpushed merges were reset. See $LOG on agent-06."
+  fail_hold "review-gate claude run exited rc=$RC after up-to-2h. Local unpushed merges were reset. See $LOG on agent-06-claude."
 fi
 
 # D2: prune AFTER all gate work, never before it, and never able to fail the

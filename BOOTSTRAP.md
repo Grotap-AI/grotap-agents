@@ -15,15 +15,15 @@ Overflow executor: load `roles/execution/MODULE.md` + `roles/execution/execute/R
 - Swap: `bash agents/ensure-swap.sh` (this repo; idempotent 4 GiB swap + swappiness). Re-run after ANY hard reset/rebuild — OOM has wedged two boxes. Also runs automatically in grotap-platform `agents/setup-server.sh`.
 - API key in **both**: `/home/agent/.env` AND `/home/agent/.profile` (`export ANTHROPIC_API_KEY=...`)
 - Git safe.directory if root/agent mismatch: `git config --global --add safe.directory /home/agent/grotap-platform`
-- SCP task files (not in git): `scp -r agents/tasks/pending agents/tasks/active agent-06:/home/agent/grotap-platform/agents/tasks/`
+- SCP task files (not in git): `scp -r agents/tasks/pending agents/tasks/active agent-06-claude:/home/agent/grotap-platform/agents/tasks/`
 - Status server: `node agents/status-server.js` running on localhost:7654
 
 ## Post-Task
-The continuous dispatcher (agent-06 + backend loop) refills slots automatically. For manual ops:
+The continuous dispatcher (agent-06-claude + backend loop) refills slots automatically. For manual ops:
 `bash agents/server-status.sh` then `bash agents/dispatch-execute.sh <task.md> <session>` (platform repo root).
 
 ## Never Do
-- SSH by raw IP — use `ssh agent-NN` aliases (`~/.ssh/grotap_agents`)
+- SSH by raw IP — use the cloud-name aliases (`ssh agent-02-claude`, `ssh agent-06-claude`, …) from `~/.ssh/config` (`~/.ssh/grotap_agents`)
 - `git add -A` or `git add .`
 - Leave agents idle or skip bootstrap
 - Load `docs/CLAUDE.md` as agent context — use `agents/GLOBAL.md`

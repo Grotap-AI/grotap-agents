@@ -1,5 +1,5 @@
 # agents/roles/planning/planner/ROLE.md
-# Role: Planner | Server: Agent-03 | Module: planning
+# Role: Planner | Server: agent-03-claude | Module: planning
 # Trigger: task.stage == 'planning'
 
 ## Role Purpose

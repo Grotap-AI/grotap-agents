@@ -1,5 +1,5 @@
 # agents/roles/review/policy-reviewer/ROLE.md
-# Role: Policy Reviewer | Server: Agent-03 | Module: review
+# Role: Policy Reviewer | Server: agent-03-claude | Module: review
 # Trigger: task.type == 'policy-review' OR task.flags contains 'policy'
 
 ## Role Purpose

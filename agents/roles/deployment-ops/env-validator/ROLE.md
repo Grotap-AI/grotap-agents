@@ -1,5 +1,5 @@
 # agents/roles/deployment-ops/env-validator/ROLE.md
-# Role: Env Validator | Server: Agent-06 | Module: deployment-ops
+# Role: Env Validator | Server: agent-06-claude | Module: deployment-ops
 # Trigger: task.type == 'env-validate' OR before any deploy-execute
 
 ## Role Purpose
@@ -74,6 +74,6 @@ Verdict: PASS | FAIL
 ## Handoff
 PASS → deploy-executor (cleared to deploy)
 FAIL → human escalation (fix secrets before deploying)
-next_server: agent-06
+next_server: agent-06-claude
 next_role: deploy-executor
 priority: high

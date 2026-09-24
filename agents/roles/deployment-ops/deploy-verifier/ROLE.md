@@ -1,5 +1,5 @@
 # agents/roles/deployment-ops/deploy-verifier/ROLE.md
-# Role: Deploy Verifier | Server: Agent-06 | Module: deployment-ops
+# Role: Deploy Verifier | Server: agent-06-claude | Module: deployment-ops
 # Trigger: event == 'merge-to-master' OR task.type == 'deploy-verify'
 
 ## Role Purpose
@@ -51,6 +51,6 @@ Failures: {list of failures}
 ## Handoff
 PASS → post-deploy-qa (smoke test live endpoints)
 FAIL → deploy-executor (trigger redeployment)
-next_server: agent-06
+next_server: agent-06-claude
 next_role: post-deploy-qa | deploy-executor
 priority: high

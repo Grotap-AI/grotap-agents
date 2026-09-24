@@ -13,9 +13,11 @@
 #
 # Part of retiring the shared fleet key `grotap_agents` (phase 2b,
 # 2026-09-16). Phase 1 (2026-09-16 04:01Z) provisioned per-target keys on
-# agent-06 for both source users:
+# agent-06-claude (then still named agent-06) for both source users:
 #   /home/agent/.ssh/grotap_from06_agent-0{2,3,4,5}
 #   /root/.ssh/grotap_from06_agent-0{2,3,4,5}
+# Those filenames were NOT renamed when the cloud names became
+# agent-0N-claude. This resolver tries the new basename, then the old one.
 # This resolver is the ONE place that knows how to turn a target into the
 # right key path, so every caller (health-monitor.sh, dispatch.sh,
 # update-fleet-cli.sh, reconcile_dispatch.py, status-server.js, ...) stops
@@ -24,9 +26,9 @@
 #
 # Resolution order:
 #   1. A per-host key at $HOME/.ssh/grotap_from<N>_<canonical-target>, where
-#      <N> is derived from the CURRENT host's own short name (agent-06 ->
-#      "06") and <canonical-target> is the resolved target (agent-02..05
-#      today). $HOME reflects whichever OS user actually runs this — /root
+#      <N> is derived from the CURRENT host's own short name (agent-06-claude ->
+#      "06") and <canonical-target> is the resolved cloud name (agent-02-claude
+#      …). $HOME reflects whichever OS user actually runs this — /root
 #      under a root crontab, /home/agent under `sudo -u agent` — so root and
 #      agent get the correct key from the exact same call, no extra flag.
 #   2. Otherwise a workstation-style per-host key at
@@ -70,34 +72,59 @@ fi
 SHARED_KEY="$HOME/.ssh/grotap_agents"
 
 # --- IP -> canonical fleet host name (see header comment) -------------------
-# Only the team1 boxes (agent-02..06) are listed: they are the only targets
-# that have per-host keys today. The team2/3/4/5 boxes deliberately have NO
-# rows — no per-host key pair has been provisioned for them, so a row would
-# resolve to a key path that does not exist and fall through to the shared
-# key anyway, while implying the opposite. Add a row at the same time as the
-# key, never before. (agent-21 / agent-31 / agent-41 were deleted from
-# Hetzner on 2026-09-16 and must never come back here; agent-20 / agent-30 /
-# agent-40 are live but still shared-key.)
+# Canonical names are the Hetzner cloud names (agents/SERVERS.md, 2026-09-24).
+# Pre-rename aliases below still resolve to those names. On-disk per-host keys
+# minted in phase 1 are still named grotap_from06_agent-0N; lookup tries the
+# new basename, then that legacy basename, then the shared fleet key.
+# Do NOT map released addresses (Hillsboro 5.78.178.81, deleted agent-21/31/41,
+# agent-30). Hetzner recycles them. See agents/SERVERS.md.
 declare -A _SSH_KEY_FOR_HOST_BY_IP=(
-  ["5.161.74.39"]="agent-02"
-  ["5.161.81.193"]="agent-03"
-  ["178.156.222.220"]="agent-04"
-  ["5.161.73.195"]="agent-05"
-  ["5.78.178.81"]="agent-06"
-  ["87.99.148.22"]="agent-20"
-  ["178.156.219.232"]="agent-40"
-  # agent-21/31/41 REMOVED 2026-09-16, agent-30 (167.233.59.142) and
-  # llm-gpu-02 (178.63.124.99) REMOVED 2026-09-20: those Hetzner servers were
-  # deleted or cancelled and their IPs released. Hetzner recycles released IPs,
-  # so mapping one to a fleet host name would offer a fleet key to a stranger.
-  # See agents/SERVERS.md.
+  ["5.161.74.39"]="agent-02-claude"
+  ["5.161.81.193"]="agent-03-claude"
+  ["178.156.222.220"]="agent-04-claude"
+  ["5.161.73.195"]="agent-05-claude"
+  ["5.161.53.103"]="agent-06-claude"
+  ["87.99.148.22"]="agent-10-codex"
+  ["178.156.219.232"]="monitor-01-deepseek"
   ["5.161.107.80"]="maps-01"
   ["178.156.246.81"]="forge-01"
-  ["178.156.209.112"]="claudecode-01"
-  ["claudecode.grotap.com"]="claudecode-01"
-  ["5.161.189.143"]="cobrowse-01"
-  ["supportagents.grotap.com"]="cobrowse-01"
-  ["178.156.199.83"]="runner-01"
+  ["178.156.209.112"]="claude-code-01"
+  ["claudecode.grotap.com"]="claude-code-01"
+  ["5.161.189.143"]="openreplay-01"
+  ["supportagents.grotap.com"]="openreplay-01"
+  ["178.156.199.83"]="openreplay-ai-support"
+)
+
+# Old host tokens → current cloud name. Applied before the IP table.
+declare -A _SSH_KEY_FOR_ALIAS=(
+  ["agent-02"]="agent-02-claude"
+  ["agent-03"]="agent-03-claude"
+  ["agent-04"]="agent-04-claude"
+  ["agent-05"]="agent-05-claude"
+  ["agent-06"]="agent-06-claude"
+  ["agent-20"]="agent-10-codex"
+  ["agent-40"]="monitor-01-deepseek"
+  ["claudecode-01"]="claude-code-01"
+  ["cobrowse-01"]="openreplay-01"
+  ["grotap-cobrowse-01"]="openreplay-01"
+  ["supportagents"]="openreplay-01"
+  ["grotap-runner-01"]="openreplay-ai-support"
+  ["runner-01"]="openreplay-ai-support"
+)
+
+# Pre-rename key basename for a canonical host, when a key file already exists
+# under the old name (grotap_from06_agent-02, grotap_cobrowse-01, ...).
+declare -A _SSH_KEY_LEGACY=(
+  ["agent-02-claude"]="agent-02"
+  ["agent-03-claude"]="agent-03"
+  ["agent-04-claude"]="agent-04"
+  ["agent-05-claude"]="agent-05"
+  ["agent-06-claude"]="agent-06"
+  ["agent-10-codex"]="agent-20"
+  ["monitor-01-deepseek"]="agent-40"
+  ["claude-code-01"]="claudecode-01"
+  ["openreplay-01"]="cobrowse-01"
+  ["openreplay-ai-support"]="runner-01"
 )
 
 # --- Canonicalize the target BEFORE the lookup -------------------------------
@@ -126,44 +153,57 @@ case "$lookup" in
 esac
 lookup="${lookup,,}"
 
+if [[ -n "${_SSH_KEY_FOR_ALIAS[$lookup]:-}" ]]; then
+  lookup="${_SSH_KEY_FOR_ALIAS[$lookup]}"
+fi
+
 canon="$lookup"
 if [[ -n "${_SSH_KEY_FOR_HOST_BY_IP[$lookup]:-}" ]]; then
   canon="${_SSH_KEY_FOR_HOST_BY_IP[$lookup]}"
 fi
+legacy="${_SSH_KEY_LEGACY[$canon]:-}"
 
 # --- Which host is THIS resolver running on? ---------------------------------
-# Only agent-06 has per-host keys as of phase 2a/2b (grotap_from06_*). Any
+# Only agent-06-claude has per-host keys as of phase 2a/2b (grotap_from06_*). Any
 # other caller (the owner workstation, a future box) has no from-<N> keys to
 # look for, so it falls straight through to the shared-key fallback.
 _local_host="$(hostname -s 2>/dev/null || hostname 2>/dev/null || true)"
 from_suffix=""
 case "$_local_host" in
-  agent-06|*agent-06*) from_suffix="06" ;;
+  agent-06-claude|agent-06|*agent-06*) from_suffix="06" ;;
 esac
 
-if [[ -n "$from_suffix" ]]; then
-  candidate="$HOME/.ssh/grotap_from${from_suffix}_${canon}"
-  if [[ -f "$candidate" ]]; then
-    printf '%s\n' "$candidate"
+_ssh_key_emit() {
+  local path="$1"
+  if [[ -f "$path" ]]; then
+    printf '%s\n' "$path"
     exit 0
+  fi
+}
+
+if [[ -n "$from_suffix" ]]; then
+  _ssh_key_emit "$HOME/.ssh/grotap_from${from_suffix}_${canon}"
+  if [[ -n "$legacy" ]]; then
+    _ssh_key_emit "$HOME/.ssh/grotap_from${from_suffix}_${legacy}"
   fi
 fi
 
 # --- 2. Workstation-style per-host key -------------------------------------
 # The owner workstation names its per-host keys $HOME/.ssh/grotap_<host>
-# (grotap_agent-04, grotap_forge-01, grotap_cobrowse-01, ...) rather than
-# the grotap_from<N>_<host> form the fleet boxes use: there is only one
-# source host, so the "from" half would carry no information. Without this
-# branch the resolver handed back the SHARED key for every workstation call
-# even though a per-host key was sitting right next to it -- exactly the
-# dependency phase 2b exists to remove.
+# (grotap_agent-04-claude, or the pre-rename grotap_agent-04 /
+# grotap_cobrowse-01 / grotap_forge-01) rather than the grotap_from<N>_<host>
+# form the fleet boxes use: there is only one source host, so the "from"
+# half would carry no information. Lookup tries the cloud name, then the
+# legacy basename, so an existing grotap_cobrowse-01 still matches
+# openreplay-01. Without this branch the resolver handed back the SHARED
+# key for every workstation call even though a per-host key was sitting
+# right next to it -- exactly the dependency phase 2b exists to remove.
 #
 # A literal target of "agents" resolves to grotap_agents here, i.e. the
 # shared key: the same answer the fallback gives, so it needs no guard.
-ws_candidate="$HOME/.ssh/grotap_${canon}"
-if [[ -f "$ws_candidate" ]]; then
-  printf '%s\n' "$ws_candidate"
-  exit 0
+_ssh_key_emit "$HOME/.ssh/grotap_${canon}"
+if [[ -n "$legacy" ]]; then
+  _ssh_key_emit "$HOME/.ssh/grotap_${legacy}"
 fi
 
 printf '%s\n' "$SHARED_KEY"

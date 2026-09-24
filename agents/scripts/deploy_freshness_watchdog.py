@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deploy-freshness watchdog — cron */5 on agent-06 (CASE-20260704-RLWAY1).
+"""Deploy-freshness watchdog — cron */5 on agent-06-claude (CASE-20260704-RLWAY1).
 
 Detects silent Railway non-deploys of grotap-backend: after a master push that
 touches backend/, the live api.grotap.com/health git_sha must catch up within
@@ -93,11 +93,11 @@ def file_hold(master_sha: str, live_sha: str, age_min: int, state: dict) -> None
             f"{master_sha} (backend/ changed, pushed {age_min} min ago). Railway GitHub auto-deploy "
             f"likely failed silently again (see CASE-20260704-RLWAY1). Check Railway deployments for "
             f"grotap-backend; stopgap: `doppler run -p grotap -c prd -- railway up --service grotap-backend` "
-            f"from backend/.\n\nSource: deploy_freshness_watchdog.py on agent-06 (cron */5). "
+            f"from backend/.\n\nSource: deploy_freshness_watchdog.py on agent-06-claude (cron */5). "
             f"Re-fires once per stale SHA / 6h."
         ),
         "priority": "high",
-        "server_name": "agent-06",
+        "server_name": "agent-06-claude",
         "created_by": "deploy-watchdog",
     }).encode()
     req = urllib.request.Request(

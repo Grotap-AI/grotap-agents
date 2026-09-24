@@ -1,7 +1,12 @@
-"""Provision agent-40/agent-41 (Team 4 — GPT-5.6 executors) in OpenAgents.grotapai.
+"""Ensure the Team 4 / monitor box exists in OpenAgents.grotapai.
+
+Live cloud name is monitor-01-deepseek (formerly agent-40). It stays shared by
+team4, team5, and MONITOR_POOL. agent-41 was deleted and must not be recreated.
+This script does not create agent-11-codex, prompt-01-astra, or
+agent-team-01-astra.
 
 Owner-approved 2026-07-13 ("execute all of your plan", docs/GPT56_SOL_TEAM4_PLAN.md):
-2x cpx21 in ASH (Ashburn) — inference is OpenRouter-hosted (openai/gpt-5.6-*), so no
+cpx21 in ASH (Ashburn) — inference is OpenRouter-hosted (openai/gpt-5.6-*), so no
 GPU-LAN adjacency needed and Ashburn is ~1/3 the FSN1 price. No private network attach
 (team2-llm-lan is eu-central; ash cannot join — same reason team2 boxes aren't on it).
 Uses HETZNER_FARM_API_TOKEN. Idempotent.
@@ -19,7 +24,15 @@ PUBKEY = (
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJiGJUlEkAootc2g9LUmd5dU7C6EjxSS+Dk1rH0zdMOp "
     "grotap-agent-farm-r2-20260705"
 )
-SERVERS = ["agent-40", "agent-41"]
+SERVERS = ["monitor-01-deepseek"]
+FORBIDDEN = {
+    "agent-11-codex",
+    "agent-40",
+    "agent-41",
+    "prompt-01-astra",
+    "agent-team-01-astra",
+    "prompt-01-claude",
+}
 
 
 def api(method: str, path: str, body: dict | None = None):
@@ -35,6 +48,10 @@ def api(method: str, path: str, body: dict | None = None):
     except urllib.error.HTTPError as e:
         raise RuntimeError(f"{method} {path} -> HTTP {e.code}: {e.read().decode()[:400]}")
 
+
+blocked = FORBIDDEN.intersection(SERVERS)
+if blocked:
+    raise SystemExit(f"refusing to provision forbidden names: {sorted(blocked)}")
 
 # 1. SSH key
 keys = api("GET", "/ssh_keys")["ssh_keys"]

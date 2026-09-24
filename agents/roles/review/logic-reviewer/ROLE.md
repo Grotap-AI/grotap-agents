@@ -1,5 +1,5 @@
 # agents/roles/review/logic-reviewer/ROLE.md
-# Role: Logic Reviewer | Server: Agent-03 | Module: review
+# Role: Logic Reviewer | Server: agent-03-claude | Module: review
 # Trigger: task.type == 'logic-review'
 
 ## Role Purpose

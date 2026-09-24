@@ -4,7 +4,7 @@
 
 ## Module Scope
 The enforcement module ensures that every change landing on master is safe,
-rule-compliant, and builds cleanly. It contains three roles, all on Agent-04.
+rule-compliant, and builds cleanly. It contains three roles, all on agent-04-claude.
 
 ## Role Summary
 | Role | When It Runs | What It Enforces |
@@ -15,7 +15,7 @@ rule-compliant, and builds cleanly. It contains three roles, all on Agent-04.
 
 ## Enforcement Authority
 - Any FAIL from this module blocks merge unconditionally
-- Rule Enforcer can escalate to agent-02 / security-reviewer for Rule 1–6 violations
+- Rule Enforcer can escalate to agent-02-claude / security-reviewer for Rule 1–6 violations
 - Build Validator failure means no deployment — period
 
 ## Key References

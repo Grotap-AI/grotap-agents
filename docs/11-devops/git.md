@@ -66,10 +66,10 @@ migration.
 runners; that is what gates merges today.
 
 **Forgejo Actions** runs alongside it on self-hosted runners: `forgejo-runner` v13.1.0 in **HOST**
-execution mode on agent-02 through agent-06, as an unprivileged `forge-runner` user inside a systemd
+execution mode on agent-02-claude through agent-06-claude, as an unprivileged `forge-runner` user inside a systemd
 jail, capacity 2, registered org-wide with labels `ubuntu-latest:host` / `ubuntu-24.04:host`. Each
 runner is bounded by the drop-in `/etc/systemd/system/forgejo-runner.service.d/10-resources.conf`
-(agent-02..05 `CPUQuota=200%`, `MemoryHigh=1600M`, `MemoryMax=2G`; agent-06 `CPUQuota=300%`,
+(agent-02-claude..05-claude `CPUQuota=200%`, `MemoryHigh=1600M`, `MemoryMax=2G`; agent-06-claude `CPUQuota=300%`,
 `MemoryHigh=3G`, `MemoryMax=4G`). A runner unit without that drop-in is a regression.
 
 The canary repository is `Grotap-AI/forge-smoke` — one workflow that checks out, runs

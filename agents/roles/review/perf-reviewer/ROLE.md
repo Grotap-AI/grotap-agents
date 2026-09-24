@@ -1,5 +1,5 @@
 # agents/roles/review/perf-reviewer/ROLE.md
-# Role: Perf Reviewer | Server: Agent-03 | Module: review
+# Role: Perf Reviewer | Server: agent-03-claude | Module: review
 # Trigger: task.type == 'perf-review' OR task.flags contains 'performance'
 
 ## Role Purpose

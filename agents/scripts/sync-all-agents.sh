@@ -22,14 +22,14 @@ set -uo pipefail
 
 SSH_KEY="$HOME/.ssh/grotap_agents"
 
-# Active fleet (consolidated 2026-04-29: agent-01/08/09/10/11 retired).
+# Active fleet. Names and IPs match agents/SERVERS.md.
+# agent-01/07/08/09/10/11 are retired — do not SSH those released addresses.
 AGENTS=(
-  "agent-02:5.161.74.39"
-  "agent-03:5.161.81.193"
-  "agent-04:178.156.222.220"
-  "agent-05:5.161.73.195"
-  "agent-06:5.78.178.81"
-  "agent-07:89.167.66.105"
+  "agent-02-claude:5.161.74.39"
+  "agent-03-claude:5.161.81.193"
+  "agent-04-claude:178.156.222.220"
+  "agent-05-claude:5.161.73.195"
+  "agent-06-claude:5.161.53.103"
 )
 
 # Resolve the fleet Doppler token once (env override, else from Doppler).

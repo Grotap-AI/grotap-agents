@@ -4,15 +4,15 @@
 
 ## Module Scope
 The execution module is where approved plans become real code. It activates
-only after a plan has been approved by Agent-03 / planner. It has one role:
+only after a plan has been approved by agent-03-claude / planner. It has one role:
 Execute.
 
 Nothing is built without a plan. Nothing is deployed without passing the
 4-reviewer pipeline first.
 
 ## Executor Pool
-Executor pool: agent-04 primary (3 slots); overflow agent-02/03/05 (3 each);
-agent-06 (2 slots, 1 reserved for dispatch). Roster: `agents/SERVERS.md`.
+Executor pool: agent-04-claude primary (3 slots); overflow agent-02-claude/03-claude/05-claude (3 each);
+agent-06-claude (2 slots, 1 reserved for dispatch). Roster: `agents/SERVERS.md`.
 
 Concurrency is per-slot via git worktrees — each task gets an isolated working
 directory at `/home/agent/worktrees/<session>/` with its own branch; no conflicts

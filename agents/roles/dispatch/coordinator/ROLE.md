@@ -1,7 +1,7 @@
 # Role: Dispatch Coordinator (automation — not a Claude session)
 # Owned by: backend `pipeline_automation` loop (3-min assign + completion-webhook refill) and the
 # LangGraph orchestrator on Railway, which SSHes `dispatch.sh` to fleet servers.
-# Agent-06 hosts the supporting crons (reconciler, failure monitor) — no dispatcher daemon runs there.
+# agent-06-claude hosts the supporting crons (reconciler, failure monitor) — no dispatcher daemon runs there.
 
 ## Responsibility
 Keep every execute server at capacity: no case waits while a slot is open, and nothing double-claims
@@ -25,6 +25,6 @@ run in tmux on the target server, and tracks lifecycle in `pipeline_dispatch_log
 
 ## Never Do
 - Leave a server idle when approved cases exist
-- Dispatch more than 3 tasks to one server (agent-06: max 2)
-- Dispatch to hosts outside the pool (cobrowse, LLM engines, retired boxes — see SERVERS.md)
+- Dispatch more than 3 tasks to one server (agent-06-claude: max 2)
+- Dispatch to hosts outside the pool (openreplay-01, openreplay-ai-support, LLM engines, retired boxes — see SERVERS.md)
 - Instant re-assign on failure without backoff/circuit breaker (GLOBAL — retry massacre)

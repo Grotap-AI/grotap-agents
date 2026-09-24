@@ -1,5 +1,5 @@
 # agents/roles/intake/intake/ROLE.md
-# Role: Intake | Server: Agent-02 | Module: intake
+# Role: Intake | Server: agent-02-claude | Module: intake
 # Trigger: task.stage == 'new'
 
 ## Role Purpose
@@ -20,7 +20,7 @@ reject malformed tasks, and hand off to triage.
 
 ## Outputs
 - Validated task summary (ticket_id, type, module, flags)
-- Pass to: triage role (same server, Agent-02)
+- Pass to: triage role (same server, agent-02-claude)
 - Reject path: return error to dispatcher with reason
 
 ## Hard Stops (do not proceed if any are true)
@@ -29,6 +29,6 @@ reject malformed tasks, and hand off to triage.
 - Task file is empty or malformed JSON/MD
 
 ## Handoff
-Routes: PASS → agent-02 / triage (priority urgent if flags contain `security`)
+Routes: PASS → agent-02-claude / triage (priority urgent if flags contain `security`)
 REJECT → return error to dispatcher with reason
 Output fields: see `agents/roles/shared/handoff-schema.md` → intake

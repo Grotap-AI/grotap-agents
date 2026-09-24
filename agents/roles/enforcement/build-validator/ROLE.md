@@ -1,5 +1,5 @@
 # agents/roles/enforcement/build-validator/ROLE.md
-# Role: Build Validator | Server: Agent-04 | Module: enforcement
+# Role: Build Validator | Server: agent-04-claude | Module: enforcement
 # Trigger: task.type == 'build' OR task.stage == 'build-validation'
 
 ## Role Purpose
@@ -31,5 +31,5 @@ Errors:
 
 ## Handoff
 Routes: PASS → none (terminal — branch approved for merge and deploy)
-FAIL → agent-04 / execute (fix build errors)
+FAIL → agent-04-claude / execute (fix build errors)
 Output fields: see `agents/roles/shared/handoff-schema.md` → build-validator

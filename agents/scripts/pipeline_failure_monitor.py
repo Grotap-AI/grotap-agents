@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Pipeline failure monitor — cron */10 on agent-06.
+"""Pipeline failure monitor — cron */10 on agent-06-claude.
 
 Checks the dispatch machinery end-to-end and files an HI hold (category
 dispatch_failure) when something is wrong. Stdlib only; DB access via psql
@@ -82,9 +82,9 @@ def file_hold(check: str, title: str, description: str, state: dict) -> bool:
         "task_id": f"pipeline-monitor-{check}",
         "task_title": title,
         "category": "dispatch_failure",
-        "description": description + "\n\nSource: pipeline_failure_monitor.py on agent-06 (runs every 10 min). What needs to happen? Investigate and clear the failure; this alert re-fires every 6h while the condition persists.",
+        "description": description + "\n\nSource: pipeline_failure_monitor.py on agent-06-claude (runs every 10 min). What needs to happen? Investigate and clear the failure; this alert re-fires every 6h while the condition persists.",
         "priority": "high",
-        "server_name": "agent-06",
+        "server_name": "agent-06-claude",
         "created_by": "pipeline-monitor",
     }).encode()
     req = urllib.request.Request(

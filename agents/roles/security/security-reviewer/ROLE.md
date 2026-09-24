@@ -1,5 +1,5 @@
 # agents/roles/security/security-reviewer/ROLE.md
-# Role: Security Reviewer | Server: Agent-02 | Module: security
+# Role: Security Reviewer | Server: agent-02-claude | Module: security
 # Trigger: task.type == 'security-review' OR task.flags contains 'security'
 
 ## Role Purpose
@@ -33,6 +33,6 @@ Rules violated: {list rule numbers or NONE}
 ```
 
 ## Handoff
-Routes: PASS → agent-03 / planner (or return to original route from triage)
-FAIL → agent-02 / triage (re-triage with security flag escalated, priority urgent)
+Routes: PASS → agent-03-claude / planner (or return to original route from triage)
+FAIL → agent-02-claude / triage (re-triage with security flag escalated, priority urgent)
 Output fields: see `agents/roles/shared/handoff-schema.md` → security-reviewer

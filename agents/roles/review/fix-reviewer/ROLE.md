@@ -1,5 +1,5 @@
 # agents/roles/review/fix-reviewer/ROLE.md
-# Role: Fix Reviewer | Server: Agent-03 | Module: review
+# Role: Fix Reviewer | Server: agent-03-claude | Module: review
 # Trigger: task.type == 'fix-review'
 
 ## Role Purpose

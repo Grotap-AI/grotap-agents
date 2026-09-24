@@ -1,5 +1,5 @@
 # agents/roles/deployment-ops/deploy-executor/ROLE.md
-# Role: Deploy Executor | Server: Agent-06 | Module: deployment-ops
+# Role: Deploy Executor | Server: agent-06-claude | Module: deployment-ops
 # Trigger: deploy-verifier verdict == FAIL OR task.type == 'deploy-execute'
 
 ## Role Purpose
@@ -58,6 +58,6 @@ Error: {error_message if failed}
 ## Handoff
 SUCCESS → deploy-verifier (re-verify everything is live)
 FAILED → escalate to human (deployment infrastructure issue)
-next_server: agent-06
+next_server: agent-06-claude
 next_role: deploy-verifier
 priority: critical

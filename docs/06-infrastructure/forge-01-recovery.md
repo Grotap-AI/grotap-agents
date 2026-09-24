@@ -30,7 +30,7 @@ forge can always re-create the four mirrors from GitHub and re-register the runn
 | Backups | `s3://grotap-forge-backups/forge-01/<YYYY>/<MM>/forge-<UTC timestamp>.zip`, Wasabi `s3.us-west-1.wasabisys.com`, region `us-west-1`, SSE-S3 AES256 |
 | Hetzner firewall | `forge-fw`, ID `11628446` |
 | Cloudflare | zone `a589e163cb028b700d725fa08d5bb009`, custom ruleset `833d63affc5d44be931d2ce74bf8f9fd` ("forge-access-lock") |
-| Allowed sources | agent-02 `5.161.74.39`, agent-03 `5.161.81.193`, agent-04 `178.156.222.220`, agent-05 `5.161.73.195`, agent-06 `5.78.178.81`, owner workstation `98.97.42.234` |
+| Allowed sources | agent-02-claude `5.161.74.39`, agent-03-claude `5.161.81.193`, agent-04-claude `178.156.222.220`, agent-05-claude `5.161.73.195`, agent-06-claude `5.161.53.103`, owner workstation `98.97.42.234` |
 | Credentials | Doppler `grotap` prd+dev: `FORGE_URL`, `FORGE_API_TOKEN`, `FORGE_ADMIN_USER`, `FORGE_ADMIN_PASSWORD`, `FORGEJO_WEBHOOK_SECRET`, `FORGE_SSH_HOST`, `FORGE_SSH_PORT`, `FORGE_SERVER_IP`, `WASABI_FORGE_*` |
 
 forge-01 deliberately holds **no Doppler token** and must never be given one. Its only secret on
@@ -110,7 +110,7 @@ Doppler prd and dev, and any `ssh_config` entry or automation that pins the addr
 
 ## Step 4 — Re-register the runners
 
-Each of agent-02 through agent-06 runs `forgejo-runner` v13.1.0 from `/opt/forgejo-runner` as the
+Each of agent-02-claude through agent-06-claude runs `forgejo-runner` v13.1.0 from `/opt/forgejo-runner` as the
 unprivileged `forge-runner` user under `forgejo-runner.service`. Registration state lives in
 `/opt/forgejo-runner/.runner`. A restored database brings the five registrations back with it and
 the runners reconnect on their own; verify with `systemctl is-active forgejo-runner` on each box and

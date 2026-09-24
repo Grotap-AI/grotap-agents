@@ -22,11 +22,11 @@ Task files live in: `agents/tasks/{ticket_id}-{slug}.md`
 ## Key Constraints
 - Never accept a task with missing `ticket_id` or `stage`
 - Never route a task to execution without triage sign-off
-- All tasks with `flags` containing `security` must route through security-reviewer on Agent-02
+- All tasks with `flags` containing `security` must route through security-reviewer on agent-02-claude
 
 ## Outbound Routes from This Module
 | Destination | Condition |
 |---|---|
-| agent-03 / planner | Normal flow after triage |
-| agent-02 / security-reviewer | Task flags contain `security` |
-| agent-05 / audit-filters | Task requires audit |
+| agent-03-claude / planner | Normal flow after triage |
+| agent-02-claude / security-reviewer | Task flags contain `security` |
+| agent-05-claude / audit-filters | Task requires audit |

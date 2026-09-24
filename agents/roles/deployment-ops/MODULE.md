@@ -31,11 +31,11 @@ Documented failure patterns that prompted this module:
 - Deploy Verifier FAIL → blocks next task dispatch (code is merged but not live)
 - Health Monitor FAIL → escalates to deploy-executor for redeployment
 - Env Validator FAIL → blocks deploy-executor from proceeding
-- Any role can escalate to agent-04/execute for hotfix if live is broken
+- Any role can escalate to agent-04-claude/execute for hotfix if live is broken
 
 ## Server Assignment
-All deployment-ops roles run on Agent-06 (cpx31 / 4 vCPU / 8 GB / Hillsboro).
-Agent-06 is the ops/monitoring server — it does not run dev tasks.
+All deployment-ops roles run on agent-06-claude (cpx31 / 4 vCPU / 8 GB / Ashburn, `5.161.53.103`).
+agent-06-claude is the ops/monitoring server — it does not run dev tasks. The old Hillsboro address `5.78.178.81` is released.
 
 ## Railway Service IDs (canonical copy — ROLE files reference this table)
 | Service | ID |

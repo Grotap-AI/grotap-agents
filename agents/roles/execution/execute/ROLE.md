@@ -1,5 +1,5 @@
 # agents/roles/execution/execute/ROLE.md
-# Role: Execute | Primary: Agent-04 | Overflow: Agent-02, Agent-03, Agent-05 | Agent-06 (2 slots)
+# Role: Execute | Primary: agent-04-claude | Overflow: agent-02-claude, agent-03-claude, agent-05-claude | agent-06-claude (2 slots)
 # Module: execution
 # Trigger: task.stage == 'execution'
 
@@ -18,7 +18,7 @@ and deploy after sign-off. Do not invent — execute the plan exactly.
 8. Commit and push your branch — uncommitted work is invisible
 9. Submit branch for review: `./agents/review-pipeline.sh <branch>`
 10. Wait for all 4 PASS verdicts — `./agents/collect-reviews.sh --wait <branch>`
-11. **NEVER merge to master yourself.** The review gate (agent-06, every 4h) / orchestrator
+11. **NEVER merge to master yourself.** The review gate (agent-06-claude, every 4h) / orchestrator
     (AUTO_APPROVE_GREEN) owns the merge — a second merger races it. On 4 PASS: report
     done-pending-merge in your handoff and stop.
 12. If ANY FAIL: fix the issues, re-push, re-submit for review.
@@ -34,7 +34,7 @@ Pushing a branch is not done. Passing review is not done. Your job ends at 4-PAS
 - Do not use `request.state.tenant_id` — use `request.state.organization_id`
 
 ## Overflow Executor Rules
-When running on an overflow server (Agent-02, Agent-03, or Agent-05):
+When running on an overflow server (agent-02-claude, agent-03-claude, or agent-05-claude):
 - Execute (overflow) yields to primary roles — this server's primary roles ALWAYS take priority
 - The overflow executor completes its current task before yielding
 - Use `dispatch-execute.sh` to auto-route — never manually dispatch execution to overflow servers

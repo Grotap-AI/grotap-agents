@@ -1,5 +1,5 @@
 # agents/roles/pipeline/pipeline-detail/ROLE.md
-# Role: Pipeline Detail | Server: Agent-05 | Module: pipeline
+# Role: Pipeline Detail | Server: agent-05-claude | Module: pipeline
 # Trigger: task.type == 'pipeline' AND task.detail == true
 
 ## Role Purpose
@@ -31,6 +31,6 @@ Next action: {recommendation}
 ```
 
 ## Handoff
-Routes: BLOCKED → agent-03 / fix-reviewer (address FAIL findings)
-APPROVED → agent-04 / execute (ready for execution)
+Routes: BLOCKED → agent-03-claude / fix-reviewer (address FAIL findings)
+APPROVED → agent-04-claude / execute (ready for execution)
 Output fields: see `agents/roles/shared/handoff-schema.md` → pipeline-detail

@@ -1,5 +1,5 @@
 # agents/roles/deployment-ops/dns-watchdog/ROLE.md
-# Role: DNS Watchdog | Server: Agent-06 | Module: deployment-ops
+# Role: DNS Watchdog | Server: agent-06-claude | Module: deployment-ops
 # Trigger: scheduled (daily) OR task.type == 'dns-check' OR after infra changes
 
 ## Role Purpose

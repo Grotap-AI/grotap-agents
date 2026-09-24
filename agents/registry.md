@@ -3,21 +3,21 @@
 # Tier 1 file — only Tech Lead may modify. Last updated: 2026-07-05
 
 ## Servers
-See `agents/SERVERS.md` — active pool agent-02…06; special hosts (cobrowse, LLM engine); retired list.
+See `agents/SERVERS.md` — active pool agent-02-claude…agent-06-claude; builder `agent-10-codex`; monitor `monitor-01-deepseek` (team4/team5/`MONITOR_POOL`); special hosts (`openreplay-01`, `openreplay-ai-support`, `claude-code-01`, LLM engine); retired list.
 
 ## Module → owning server
 | Module | Server | Roles (ROLE.md under agents/roles/<module>/) |
 |---|---|---|
-| intake | agent-02 | intake, triage |
-| security | agent-02 | security-reviewer |
-| planning | agent-03 | planner |
-| review | agent-03 | fix-reviewer, policy-reviewer, logic-reviewer, perf-reviewer |
-| execution | agent-04 primary; overflow agent-02/03/05, agent-06 (2 slots) | execute |
-| enforcement | agent-04 | change-reviewer, rule-enforcer, build-validator |
-| pipeline | agent-05 | pipeline-detail, audit-filters |
-| approvals | agent-05 | mobile-approvals |
-| dispatch | agent-06 | coordinator, watchdog |
-| deployment-ops | agent-06 | deploy-verifier, deploy-executor, env-validator, health-monitor, dns-watchdog, post-deploy-qa |
+| intake | agent-02-claude | intake, triage |
+| security | agent-02-claude | security-reviewer |
+| planning | agent-03-claude | planner |
+| review | agent-03-claude | fix-reviewer, policy-reviewer, logic-reviewer, perf-reviewer |
+| execution | agent-04-claude primary; overflow agent-02-claude/03-claude/05-claude, agent-06-claude (2 slots) | execute |
+| enforcement | agent-04-claude | change-reviewer, rule-enforcer, build-validator |
+| pipeline | agent-05-claude | pipeline-detail, audit-filters |
+| approvals | agent-05-claude | mobile-approvals |
+| dispatch | agent-06-claude | coordinator, watchdog |
+| deployment-ops | agent-06-claude | deploy-verifier, deploy-executor, env-validator, health-monitor, dns-watchdog, post-deploy-qa |
 
 ## File tiers
 | Tier | Files | Policy |

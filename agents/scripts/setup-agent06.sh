@@ -1,14 +1,15 @@
 #!/bin/bash
-# setup-agent06.sh — Run from local machine to deploy all scripts + cron to Agent-06.
+# setup-agent06.sh — Run from local machine to deploy all scripts + cron to agent-06-claude.
 # Usage: bash agents/scripts/setup-agent06.sh
 set -euo pipefail
 
-AGENT06="5.78.178.81"
+# Live Ashburn address. The old Hillsboro IP 5.78.178.81 was released.
+AGENT06="5.161.53.103"
 SSH_KEY="$HOME/.ssh/grotap_agents"
 SSH="ssh -i $SSH_KEY -o StrictHostKeyChecking=no root@$AGENT06"
 SCP="scp -i $SSH_KEY -o StrictHostKeyChecking=no"
 
-echo "=== Setting up Agent-06 ($AGENT06) ==="
+echo "=== Setting up agent-06-claude ($AGENT06) ==="
 
 # ── 1. Create directory structure ─────────────────────────────────────────────
 echo "[1/5] Creating directories..."
@@ -37,6 +38,9 @@ $SCP "$SCRIPT_DIR/ssh-key-for.sh" root@$AGENT06:/home/agent/scripts/
 # source user — the private half is created on the box that uses it and
 # never travels over SCP.
 echo "[3/5] Provisioning per-target keys for agent-to-agent checks..."
+# Key filenames stay the pre-rename basenames (grotap_from06_agent-02, …).
+# ssh-key-for.sh maps agent-0N-claude onto these files. Do not mint a second
+# pair under the new name until the targets' authorized_keys are updated.
 FLEET_TARGETS="agent-02 agent-03 agent-04 agent-05"
 for TARGET in $FLEET_TARGETS; do
   ROOT_KEY="/root/.ssh/grotap_from06_${TARGET}"

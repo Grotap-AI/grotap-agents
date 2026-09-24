@@ -9,7 +9,7 @@
 # Pruning still has to happen sometime, so it happens here — on its own
 # schedule, where a failure costs nothing and can never block a gate run.
 #
-# Installed on agent-06:
+# Installed on agent-06-claude:
 #   17 4 * * *  /home/agent/grotap-agents/agents/scripts/git-prune-janitor.sh >> /home/agent/logs/git-prune-janitor.log 2>&1
 #
 # Manual run: bash /home/agent/grotap-agents/agents/scripts/git-prune-janitor.sh

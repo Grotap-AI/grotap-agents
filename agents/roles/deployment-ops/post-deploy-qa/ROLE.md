@@ -1,5 +1,5 @@
 # agents/roles/deployment-ops/post-deploy-qa/ROLE.md
-# Role: Post-Deploy QA | Server: Agent-06 | Module: deployment-ops
+# Role: Post-Deploy QA | Server: agent-06-claude | Module: deployment-ops
 # Trigger: deploy-verifier verdict == PASS OR task.type == 'post-deploy-qa'
 
 ## Role Purpose
@@ -67,6 +67,6 @@ Verdict: PASS | FAIL
 ## Handoff
 PASS → none (terminal — deployment confirmed live and working)
 FAIL → deploy-executor (rollback or hotfix)
-next_server: agent-06
+next_server: agent-06-claude
 next_role: deploy-executor
 priority: critical

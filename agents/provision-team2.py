@@ -1,9 +1,13 @@
-"""Provision agent-20/agent-21 (Team 2) in the OpenAgents.grotapai Hetzner project.
+"""Ensure the Team 2 box exists in the OpenAgents.grotapai Hetzner project.
 
-Uses HETZNER_FARM_API_TOKEN (the empty project's token). cpx21, Ashburn,
-ubuntu-24.04, grotap-agents SSH key. Idempotent: skips resources that exist.
+Live cloud name is agent-10-codex (formerly agent-20). agent-21 was deleted
+and must not be recreated. This script does not create agent-11-codex,
+prompt-01-astra, or agent-team-01-astra.
 
-Run: doppler run -p grotap -c prd -- python provision_team2.py
+Uses HETZNER_FARM_API_TOKEN. cpx21, Ashburn, ubuntu-24.04, grotap-agents SSH
+key. Idempotent: skips a server whose cloud name already exists.
+
+Run: doppler run -p grotap -c prd -- python provision-team2.py
 """
 import json
 import os
@@ -16,7 +20,16 @@ PUBKEY = (
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJiGJUlEkAootc2g9LUmd5dU7C6EjxSS+Dk1rH0zdMOp "
     "grotap-agent-farm-r2-20260705"
 )
-SERVERS = ["agent-20", "agent-21"]
+SERVERS = ["agent-10-codex"]
+# Creating any of these would add a box this rename explicitly does not want.
+FORBIDDEN = {
+    "agent-11-codex",
+    "agent-20",
+    "agent-21",
+    "prompt-01-astra",
+    "agent-team-01-astra",
+    "prompt-01-claude",
+}
 
 
 def api(method: str, path: str, body: dict | None = None):
@@ -32,6 +45,10 @@ def api(method: str, path: str, body: dict | None = None):
     except urllib.error.HTTPError as e:
         raise RuntimeError(f"{method} {path} -> HTTP {e.code}: {e.read().decode()[:400]}")
 
+
+blocked = FORBIDDEN.intersection(SERVERS)
+if blocked:
+    raise SystemExit(f"refusing to provision forbidden names: {sorted(blocked)}")
 
 # 1. SSH key
 keys = api("GET", "/ssh_keys")["ssh_keys"]

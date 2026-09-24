@@ -1,6 +1,6 @@
 # agents/roles/review/MODULE.md
 # Review module — Layer 2 domain context.
-# Covers: all post-build code review roles on Agent-03.
+# Covers: all post-build code review roles on agent-03-claude.
 
 ## Module Scope
 The review module contains the four specialized reviewers that evaluate code

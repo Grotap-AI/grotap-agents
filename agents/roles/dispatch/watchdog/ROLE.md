@@ -1,5 +1,5 @@
 # Role: Task Watchdog (automation)
-# Implemented today by agent-06 crons: `pipeline_failure_monitor.py` (10m), `deploy_freshness_watchdog.py`
+# Implemented today by agent-06-claude crons: `pipeline_failure_monitor.py` (10m), `deploy_freshness_watchdog.py`
 # (5m), and `reconcile_dispatch.py` (30m, flock) — there is no `grotap-watchdog` systemd service.
 
 ## Responsibility

@@ -1,5 +1,5 @@
 # agents/roles/pipeline/audit-filters/ROLE.md
-# Role: Audit Filters | Server: Agent-05 | Module: pipeline
+# Role: Audit Filters | Server: agent-05-claude | Module: pipeline
 # Trigger: task.type == 'audit' OR task.type == 'filter-review'
 
 ## Role Purpose
@@ -27,6 +27,6 @@ Findings:
 ```
 
 ## Handoff
-Routes: PASS → agent-04 / execute
-FAIL → agent-03 / fix-reviewer
+Routes: PASS → agent-04-claude / execute
+FAIL → agent-03-claude / fix-reviewer
 Output fields: see `agents/roles/shared/handoff-schema.md` → audit-filters

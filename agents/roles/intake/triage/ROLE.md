@@ -1,5 +1,5 @@
 # agents/roles/intake/triage/ROLE.md
-# Role: Triage | Server: Agent-02 | Module: intake
+# Role: Triage | Server: agent-02-claude | Module: intake
 # Trigger: task.stage == 'triaged' OR task.type == 'triage'
 
 ## Role Purpose
@@ -9,11 +9,11 @@ and route it to the right server and role.
 ## Routing Decision Table
 | Condition | Route to |
 |---|---|
-| `flags` contains `security` | agent-02 / security-reviewer |
-| `type == 'audit'` or `type == 'filter-review'` | agent-05 / audit-filters |
-| `type == 'policy-review'` | agent-03 / policy-reviewer |
-| `type == 'build'` | agent-04 / build-validator |
-| Default (feature/fix, no flags) | agent-03 / planner |
+| `flags` contains `security` | agent-02-claude / security-reviewer |
+| `type == 'audit'` or `type == 'filter-review'` | agent-05-claude / audit-filters |
+| `type == 'policy-review'` | agent-03-claude / policy-reviewer |
+| `type == 'build'` | agent-04-claude / build-validator |
+| Default (feature/fix, no flags) | agent-03-claude / planner |
 
 ## Triage Checklist
 1. Read full task description — confirm scope is understood

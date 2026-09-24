@@ -1,5 +1,5 @@
 # agents/roles/approvals/mobile-approvals/ROLE.md
-# Role: Mobile Approvals | Server: Agent-05 | Module: approvals
+# Role: Mobile Approvals | Server: agent-05-claude | Module: approvals
 # Trigger: task.channel == 'mobile' AND task.type == 'approval'
 
 ## Role Purpose
@@ -16,7 +16,7 @@ human's decision.
 3. Push approval request to Expo notification system
 4. Poll for human decision (timeout: 24 hours)
 5. On approval: resume LangGraph graph from interrupt point
-6. On rejection: route task back to agent-03 / planner for re-planning
+6. On rejection: route task back to agent-03-claude / planner for re-planning
 7. On expiry: escalate to human via support portal
 
 ## Output Format
@@ -30,6 +30,6 @@ Decision by: {timestamp or 'awaiting'}
 ```
 
 ## Handoff
-Routes: approved → agent-04 / execute (resume from interrupt) | rejected → agent-03 / planner (re-plan)
+Routes: approved → agent-04-claude / execute (resume from interrupt) | rejected → agent-03-claude / planner (re-plan)
 expired → none (escalate to support portal) — priority: urgent (approvals block the pipeline)
 Output fields: see `agents/roles/shared/handoff-schema.md` → mobile-approvals

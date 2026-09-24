@@ -1,5 +1,5 @@
 #!/bin/bash
-# health-monitor.sh — Runs on Agent-06 via cron every 5 minutes.
+# health-monitor.sh — Runs on agent-06-claude via cron every 5 minutes.
 # Polls all production endpoints + agent servers.
 # On 3 consecutive failures, triggers deploy-executor.
 # Usage: bash /home/agent/scripts/health-monitor.sh
@@ -46,14 +46,16 @@ done
 # Roster of record is SERVERS.md — keep this list equal to the agent-0N rows there.
 # It was wrong in both directions until 2026-09-15: it probed agent-01, deleted
 # 2026-06-29 with its IP recycled to supportagents (so the check passed while
-# testing a different machine entirely), and it omitted agent-06 — the box whose
+# testing a different machine entirely), and it omitted agent-06-claude — the box whose
 # crons must always run, and the box this script itself runs on.
+# Names match agents/SERVERS.md. agent-06-claude moved Ashburn; do not probe
+# the released Hillsboro address 5.78.178.81.
 AGENTS=(
-  "agent-02:5.161.74.39"
-  "agent-03:5.161.81.193"
-  "agent-04:178.156.222.220"
-  "agent-05:5.161.73.195"
-  "agent-06:5.78.178.81"
+  "agent-02-claude:5.161.74.39"
+  "agent-03-claude:5.161.81.193"
+  "agent-04-claude:178.156.222.220"
+  "agent-05-claude:5.161.73.195"
+  "agent-06-claude:5.161.53.103"
 )
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -64,7 +66,7 @@ for ENTRY in "${AGENTS[@]}"; do
   FAIL_FILE="$STATE_DIR/fail_count_$NAME"
 
   # Per-host key when this OS user (root, via root's crontab) has one on THIS
-  # box (agent-06); falls back to the shared fleet key otherwise. $HOME here
+  # box (agent-06-claude); falls back to the shared fleet key otherwise. $HOME here
   # is root's — the resolver reads it internally, so root and agent (via
   # sudo -u agent) get the right key from the same call. See ssh-key-for.sh.
   SSH_KEY_FOR_TARGET="$(bash "$SCRIPT_DIR/ssh-key-for.sh" "$NAME" 2>/dev/null || echo "$HOME/.ssh/grotap_agents")"
