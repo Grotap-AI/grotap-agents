@@ -114,9 +114,9 @@ Naming stays type-first · lowercase · hyphens. Cloud name = Linux hostname.
 
 | Action | Name | Role |
 |--------|------|------|
-| **Provision (Ashburn)** | `prompt-01-astra` | Prompt Option — GPT-6 Astra (`gpt-6-astra`), dedicated metal |
-| **Provision (Ashburn)** | `agent-team-01-astra` | Agent Team — GPT-6 Astra, dedicated metal |
-| **Rename (live)** | `claude-code-01` → `prompt-01-claude` | Claude jump seat at `178.156.209.112` (was `claudecode-01`, then `claude-code-01`). Cloud+Linux rename is live. |
+| **Live** | `prompt-01-astra` `5.161.243.18` | Prompt Option — GPT-6 Astra (`gpt-6-astra`), cpx31 Ashburn, id 167204705. Running |
+| **Live** | `agent-team-01-astra` `5.161.80.75` | Agent Team — GPT-6 Astra, cpx31 Ashburn, id 167204706. Running |
+| **Current name** | `prompt-01-claude` `178.156.209.112` | Jumpbox. Was `claudecode-01`, then `claude-code-01`. DNS `claudecode.grotap.com` unchanged. Running |
 
 Constraints:
 - Do not put Astra boxes in the Team Claude `agent-0N-claude` pool.
@@ -126,18 +126,22 @@ Constraints:
 
 Why multiple Claude workers exist: parallel **throughput** (concurrent sessions), not faster single-job latency. Astra gets speed the same way — dedicated seats, not more Claude boxes.
 
-## 2026-09-24 — verified IPs (Shadow Harness)
+## 2026-09-24 — locked live map (Shadow metal PASS)
 
-Naming rules above are unchanged. This table is the IP authority. SSH alias `agent-01` is `agent-01-claude` at `5.161.74.39`. `agent-02` is `agent-02-claude`. Same number, same IP. Do not pair `agent-01-claude` with SSH `agent-02`.
+This table is the IP authority. SSH alias `agent-01` is `agent-01-claude` at `5.161.74.39`. `agent-02` is `agent-02-claude` at `5.161.81.193`. Same number, same IP. `prompt-01-claude` is the current jumpbox name. `agent-04-claude` is running.
 
-| IP | Cloud name | Linux hostname | Notes |
-|---|---|---|---|
-| 5.161.74.39 | agent-01-claude | agent-01-claude | SSH alias `agent-01`. Running. |
-| 5.161.81.193 | agent-02-claude | agent-02-claude | SSH alias `agent-02` |
-| 178.156.222.220 | agent-03-claude | agent-03-claude | SSH alias `agent-03`. Console was `03-Agent` |
-| 5.161.73.195 | agent-04-claude | agent-04-claude | Running. SSH alias `agent-04` |
-| 5.78.178.81 | agent-05-claude | (off, Hillsboro) | OFF / unreachable. SSH alias `agent-05` |
-| 5.161.53.103 | agent-06-claude | still `grotap-agent-06-ash` | SSH alias `agent-06`. Fix Linux hostname when SSH works |
-| 178.156.209.112 | prompt-01-claude | prompt-01-claude | Jumpbox. Former `claudecode-01` / `claude-code-01`. DNS `claudecode.grotap.com` may still point here |
-| 5.161.243.18 | prompt-01-astra | — | Live Ashburn cpx31, id 167204705. Outside Team Claude pool |
-| 5.161.80.75 | agent-team-01-astra | — | Live Ashburn cpx31, id 167204706. Outside Team Claude pool |
+| Cloud name | IPv4 | Status |
+|---|---|---|
+| prompt-01-claude | 178.156.209.112 | running (was claude-code-01; DNS claudecode.grotap.com unchanged) |
+| prompt-01-astra | 5.161.243.18 | running (cpx31 Ashburn, id 167204705) |
+| agent-team-01-astra | 5.161.80.75 | running (cpx31 Ashburn, id 167204706) |
+| agent-01-claude | 5.161.74.39 | running |
+| agent-02-claude | 5.161.81.193 | running |
+| agent-03-claude | 178.156.222.220 | running |
+| agent-04-claude | 5.161.73.195 | running |
+| agent-05-claude | 5.78.178.81 | OFF Hillsboro |
+| agent-06-claude | 5.161.53.103 | running |
+| agent-10-codex | 87.99.148.22 | Cloud OK |
+| monitor-01-deepseek | 178.156.219.232 | Cloud OK |
+
+Footnotes: `agent-06-claude` Linux hostname may still be `grotap-agent-06-ash`. `agent-10-codex` Linux hostname may still be `agent-20`. `monitor-01-deepseek` Linux hostname may still be `agent-40`.

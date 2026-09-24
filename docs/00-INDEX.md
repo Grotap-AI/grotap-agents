@@ -73,7 +73,7 @@
 |---|---|
 | [GROTAP-SERVER-RENAME-PLAN](./GROTAP-SERVER-RENAME-PLAN.md) | Locked Cloud rename map + 2026-09-23 Astra addendum |
 | [GROTAP-SERVER-RENAME-STATUS](./GROTAP-SERVER-RENAME-STATUS.md) | What is already renamed; OpenReplay AI Support stays |
-| [GROTAP-PROMPT-ASTRA-PROVISION](./GROTAP-PROMPT-ASTRA-PROVISION.md) | GO names: prompt-01-astra, agent-team-01-astra, prompt-01-claude |
+| [GROTAP-PROMPT-ASTRA-PROVISION](./GROTAP-PROMPT-ASTRA-PROVISION.md) | Live: prompt-01-astra 5.161.243.18, agent-team-01-astra 5.161.80.75, prompt-01-claude 178.156.209.112 |
 
 ## 06 — Infrastructure (Terraform + Hetzner)
 | File | Topic |

@@ -1,7 +1,7 @@
 # Grotap Prompt / Agent Team / Astra provision
 
 **Date:** 2026-09-23 (PT)
-**Status:** Aaron GO — provision + rename
+**Status:** Live metal. `prompt-01-claude` is the current jumpbox name. Astra hosts are running.
 **Bootstrap:** land this alongside SERVERS.md / rename plan in grotap-agents
 
 ## Names (locked)

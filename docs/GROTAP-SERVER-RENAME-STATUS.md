@@ -48,30 +48,23 @@ Queue depth is 0 — no Help → AI Support session is waiting. When a user star
 openreplay-ai-support is the Strong Feature host — keep it.
 
 
-## 2026-09-23 — Astra provision + jumpbox rename (GO)
+## 2026-09-24 — locked live map (Shadow metal PASS)
 
-| Item | Status |
-|------|--------|
-| `prompt-01-astra` | GO provision Ashburn — Agent Infrastructure |
-| `agent-team-01-astra` | GO provision Ashburn — Agent Infrastructure |
-| `claude-code-01` → `prompt-01-claude` | GO rename — live at `178.156.209.112` |
-| Plan/STATUS on GitHub for bootstrap | In flight |
+`prompt-01-claude` is the current Cloud name. Short alias `agent-0N` is the same IPv4 as `agent-0N-claude`. `agent-04-claude` is running. `agent-05-claude` is OFF in Hillsboro.
 
-## 2026-09-24 — Shadow Harness IP map (supersedes any off-by-one in the roster)
+| Cloud name | IPv4 | Status |
+|---|---|---|
+| prompt-01-claude | 178.156.209.112 | running (was claude-code-01; DNS claudecode.grotap.com unchanged) |
+| prompt-01-astra | 5.161.243.18 | running (cpx31 Ashburn, Hetzner id 167204705) |
+| agent-team-01-astra | 5.161.80.75 | running (cpx31 Ashburn, Hetzner id 167204706) |
+| agent-01-claude | 5.161.74.39 | running |
+| agent-02-claude | 5.161.81.193 | running |
+| agent-03-claude | 178.156.222.220 | running |
+| agent-04-claude | 5.161.73.195 | running |
+| agent-05-claude | 5.78.178.81 | OFF Hillsboro |
+| agent-06-claude | 5.161.53.103 | running |
+| agent-10-codex | 87.99.148.22 | Cloud OK |
+| monitor-01-deepseek | 178.156.219.232 | Cloud OK |
 
-Cloud name and Linux hostname match, except `agent-06-claude`. Jumpbox Cloud+Linux name is `prompt-01-claude` at `178.156.209.112`. SSH alias `agent-0N` is the same IP as `agent-0N-claude`.
-
-| IP | Cloud name | Linux hostname | Notes |
-|---|---|---|---|
-| 5.161.74.39 | agent-01-claude | agent-01-claude | SSH alias `agent-01`. Running. Not "no IP". |
-| 5.161.81.193 | agent-02-claude | agent-02-claude | SSH alias `agent-02` |
-| 178.156.222.220 | agent-03-claude | agent-03-claude | SSH alias `agent-03`. Not agent-04-claude |
-| 5.161.73.195 | agent-04-claude | agent-04-claude | Running. SSH alias `agent-04` |
-| 5.78.178.81 | agent-05-claude | (off, Hillsboro) | OFF / unreachable. SSH alias `agent-05` |
-| 5.161.53.103 | agent-06-claude | still `grotap-agent-06-ash` | SSH alias `agent-06`. Set Linux hostname to `agent-06-claude` when SSH works |
-| 178.156.209.112 | prompt-01-claude | prompt-01-claude | Jumpbox. Former `claudecode-01` / `claude-code-01`. DNS `claudecode.grotap.com` may still point here |
-| 5.161.243.18 | prompt-01-astra | — | Live cpx31 Ashburn, id 167204705. Address was released `agent-21`. Outside Team Claude pool |
-| 5.161.80.75 | agent-team-01-astra | — | Live cpx31 Ashburn, id 167204706. Outside Team Claude pool |
-
-The 2026-09-21 row "`05-Agent` → `agent-05-claude` off" is the Hillsboro box above, not `5.161.73.195`.
+Footnotes: `agent-06-claude` Linux hostname may still be `grotap-agent-06-ash`. `agent-10-codex` Linux hostname may still be `agent-20`. `monitor-01-deepseek` Linux hostname may still be `agent-40`. The 2026-09-21 row "`05-Agent` → `agent-05-claude` off" is `5.78.178.81`. `5.161.73.195` is running `agent-04-claude`.
 
