@@ -1,4 +1,6 @@
-"""Provision agent-20/agent-21 (Team 2) in the OpenAgents.grotapai Hetzner project.
+"""Provision agent-10-codex (Team Builder, was agent-20) in OpenAgents.grotapai.
+
+agent-21 was deleted 2026-09-16. Do not create agent-11-codex or recreate agent-20.
 
 Uses HETZNER_FARM_API_TOKEN (the empty project's token). cpx21, Ashburn,
 ubuntu-24.04, grotap-agents SSH key. Idempotent: skips resources that exist.
@@ -16,7 +18,8 @@ PUBKEY = (
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJiGJUlEkAootc2g9LUmd5dU7C6EjxSS+Dk1rH0zdMOp "
     "grotap-agent-farm-r2-20260705"
 )
-SERVERS = ["agent-20", "agent-21"]
+SERVERS = ["agent-10-codex"]
+REFUSED = {"agent-11-codex", "agent-20", "agent-21"}
 
 
 def api(method: str, path: str, body: dict | None = None):
@@ -44,6 +47,8 @@ else:
 # 2. Servers
 existing = {s["name"]: s for s in api("GET", "/servers")["servers"]}
 for name in SERVERS:
+    if name in REFUSED:
+        raise SystemExit(f"refusing to provision reserved or retired name {name}")
     if name in existing:
         print(f"{name}: exists ip={existing[name]['public_net']['ipv4']['ip']}")
         continue

@@ -49,11 +49,12 @@ done
 # testing a different machine entirely), and it omitted agent-06 — the box whose
 # crons must always run, and the box this script itself runs on.
 AGENTS=(
-  "agent-02:5.161.74.39"
-  "agent-03:5.161.81.193"
-  "agent-04:178.156.222.220"
-  "agent-05:5.161.73.195"
-  "agent-06:5.78.178.81"
+  "agent-01-claude:5.161.74.39"
+  "agent-02-claude:5.161.81.193"
+  "agent-03-claude:178.156.222.220"
+  "agent-04-claude:5.161.73.195"
+  "agent-05-claude:5.78.178.81"
+  "agent-06-claude:5.161.53.103"
 )
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

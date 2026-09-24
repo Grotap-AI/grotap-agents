@@ -70,34 +70,69 @@ fi
 SHARED_KEY="$HOME/.ssh/grotap_agents"
 
 # --- IP -> canonical fleet host name (see header comment) -------------------
-# Only the team1 boxes (agent-02..06) are listed: they are the only targets
-# that have per-host keys today. The team2/3/4/5 boxes deliberately have NO
-# rows — no per-host key pair has been provisioned for them, so a row would
-# resolve to a key path that does not exist and fall through to the shared
-# key anyway, while implying the opposite. Add a row at the same time as the
-# key, never before. (agent-21 / agent-31 / agent-41 were deleted from
-# Hetzner on 2026-09-16 and must never come back here; agent-20 / agent-30 /
-# agent-40 are live but still shared-key.)
+# Canonical names are Hetzner Cloud names in agents/SERVERS.md.
+# Short aliases agent-01..agent-06 are the SAME IP as agent-01-claude..agent-06-claude.
+# Do not map agent-02 onto agent-01-claude. Jumpbox is prompt-01-claude
+# at 178.156.209.112 (former claudecode-01 / claude-code-01).
+# 5.78.178.81 is agent-05-claude (off).
+# 5.161.243.18 is prompt-01-astra. Do not add agent-11-codex.
+# Deleted and unmapped: agent-31/41, agent-30 (167.233.59.142),
+# llm-gpu-02 (178.63.124.99).
 declare -A _SSH_KEY_FOR_HOST_BY_IP=(
-  ["5.161.74.39"]="agent-02"
-  ["5.161.81.193"]="agent-03"
-  ["178.156.222.220"]="agent-04"
-  ["5.161.73.195"]="agent-05"
-  ["5.78.178.81"]="agent-06"
-  ["87.99.148.22"]="agent-20"
-  ["178.156.219.232"]="agent-40"
-  # agent-21/31/41 REMOVED 2026-09-16, agent-30 (167.233.59.142) and
-  # llm-gpu-02 (178.63.124.99) REMOVED 2026-09-20: those Hetzner servers were
-  # deleted or cancelled and their IPs released. Hetzner recycles released IPs,
-  # so mapping one to a fleet host name would offer a fleet key to a stranger.
-  # See agents/SERVERS.md.
+  ["5.161.74.39"]="agent-01-claude"
+  ["5.161.81.193"]="agent-02-claude"
+  ["178.156.222.220"]="agent-03-claude"
+  ["5.161.73.195"]="agent-04-claude"
+  ["5.78.178.81"]="agent-05-claude"
+  ["5.161.53.103"]="agent-06-claude"
+  ["5.161.243.18"]="prompt-01-astra"
+  ["5.161.80.75"]="agent-team-01-astra"
+  ["87.99.148.22"]="agent-10-codex"
+  ["178.156.219.232"]="monitor-01-deepseek"
   ["5.161.107.80"]="maps-01"
   ["178.156.246.81"]="forge-01"
-  ["178.156.209.112"]="claudecode-01"
-  ["claudecode.grotap.com"]="claudecode-01"
-  ["5.161.189.143"]="cobrowse-01"
-  ["supportagents.grotap.com"]="cobrowse-01"
-  ["178.156.199.83"]="runner-01"
+  ["178.156.209.112"]="prompt-01-claude"
+  ["claudecode.grotap.com"]="prompt-01-claude"
+  ["5.161.189.143"]="openreplay-01"
+  ["supportagents.grotap.com"]="openreplay-01"
+  ["178.156.199.83"]="openreplay-ai-support"
+)
+
+# Old bootstrap aliases → canonical Cloud name. Applied to a hostname lookup
+# and also to a name that arrived via the IP table (the table is already
+# canonical, so this is a no-op for those).
+declare -A _SSH_KEY_FOR_ALIAS=(
+  ["agent-01"]="agent-01-claude"
+  ["agent-02"]="agent-02-claude"
+  ["agent-03"]="agent-03-claude"
+  ["agent-04"]="agent-04-claude"
+  ["agent-05"]="agent-05-claude"
+  ["agent-06"]="agent-06-claude"
+  ["agent-06-ash"]="agent-06-claude"
+  ["grotap-agent-06-ash"]="agent-06-claude"
+  ["agent-20"]="agent-10-codex"
+  ["agent-40"]="monitor-01-deepseek"
+  ["claudecode-01"]="prompt-01-claude"
+  ["claude-code-01"]="prompt-01-claude"
+  ["cobrowse-01"]="openreplay-01"
+  ["grotap-cobrowse-01"]="openreplay-01"
+  ["runner-01"]="openreplay-ai-support"
+  ["grotap-runner-01"]="openreplay-ai-support"
+)
+
+# Canonical name → basename of the key file minted before the rename.
+declare -A _SSH_KEY_FOR_LEGACY=(
+  ["agent-01-claude"]="agent-01"
+  ["agent-02-claude"]="agent-02"
+  ["agent-03-claude"]="agent-03"
+  ["agent-04-claude"]="agent-04"
+  ["agent-05-claude"]="agent-05"
+  ["agent-06-claude"]="agent-06"
+  ["agent-10-codex"]="agent-20"
+  ["monitor-01-deepseek"]="agent-40"
+  ["prompt-01-claude"]="claudecode-01"
+  ["openreplay-01"]="cobrowse-01"
+  ["openreplay-ai-support"]="runner-01"
 )
 
 # --- Canonicalize the target BEFORE the lookup -------------------------------
@@ -130,6 +165,10 @@ canon="$lookup"
 if [[ -n "${_SSH_KEY_FOR_HOST_BY_IP[$lookup]:-}" ]]; then
   canon="${_SSH_KEY_FOR_HOST_BY_IP[$lookup]}"
 fi
+if [[ -n "${_SSH_KEY_FOR_ALIAS[$canon]:-}" ]]; then
+  canon="${_SSH_KEY_FOR_ALIAS[$canon]}"
+fi
+legacy="${_SSH_KEY_FOR_LEGACY[$canon]:-}"
 
 # --- Which host is THIS resolver running on? ---------------------------------
 # Only agent-06 has per-host keys as of phase 2a/2b (grotap_from06_*). Any
@@ -141,11 +180,26 @@ case "$_local_host" in
   agent-06|*agent-06*) from_suffix="06" ;;
 esac
 
-if [[ -n "$from_suffix" ]]; then
-  candidate="$HOME/.ssh/grotap_from${from_suffix}_${canon}"
-  if [[ -f "$candidate" ]]; then
-    printf '%s\n' "$candidate"
+# Prints the path and exits the script when the file exists.
+_ssh_key_for_use() {
+  local path="$1"
+  if [[ -n "$path" && -f "$path" ]]; then
+    printf '%s\n' "$path"
     exit 0
+  fi
+}
+
+if [[ -n "$from_suffix" ]]; then
+  _ssh_key_for_use "$HOME/.ssh/grotap_from${from_suffix}_${canon}"
+  if [[ -n "$legacy" ]]; then
+    _ssh_key_for_use "$HOME/.ssh/grotap_from${from_suffix}_${legacy}"
+  fi
+  if [[ "$canon" == "prompt-01-claude" ]]; then
+    _ssh_key_for_use "$HOME/.ssh/grotap_from${from_suffix}_claude-code-01"
+    _ssh_key_for_use "$HOME/.ssh/grotap_from${from_suffix}_claudecode-01"
+  fi
+  if [[ "$canon" == "agent-06-claude" ]]; then
+    _ssh_key_for_use "$HOME/.ssh/grotap_from${from_suffix}_grotap-agent-06-ash"
   fi
 fi
 
@@ -160,10 +214,16 @@ fi
 #
 # A literal target of "agents" resolves to grotap_agents here, i.e. the
 # shared key: the same answer the fallback gives, so it needs no guard.
-ws_candidate="$HOME/.ssh/grotap_${canon}"
-if [[ -f "$ws_candidate" ]]; then
-  printf '%s\n' "$ws_candidate"
-  exit 0
+_ssh_key_for_use "$HOME/.ssh/grotap_${canon}"
+if [[ -n "$legacy" ]]; then
+  _ssh_key_for_use "$HOME/.ssh/grotap_${legacy}"
+fi
+if [[ "$canon" == "prompt-01-claude" ]]; then
+  _ssh_key_for_use "$HOME/.ssh/grotap_claude-code-01"
+  _ssh_key_for_use "$HOME/.ssh/grotap_claudecode-01"
+fi
+if [[ "$canon" == "agent-06-claude" ]]; then
+  _ssh_key_for_use "$HOME/.ssh/grotap_grotap-agent-06-ash"
 fi
 
 printf '%s\n' "$SHARED_KEY"

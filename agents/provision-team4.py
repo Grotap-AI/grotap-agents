@@ -1,4 +1,6 @@
-"""Provision agent-40/agent-41 (Team 4 — GPT-5.6 executors) in OpenAgents.grotapai.
+"""Provision monitor-01-deepseek (Team Monitor, was agent-40) in OpenAgents.grotapai.
+
+agent-41 was deleted 2026-09-16. Do not recreate agent-40 or agent-41.
 
 Owner-approved 2026-07-13 ("execute all of your plan", docs/GPT56_SOL_TEAM4_PLAN.md):
 2x cpx21 in ASH (Ashburn) — inference is OpenRouter-hosted (openai/gpt-5.6-*), so no
@@ -19,7 +21,8 @@ PUBKEY = (
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJiGJUlEkAootc2g9LUmd5dU7C6EjxSS+Dk1rH0zdMOp "
     "grotap-agent-farm-r2-20260705"
 )
-SERVERS = ["agent-40", "agent-41"]
+SERVERS = ["monitor-01-deepseek"]
+REFUSED = {"agent-40", "agent-41"}
 
 
 def api(method: str, path: str, body: dict | None = None):
@@ -47,6 +50,8 @@ else:
 # 2. Servers (ash, public-only)
 existing = {s["name"]: s for s in api("GET", "/servers")["servers"]}
 for name in SERVERS:
+    if name in REFUSED:
+        raise SystemExit(f"refusing to provision reserved or retired name {name}")
     if name in existing:
         print(f"{name}: exists ip={existing[name]['public_net']['ipv4']['ip']}")
         continue

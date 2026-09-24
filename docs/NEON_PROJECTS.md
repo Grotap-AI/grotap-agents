@@ -31,11 +31,11 @@
 
 ## Cost note
 
-Direct spend is small (~31 MB storage and ~12 min lifetime compute each), but **all four delete-proposed projects are woken every day at 00:00 UTC by the agent-06 daily Neon backup job** (they are targets D3/D5/D6/D8 in `BACKUP_INDEX.md`) — that is the daily compute billing observed. Estimated saving is under $5/mo combined; the main win is account hygiene and four fewer pointless daily backups.
+Direct spend is small (~31 MB storage and ~12 min lifetime compute each), but **all four delete-proposed projects are woken every day at 00:00 UTC by the daily Neon backup job on the ops host (Cloud name `agent-06-claude`, `5.161.53.103`)** (they are targets D3/D5/D6/D8 in `BACKUP_INDEX.md`) — that is the daily compute billing observed. Estimated saving is under $5/mo combined; the main win is account hygiene and four fewer pointless daily backups.
 
 ## Proposed action (owner-gated — HI hold `ea5cda58-944e-46a2-850b-314dea978d85`)
 
 1. Owner approves the HI hold.
 2. Delete these **4** Neon projects via console/API: `falling-brook-32044564`, `little-art-07275447`, `plain-boat-59331029`, `jolly-term-00231771`.
-3. Remove them from the agent-06 backup targets and update `docs/BACKUP_INDEX.md` (rows D3, D5, D6, D8).
+3. Remove them from the ops-host backup targets (`agent-06-claude`) and update `docs/BACKUP_INDEX.md` (rows D3, D5, D6, D8).
 4. Optional follow-up: `RFID_PIPE_KNOWLEDGE_DB_URL` exists in Doppler but no code consumes it — decide whether dry-scene stays the future knowledge DB (per task 951 provisioning plan) or is retired too.

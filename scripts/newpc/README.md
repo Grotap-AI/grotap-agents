@@ -119,7 +119,7 @@ railway login
 vercel login
 ```
 
-Then drop the SSH key into `C:\Users\<you>\.ssh\` and confirm with `ssh agent-02`.
+Then drop the SSH key into `C:\Users\<you>\.ssh\` and confirm with `ssh agent-01-claude`.
 
 **Secrets rule is unchanged**: everything lives in Doppler (`grotap` project, `dev`/`prd`).
 No hand-set env vars. The only GitHub secret anywhere is `DOPPLER_SERVICE_TOKEN`.

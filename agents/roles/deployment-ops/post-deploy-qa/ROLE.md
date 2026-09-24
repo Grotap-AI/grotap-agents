@@ -1,5 +1,5 @@
 # agents/roles/deployment-ops/post-deploy-qa/ROLE.md
-# Role: Post-Deploy QA | Server: Agent-06 | Module: deployment-ops
+# Role: Post-Deploy QA | Server: agent-06-claude (Ashburn, 5.161.53.103) | Module: deployment-ops
 # Trigger: deploy-verifier verdict == PASS OR task.type == 'post-deploy-qa'
 
 ## Role Purpose

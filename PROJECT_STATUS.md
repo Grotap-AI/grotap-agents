@@ -22,6 +22,6 @@ Multi-tenant AI-powered ERP/SaaS platform. Every feature is a discrete app; tena
 ## Current State (2026-07-05)
 - Two brands live (Grotap Apps, Grotap AI Agents); app catalog with voting/building/beta/live lifecycle
 - Pipeline runs CONTINUOUSLY (3-min assign loop + webhook refill); review gate every 4h on agent-06
-- Fleet: agent-02…06 executing (roster: `agents/SERVERS.md`); staging SUSPENDED (ships master → prod)
+- Fleet: agent-01-claude…agent-04-claude and agent-06-claude executing; agent-05-claude (Hillsboro) is off (roster: `agents/SERVERS.md`); staging SUSPENDED (ships master → prod)
 - Scale program (pooled tenancy, RLS, migration runner) executed; ScanTap + Manor View Farm onboarded
 - Secrets: Doppler only. DR backup to Wasabi nightly from agent-06.

@@ -1,5 +1,5 @@
 # agents/roles/deployment-ops/deploy-executor/ROLE.md
-# Role: Deploy Executor | Server: Agent-06 | Module: deployment-ops
+# Role: Deploy Executor | Server: agent-06-claude (Ashburn, 5.161.53.103) | Module: deployment-ops
 # Trigger: deploy-verifier verdict == FAIL OR task.type == 'deploy-execute'
 
 ## Role Purpose
