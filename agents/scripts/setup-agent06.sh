@@ -1,16 +1,16 @@
 #!/bin/bash
-# setup-agent06.sh — Deploy ops scripts + cron to the Hillsboro box.
-# Cloud name is agent-05-claude (5.78.178.81). That host is OFF / unreachable.
-# Do not aim this at 5.161.53.103 — that is agent-06-claude (hostname still grotap-agent-06-ash).
+# setup-agent06.sh — Deploy ops scripts + cron to agent-06-claude.
+# Cloud name is agent-06-claude (5.161.53.103, Ashburn). Linux hostname is agent-06-claude.
+# agent-05-claude (5.78.178.81, Hillsboro) is OFF and is not the ops host.
 # Usage: bash agents/scripts/setup-agent06.sh
 set -euo pipefail
 
-AGENT06="5.78.178.81"
+AGENT06="5.161.53.103"
 SSH_KEY="$HOME/.ssh/grotap_agents"
 SSH="ssh -i $SSH_KEY -o StrictHostKeyChecking=no root@$AGENT06"
 SCP="scp -i $SSH_KEY -o StrictHostKeyChecking=no"
 
-echo "=== Setting up agent-05-claude ($AGENT06) — Hillsboro ops box; OFF until powered on ==="
+echo "=== Setting up agent-06-claude ($AGENT06) — Ashburn ops host ==="
 
 # ── 1. Create directory structure ─────────────────────────────────────────────
 echo "[1/5] Creating directories..."
@@ -76,7 +76,7 @@ CRON
 crontab /tmp/agent06-cron && rm /tmp/agent06-cron'
 
 echo ""
-echo "=== agent-05-claude setup complete ==="
+echo "=== agent-06-claude setup complete ==="
 echo ""
 echo "Cron installed:"
 $SSH "crontab -l"

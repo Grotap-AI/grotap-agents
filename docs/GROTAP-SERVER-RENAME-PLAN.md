@@ -144,4 +144,4 @@ This table is the IP authority. SSH alias `agent-01` is `agent-01-claude` at `5.
 | agent-10-codex | 87.99.148.22 | Cloud OK |
 | monitor-01-deepseek | 178.156.219.232 | Cloud OK |
 
-Footnotes: `agent-06-claude` Linux hostname may still be `grotap-agent-06-ash`. `agent-10-codex` Linux hostname may still be `agent-20`. `monitor-01-deepseek` Linux hostname may still be `agent-40`.
+Footnotes: Linux hostname on `agent-06-claude` is `agent-06-claude`. Live ops is on `agent-06-claude` (`5.161.53.103`), not on OFF Hillsboro `agent-05-claude`. `agent-10-codex` Linux hostname may still be `agent-20`. `monitor-01-deepseek` Linux hostname may still be `agent-40`.

@@ -1,7 +1,7 @@
 # Dispatch Module
 # Assignment is owned by the backend continuous loop (every 3 min + completion-webhook refill)
 # and the LangGraph orchestrator on Railway, which SSHes dispatches to the fleet.
-# Agent-06 hosts the supporting monitor/reconciler crons — there is no dispatcher daemon on it.
+# Agent-06-claude (5.161.53.103) hosts the supporting monitor/reconciler crons and live ops units (`grotap-status`, `cloudflared`, `review-gate.timer`).
 
 ## Purpose
 Keep every agent server at capacity. No task waits while a slot is open.

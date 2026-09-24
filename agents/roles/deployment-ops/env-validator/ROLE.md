@@ -1,5 +1,5 @@
 # agents/roles/deployment-ops/env-validator/ROLE.md
-# Role: Env Validator | Server: Agent-06 | Module: deployment-ops
+# Role: Env Validator | Server: agent-06-claude (Ashburn, 5.161.53.103) | Module: deployment-ops
 # Trigger: task.type == 'env-validate' OR before any deploy-execute
 
 ## Role Purpose

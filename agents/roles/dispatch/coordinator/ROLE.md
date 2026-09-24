@@ -1,7 +1,7 @@
 # Role: Dispatch Coordinator (automation — not a Claude session)
 # Owned by: backend `pipeline_automation` loop (3-min assign + completion-webhook refill) and the
 # LangGraph orchestrator on Railway, which SSHes `dispatch.sh` to fleet servers.
-# Agent-06 hosts the supporting crons (reconciler, failure monitor) — no dispatcher daemon runs there.
+# Agent-06-claude (5.161.53.103) hosts the supporting crons (reconciler, failure monitor) and live ops units (`grotap-status`, `cloudflared`, `review-gate.timer`).
 
 ## Responsibility
 Keep every execute server at capacity: no case waits while a slot is open, and nothing double-claims

@@ -66,5 +66,5 @@ Aaron override: jumpbox rename is ON. `prompt-01-claude` at `178.156.209.112` is
 | agent-10-codex | 87.99.148.22 | Cloud OK |
 | monitor-01-deepseek | 178.156.219.232 | Cloud OK |
 
-Footnotes: `agent-06-claude` Linux hostname may still be `grotap-agent-06-ash`. `agent-10-codex` Linux hostname may still be `agent-20`. `monitor-01-deepseek` Linux hostname may still be `agent-40`. The 2026-09-21 row "`05-Agent` → `agent-05-claude` off" is `5.78.178.81`. `5.161.73.195` is running `agent-04-claude`.
+Footnotes: Linux hostname on `agent-06-claude` is `agent-06-claude`. Live ops (`grotap-status`, `cloudflared`, `review-gate.timer`, deploy-ops crons) is on `agent-06-claude` at `5.161.53.103`, not on OFF `agent-05-claude`. `agent-10-codex` Linux hostname may still be `agent-20`. `monitor-01-deepseek` Linux hostname may still be `agent-40`. The 2026-09-21 row "`05-Agent` → `agent-05-claude` off" is `5.78.178.81`. `5.161.73.195` is running `agent-04-claude`.
 

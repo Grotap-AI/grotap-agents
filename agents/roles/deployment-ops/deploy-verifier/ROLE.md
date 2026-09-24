@@ -1,5 +1,5 @@
 # agents/roles/deployment-ops/deploy-verifier/ROLE.md
-# Role: Deploy Verifier | Server: Agent-06 | Module: deployment-ops
+# Role: Deploy Verifier | Server: agent-06-claude (Ashburn, 5.161.53.103) | Module: deployment-ops
 # Trigger: event == 'merge-to-master' OR task.type == 'deploy-verify'
 
 ## Role Purpose
