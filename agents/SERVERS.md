@@ -37,7 +37,7 @@ reason here, so the next reader can tell an exception from a mistake.
 
 ## Locked live map (Shadow metal PASS, 2026-09-24)
 
-`prompt-01-claude` is the current Cloud name of the jumpbox. Short aliases `agent-01` … `agent-06` are the same IPv4 as `agent-01-claude` … `agent-06-claude`. `agent-04-claude` is running. `agent-05-claude` is the Hillsboro box that is off.
+Aaron override: jumpbox rename is ON. `prompt-01-claude` at `178.156.209.112` is the current Cloud name (from `claudecode-01` / `claude-code-01`; DNS `claudecode.grotap.com` unchanged). `prompt-01-astra` at `5.161.243.18` is a separate host. Short aliases `agent-01` … `agent-06` are the same IPv4 as `agent-01-claude` … `agent-06-claude`. `agent-04-claude` is running. `agent-05-claude` is the Hillsboro box that is off. `agent-team-01-astra` is `5.161.80.75`.
 
 | Cloud name | IPv4 | Status |
 |---|---|---|
