@@ -18,8 +18,8 @@ Updated: 2026-09-21 evening PT (box clock ~ Sep 22 02:18 UTC)
 | claudecode-01 | prompt-01-claude | running. Aaron override: jumpbox rename is ON (was `claude-code-01`). DNS `claudecode.grotap.com` unchanged. `178.156.209.112` |
 | mdm-01 / forge-01 / maps-01 / scan-01 | unchanged (already correct) | running |
 
-Linux hostname set on: openreplay-ai-support, openreplay-01, agent-01..04-claude.
-Other boxes: Cloud name done; Linux hostname may still be old where SSH key missing from Desktop1.
+Linux hostname set on: openreplay-ai-support, openreplay-01, agent-01..04-claude, and `agent-06-claude` (Linux hostname `agent-06-claude`).
+`agent-10-codex` Linux hostname may still be `agent-20`. `monitor-01-deepseek` Linux hostname may still be `agent-40`.
 
 ## OpenReplay AI Support — DONE / LIVE wire
 
