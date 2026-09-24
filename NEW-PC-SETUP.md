@@ -221,7 +221,7 @@ vercel login
 
 **SSH to the agent fleet**: copy `~/.ssh/grotap_agents` + `.pub` + `~/.ssh/config` from a secure
 channel (password manager / USB), **not** through chat or a repo. `chmod 600` the private key.
-Test with `ssh agent-02` once `SERVERS.md` roster is in place.
+Test with `ssh agent-02-claude` once `agents/SERVERS.md` is in place. Canonical names are in `docs/GROTAP-SERVER-RENAME-PLAN.md` — not `agent-NN`.
 
 Secrets rule stands: everything lives in Doppler (`grotap` project, `dev`/`prd`). Never set an env
 var by hand, never put a secret in a GitHub secret except `DOPPLER_SERVICE_TOKEN`.

@@ -1,14 +1,14 @@
 #!/bin/bash
-# setup-agent06.sh — Run from local machine to deploy all scripts + cron to Agent-06.
+# setup-agent06.sh — Run from local machine to deploy all scripts + cron to agent-06-claude.
 # Usage: bash agents/scripts/setup-agent06.sh
 set -euo pipefail
 
-AGENT06="5.78.178.81"
+AGENT06="5.161.53.103"
 SSH_KEY="$HOME/.ssh/grotap_agents"
 SSH="ssh -i $SSH_KEY -o StrictHostKeyChecking=no root@$AGENT06"
 SCP="scp -i $SSH_KEY -o StrictHostKeyChecking=no"
 
-echo "=== Setting up Agent-06 ($AGENT06) ==="
+echo "=== Setting up agent-06-claude ($AGENT06) ==="
 
 # ── 1. Create directory structure ─────────────────────────────────────────────
 echo "[1/5] Creating directories..."
@@ -37,6 +37,8 @@ $SCP "$SCRIPT_DIR/ssh-key-for.sh" root@$AGENT06:/home/agent/scripts/
 # source user — the private half is created on the box that uses it and
 # never travels over SCP.
 echo "[3/5] Provisioning per-target keys for agent-to-agent checks..."
+# Key-file basenames minted 2026-09-16. Canonical hosts are agent-02-claude ..
+# agent-05-claude; ssh-key-for.sh maps those names onto these files.
 FLEET_TARGETS="agent-02 agent-03 agent-04 agent-05"
 for TARGET in $FLEET_TARGETS; do
   ROOT_KEY="/root/.ssh/grotap_from06_${TARGET}"
@@ -73,7 +75,7 @@ CRON
 crontab /tmp/agent06-cron && rm /tmp/agent06-cron'
 
 echo ""
-echo "=== Agent-06 setup complete ==="
+echo "=== agent-06-claude setup complete ==="
 echo ""
 echo "Cron installed:"
 $SSH "crontab -l"

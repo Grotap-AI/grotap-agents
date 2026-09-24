@@ -160,7 +160,7 @@ single-token prompt or a file when driving codex non-interactively.
 
 **Fleet SSH key**: copy `~/.ssh/grotap_agents`, `grotap_agents.pub` and `config` from the desktop
 over a secure channel — password manager or USB, never chat or a repo. Then `chmod 600` the
-private key and confirm with `ssh agent-02`.
+private key and confirm with `ssh agent-02-claude`.
 
 **Secrets rule is unchanged**: everything lives in Doppler (`grotap` project, `dev`/`prd`). No
 hand-set env vars, and the only GitHub secret anywhere is `DOPPLER_SERVICE_TOKEN`.

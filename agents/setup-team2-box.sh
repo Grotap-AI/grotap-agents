@@ -1,6 +1,6 @@
 #!/bin/bash
 # Onboard a Team 2 (open-model) fleet box — mirrors agent-04 baseline, minus claude CLI.
-# Run as root on the box: ssh agent-NN "bash -s" < onboard_team2_box.sh
+# Run as root on the box: ssh agent-10-codex "bash -s" < onboard_team2_box.sh
 set -e
 export DEBIAN_FRONTEND=noninteractive
 

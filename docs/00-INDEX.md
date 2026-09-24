@@ -68,6 +68,13 @@
 | [agent-architecture-reliability](./05-agents/agent-architecture-reliability.md) | Agent architecture for reliability |
 | [agent-pipeline-optimizations](./05-agents/agent-pipeline-optimizations.md) | **Speed + cost optimizations — review parallelism, dynamic turns, token reduction** |
 
+## Fleet rename (bootstrap names)
+| File | Topic |
+|---|---|
+| [GROTAP-SERVER-RENAME-PLAN](./GROTAP-SERVER-RENAME-PLAN.md) | Locked Cloud rename map + 2026-09-23 Astra addendum |
+| [GROTAP-SERVER-RENAME-STATUS](./GROTAP-SERVER-RENAME-STATUS.md) | What is already renamed; OpenReplay AI Support stays |
+| [GROTAP-PROMPT-ASTRA-PROVISION](./GROTAP-PROMPT-ASTRA-PROVISION.md) | GO names: prompt-01-astra, agent-team-01-astra, prompt-01-claude |
+
 ## 06 — Infrastructure (Terraform + Hetzner)
 | File | Topic |
 |---|---|

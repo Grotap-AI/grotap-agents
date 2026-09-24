@@ -205,7 +205,7 @@ deliberate accepted gap, not an oversight: Drive syncs deletions and ransomware 
 through, and its only floor is a 30-day trash.
 
 **Platform data is out of scope** — Neon databases, R2 assets, Doppler secrets and the
-platform source are covered by the agent-06 backup machine
+platform source are covered by the agent-06-claude backup machine
 (`platform/scripts/backup/`, `platform/docs/BACKUP_MACHINE.md`). This is only the workstation.
 
 ---

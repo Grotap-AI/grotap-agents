@@ -1,5 +1,5 @@
 #!/bin/bash
-# fleet-load.sh — Read-only CPU / memory / disk sampler for the worker boxes (agent-02…06).
+# fleet-load.sh — Read-only CPU / memory / disk sampler for the worker boxes (agent-02-claude…agent-06-claude).
 #
 # Why this exists: since 2026-09-15 every worker box runs TWO daemons — the agent tmux
 # session used by dispatch.sh, and forgejo-runner (v13.1.0, HOST execution mode, capacity 2,
@@ -13,7 +13,7 @@
 # Usage:
 #   bash fleet-load.sh                  # one sample of every host
 #   bash fleet-load.sh --watch 30       # resample every 30 seconds until Ctrl-C
-#   bash fleet-load.sh --host agent-04  # one host only (repeatable)
+#   bash fleet-load.sh --host agent-04-claude  # one host only (repeatable)
 #   bash fleet-load.sh --log /path/to/fleet-load.log
 #
 # Exit status: 0 if every sampled host answered, 1 if any host was UNREACHABLE.
@@ -22,13 +22,13 @@ set -uo pipefail
 
 # ── Roster ───────────────────────────────────────────────────────────────────
 # Source of truth is agents/SERVERS.md. Kept as name:ip so the script also works on a box
-# with no ~/.ssh/config (e.g. agent-06) as well as on the owner workstation.
+# with no ~/.ssh/config (e.g. agent-06-claude) as well as on the owner workstation.
 HOSTS=(
-  "agent-02:5.161.74.39"
-  "agent-03:5.161.81.193"
-  "agent-04:178.156.222.220"
-  "agent-05:5.161.73.195"
-  "agent-06:5.78.178.81"
+  "agent-02-claude:5.161.74.39"
+  "agent-03-claude:5.161.81.193"
+  "agent-04-claude:178.156.222.220"
+  "agent-05-claude:5.161.73.195"
+  "agent-06-claude:5.161.53.103"
 )
 
 SSH_USER="${FLEET_SSH_USER:-root}"
@@ -118,8 +118,18 @@ PROBE_EOF
 # Per-host SSH keys were added 2026-09-15; fall back to the shared fleet key, then to
 # whatever ~/.ssh/config resolves on its own.
 key_for() {
-  if [ -f "$SSH_KEY_DIR/grotap_$1" ]; then
-    printf '%s' "$SSH_KEY_DIR/grotap_$1"
+  local name="$1" legacy=""
+  case "$name" in
+    agent-02-claude) legacy=agent-02 ;;
+    agent-03-claude) legacy=agent-03 ;;
+    agent-04-claude) legacy=agent-04 ;;
+    agent-05-claude) legacy=agent-05 ;;
+    agent-06-claude) legacy=agent-06 ;;
+  esac
+  if [ -f "$SSH_KEY_DIR/grotap_$name" ]; then
+    printf '%s' "$SSH_KEY_DIR/grotap_$name"
+  elif [ -n "$legacy" ] && [ -f "$SSH_KEY_DIR/grotap_$legacy" ]; then
+    printf '%s' "$SSH_KEY_DIR/grotap_$legacy"
   elif [ -f "$SSH_KEY_DIR/grotap_agents" ]; then
     printf '%s' "$SSH_KEY_DIR/grotap_agents"
   fi
