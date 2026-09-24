@@ -15,7 +15,7 @@ Updated: 2026-09-21 evening PT (box clock ~ Sep 22 02:18 UTC)
 | agent-40 | monitor-01-deepseek | running |
 | grotap-cobrowse-01 | openreplay-01 | running |
 | grotap-runner-01 | openreplay-ai-support | running |
-| claudecode-01 | prompt-01-claude | running (intermediate name `claude-code-01`; Cloud+Linux rename is live) |
+| claudecode-01 | prompt-01-claude | running. Aaron override: jumpbox rename is ON (was `claude-code-01`). DNS `claudecode.grotap.com` unchanged. `178.156.209.112` |
 | mdm-01 / forge-01 / maps-01 / scan-01 | unchanged (already correct) | running |
 
 Linux hostname set on: openreplay-ai-support, openreplay-01, agent-01..04-claude.
@@ -50,7 +50,7 @@ openreplay-ai-support is the Strong Feature host — keep it.
 
 ## 2026-09-24 — locked live map (Shadow metal PASS)
 
-`prompt-01-claude` is the current Cloud name. Short alias `agent-0N` is the same IPv4 as `agent-0N-claude`. `agent-04-claude` is running. `agent-05-claude` is OFF in Hillsboro.
+Aaron override: jumpbox rename is ON. `prompt-01-claude` at `178.156.209.112` is the current Cloud name (from `claudecode-01` / `claude-code-01`). `prompt-01-astra` at `5.161.243.18` is a separate host. Short alias `agent-0N` is the same IPv4 as `agent-0N-claude`. `agent-04-claude` is running. `agent-05-claude` is OFF in Hillsboro. `agent-team-01-astra` is `5.161.80.75`.
 
 | Cloud name | IPv4 | Status |
 |---|---|---|

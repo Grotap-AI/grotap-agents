@@ -1,7 +1,7 @@
 # Grotap Prompt / Agent Team / Astra provision
 
 **Date:** 2026-09-23 (PT)
-**Status:** Live metal. `prompt-01-claude` is the current jumpbox name. Astra hosts are running.
+**Status:** Aaron override — jumpbox rename is ON. `prompt-01-claude` is `178.156.209.112`. `prompt-01-astra` is separate metal at `5.161.243.18`. `agent-team-01-astra` is `5.161.80.75`.
 **Bootstrap:** land this alongside SERVERS.md / rename plan in grotap-agents
 
 ## Names (locked)
@@ -10,7 +10,7 @@
 |------|--------|----------------|
 | `prompt-01-astra` | Live Ashburn `5.161.243.18` (cpx31, Hetzner id 167204705) | GPT-6 Astra — Prompt Option. Outside the Team Claude pool |
 | `agent-team-01-astra` | Live Ashburn `5.161.80.75` (cpx31, Hetzner id 167204706) | GPT-6 Astra — Agent Team. Outside the Team Claude pool |
-| `prompt-01-claude` | Live `178.156.209.112`. Former `claudecode-01` / `claude-code-01`. DNS `claudecode.grotap.com` may still point here | Claude jump seat (Prompt Option Claude path) |
+| `prompt-01-claude` | Rename ON. Live `178.156.209.112` (from `claudecode-01` / `claude-code-01`). DNS `claudecode.grotap.com` unchanged. Not the Astra host | Claude jump seat |
 
 ## Rules
 

@@ -42,7 +42,7 @@ Number bands for agents:
 | `mdm-01` | **mdm-01** | MDM - manage/support customer tablets & hardware (monthly fee) | Quiet CPU (~1%) | **Critical pool** - keep 24/7 even when quiet. Name already matches convention. |
 | `grotap-cobrowse-01` | **openreplay-01** | Self-hosted OpenReplay (k3s, ClickHouse, Assist, coturn) at supportagents.grotap.com | Heavy (~50% 24h) | Misnamed "cobrowse". Load is OpenReplay stack, not Cobrowse.io. Keep; kill leftover cobrowse-runner service. |
 | `grotap-runner-01` | **openreplay-ai-support** | OpenReplay AI assist session runner (Playwright) | Near idle (~0.7%); claim API failing | **Strongest retire candidate** after Assist works on openreplay-01 alone |
-| `claudecode-01` | **prompt-01-claude** | Claude Code jumpbox / tooling at `178.156.209.112` | Regular (~9%) | Keep. Intermediate name `claude-code-01`. Cloud+Linux rename is live. DNS `claudecode.grotap.com` may still point here. |
+| `claudecode-01` | **prompt-01-claude** | Claude Code jumpbox / tooling at `178.156.209.112` | Regular (~9%) | Keep. Aaron override: jumpbox rename is ON. Was `claude-code-01`. DNS `claudecode.grotap.com` unchanged. Separate from `prompt-01-astra` `5.161.243.18`. |
 | `forge-01` | **forge-01** | Build / forge | Light with spikes (~5%) | Keep - name already close |
 | `maps-01` | **maps-01** | Maps service | Light steady (~3%) | Keep |
 | `scan-01` | **scan-01** | ClamAV / malware scan | Quiet between scans (~1%) | Keep |
@@ -116,7 +116,7 @@ Naming stays type-first · lowercase · hyphens. Cloud name = Linux hostname.
 |--------|------|------|
 | **Live** | `prompt-01-astra` `5.161.243.18` | Prompt Option — GPT-6 Astra (`gpt-6-astra`), cpx31 Ashburn, id 167204705. Running |
 | **Live** | `agent-team-01-astra` `5.161.80.75` | Agent Team — GPT-6 Astra, cpx31 Ashburn, id 167204706. Running |
-| **Current name** | `prompt-01-claude` `178.156.209.112` | Jumpbox. Was `claudecode-01`, then `claude-code-01`. DNS `claudecode.grotap.com` unchanged. Running |
+| **Rename ON** | `prompt-01-claude` `178.156.209.112` | Jumpbox. Aaron override: rename from `claudecode-01` / `claude-code-01` is ON. DNS `claudecode.grotap.com` unchanged. Running. Not `prompt-01-astra`. |
 
 Constraints:
 - Do not put Astra boxes in the Team Claude `agent-0N-claude` pool.
