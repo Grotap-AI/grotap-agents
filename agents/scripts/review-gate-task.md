@@ -5,6 +5,9 @@ review backlog — review every agent-built branch, merge what is correct, route
 defects back to the fleet, and leave an auditable trail. You work in a fresh checkout of
 `grotap-platform` on `master`.
 
+The cron that launches you exits unless `hostname -s` is `agent-06-claude`. If you are
+somehow running anywhere else, stop: claim nothing, merge nothing, set nothing to done.
+
 ## 0. Claim your slice of the queue (GATECLAIM-1)
 Concurrent gate processes must never review the same case. Before reviewing anything,
 atomically claim up to 15 cases. Work ONLY the case_ids the UPDATE returns — anything
@@ -25,6 +28,8 @@ GATE_ID="${GATE_ID:-review-gate-$(hostname -s)-$$}"
 # empty-queue pre-check uses the same predicate. Change both or neither: if the
 # pre-check's window is SHORTER than this one it counts cases this UPDATE then
 # refuses, and the gate burns a whole Claude run discovering it has no work.
+# The RG_MERGE_HOLD_WHERE blocks match review-gate-cron.sh exactly (both arms).
+# A pending Approve-merge hold is not claimable. Do not edit one copy only.
 CLAIMED_IDS=$(doppler run -- psql "$DATABASE_URL" -Atc "
 UPDATE pipeline_cases
 SET claimed_by  = '$GATE_ID',
@@ -38,6 +43,21 @@ WHERE case_id IN (
       AND (claimed_by IS NULL
            OR claimed_at IS NULL
            OR claimed_at < NOW() - INTERVAL '30 minutes')
+      AND NOT EXISTS (
+        SELECT 1 FROM human_holds h
+        WHERE /*RG_MERGE_HOLD_WHERE case_id*/
+          h.task_id = case_id
+          AND h.status = 'pending'
+          AND h.created_by = 'agent-progress'
+          AND h.category = 'approval'
+          AND (
+            h.task_title = 'Approve merge'
+            OR h.task_title LIKE 'Approve merge %'
+            OR h.description LIKE 'Approve merge of %'
+            OR h.description LIKE 'Awaiting human approval — branch %'
+          )
+        /*RG_MERGE_HOLD_WHERE_END*/
+      )
     UNION
     SELECT c.case_id FROM pipeline_cases c
     WHERE c.status = 'awaiting_human'
@@ -48,6 +68,21 @@ WHERE case_id IN (
       AND (c.claimed_by IS NULL
            OR c.claimed_at IS NULL
            OR c.claimed_at < NOW() - INTERVAL '30 minutes')
+      AND NOT EXISTS (
+        SELECT 1 FROM human_holds h
+        WHERE /*RG_MERGE_HOLD_WHERE c.case_id*/
+          h.task_id = c.case_id
+          AND h.status = 'pending'
+          AND h.created_by = 'agent-progress'
+          AND h.category = 'approval'
+          AND (
+            h.task_title = 'Approve merge'
+            OR h.task_title LIKE 'Approve merge %'
+            OR h.description LIKE 'Approve merge of %'
+            OR h.description LIKE 'Awaiting human approval — branch %'
+          )
+        /*RG_MERGE_HOLD_WHERE_END*/
+      )
     ORDER BY case_id
     LIMIT 15
   ) q
@@ -91,6 +126,30 @@ Apply `agents/GLOBAL.md` lessons as the checklist. Hard rules:
 Verdicts: MERGE / FIX (defect — do NOT merge if the defect writes bad data or breaks auth; small latent defects may merge WITH a fix case filed) / SKIP.
 
 ## 3. Merge
+- **Approve-merge hold backstop (hard rule).** Before you merge a case, and before you set it to done, run this check. If it returns the case_id, a pending Approve-merge hold still exists: do not merge, do not set status to done, do not close its dispatch rows, skip the case, and leave the status unchanged.
+
+```sql
+SELECT c.case_id
+FROM pipeline_cases c
+WHERE c.case_id = '<CASE_ID>'
+  AND EXISTS (
+    SELECT 1 FROM human_holds h
+    WHERE /*RG_MERGE_HOLD_WHERE c.case_id*/
+      h.task_id = c.case_id
+      AND h.status = 'pending'
+      AND h.created_by = 'agent-progress'
+      AND h.category = 'approval'
+      AND (
+        h.task_title = 'Approve merge'
+        OR h.task_title LIKE 'Approve merge %'
+        OR h.description LIKE 'Approve merge of %'
+        OR h.description LIKE 'Awaiting human approval — branch %'
+      )
+    /*RG_MERGE_HOLD_WHERE_END*/
+  );
+```
+
+  The claim in §0 should already have excluded that case. This check is what stops a hold filed after the claim, and what stops a claim predicate that has drifted. A returned row is a skip, not a review.
 - Dependency order: schema → providers → services/endpoints → frontend. Docs anytime.
 - Union-resolve simple same-anchor conflicts (both sides appended to one init block → keep both, dedupe duplicate ALTERs).
 - STRUCTURAL conflicts (two rewrites of the same function/flow): abort that merge, file a rebase fix case, move on. Never hand-weave two implementations.
