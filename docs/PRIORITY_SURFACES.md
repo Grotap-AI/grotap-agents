@@ -401,7 +401,7 @@ Plan-Implement-Review: Claude plans/implements, Codex audits.
 Cap each coalesced batch so the full run finishes within ~80 turns. Oversized tasks exhaust
 the turn budget partway and waste the slot (CLAUDE.md § Coalescing).
 
-### DISPATCH_PROTOCOL env var (team1 only)
+### DISPATCH_PROTOCOL env var (Team Claude (team1) only)
 Set in the caller's environment before calling `agents/dispatch.sh`:
 - **`legacy`** (default): inline RUNNER — reads markdown, runs Claude, commits, pushes.
   Byte-identical to all pre-protocol dispatches; safe for all existing automation.
@@ -422,7 +422,7 @@ Set in the caller's environment before calling `agents/dispatch.sh`:
 - **API exhausted** — Anthropic credit limit hit; the dispatch row is flagged `api_exhausted`
   (no retry strike consumed); any partial commits are preserved on the branch.
 - **team pool empty/unreachable** — provisioning incomplete or server down; dispatch logs
-  the skip and falls back to team1 automatically.
+  the skip and falls back to Team Claude automatically.
 - **tmux session conflict** — `ssh root@<ip> "su - agent -c 'tmux kill-session -t <session>'"`,
   then re-dispatch.
 - **`DIRTY_TREE` or `DETACHED_HEAD`** in `agents/logs/bootstrap-sync-fail.json` — another

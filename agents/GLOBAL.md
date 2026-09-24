@@ -38,6 +38,7 @@ Control Neon `green-rice-76766370` · Grotap tenant Neon `proud-union-74070434` 
 ## Fleet / Dispatch / Review / Deploy
 Roster+SSH: `agents/SERVERS.md` (do **not** auto-load into coding prompts).
 Dispatch continuous; teams/routing: `agents/SERVERS.md` + platform `agents/config.sh`.
+User-facing text names a fleet team by model. On the first mention in a doc, add the internal key; after that use the model name alone. Team Claude (team1). Team Codex (team2). Team Monitor (DeepSeek, team4). Team Astra (team5). `team3` is reserved and unused. Keys `team1`..`team5` stay in config, `case_data.team`, and task YAML.
 Review: `/codex:review` then Rule 7 pipeline. Deploy: Vercel FE on master; Railway BE gated on green CI.
 Git: master; stage named paths only; tsc before commit; one app to one branch.
 

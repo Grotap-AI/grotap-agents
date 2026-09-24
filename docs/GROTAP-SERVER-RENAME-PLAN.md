@@ -13,9 +13,9 @@
 5. Name reflects model or job on that metal.
 
 Number bands for agents:
-- **01-09** = Claude workers (Team Claude)
-- **10-19** = Codex / OpenRouter builders (Team Builder)
-- **monitor-NN-*** = monitors (Team Monitor)
+- **01-09** = Claude workers (Team Claude (team1))
+- **10-19** = Codex / OpenRouter builders (Team Codex (team2))
+- **monitor-NN-*** = monitors (Team Monitor (DeepSeek, team4))
 
 ---
 
@@ -31,9 +31,9 @@ Number bands for agents:
 | `04-Agent` | **agent-04-claude** | Team Claude worker | Light (~2%) | Keep |
 | `05-Agent` | **agent-05-claude** | Team Claude worker (powered off) | Off | Rename for clean inventory; power on only if needed |
 | `agent-06-ash` | **agent-06-claude** | Team Claude worker in Ashburn | Light (~3%) | Keep - Ashburn Claude stack |
-| `agent-20` | **agent-10-codex** | Team Builder - GPT Codex via OpenRouter | Light (~3%) | Keep - only live builder today |
+| `agent-20` | **agent-10-codex** | Team Codex - GPT Codex via OpenRouter | Light (~3%) | Keep - only live builder today |
 | (none yet) | **agent-11-codex** | Reserved 2nd Codex builder | n/a | Create metal only when you want a second builder |
-| `agent-40` | **monitor-01-deepseek** | Team Monitor - DeepSeek via OpenRouter | Light (~2%) | Keep |
+| `agent-40` | **monitor-01-deepseek** | Team Monitor (DeepSeek) - DeepSeek via OpenRouter | Light (~2%) | Keep |
 
 ### Platform
 
@@ -57,7 +57,7 @@ Number bands for agents:
 | **cobrowse-runner.service** on openreplay-01 | **Disable & remove** now (service, not the whole VM) | As soon as you approve ops cleanup | Broken (404/500 claims); product policy is NO cobrowse |
 | **agent-05-claude** (today `05-Agent`) | Keep name, leave **powered off** or delete if you will not use a 5th Claude worker | Optional | Already off - only pay storage/IP if Hetzner still bills the off VM |
 | Cobrowse.io dependency / any cobrowse app paths | Already policy: never restore | Ongoing | Replaced by OpenReplay Assist + MDM remote for tablets |
-| Old missing boxes (agent-21/41, GPU/Team3, Lane C) | Already gone - do not recreate under old names | - | Leaner fleet is intentional |
+| Old missing boxes (agent-21/41, GPU / unused `team3` slot, Lane C) | Already gone - do not recreate under old names | - | Leaner fleet is intentional |
 
 **Do not retire:** mdm-01, openreplay-01 (after rename), Claude agents 01-04/06, agent-10-codex, monitor-01-deepseek, prompt-01-claude (was claude-code-01), forge/maps/scan.
 
@@ -88,7 +88,8 @@ scan-01
 
 ## Docs / UI labels (not server names)
 
-- Team Claude / Team Builder / Team Monitor
+- Team Claude / Team Codex / Team Monitor (DeepSeek) / Team Astra (team5)
+- `team3` is reserved and unused
 - Pipe Claude / Pipe OpenRouter
 - Live code: Lane A = OpenRouter, Lane B = Claude (do not flip in first rename pass)
 
@@ -114,17 +115,17 @@ Naming stays type-first · lowercase · hyphens. Cloud name = Linux hostname.
 
 | Action | Name | Role |
 |--------|------|------|
-| **Live** | `prompt-01-astra` `5.161.243.18` | Prompt Option — GPT-6 Astra (`gpt-6-astra`), cpx31 Ashburn, id 167204705. Running |
-| **Live** | `agent-team-01-astra` `5.161.80.75` | Agent Team — GPT-6 Astra, cpx31 Ashburn, id 167204706. Running |
+| **Live** | `prompt-01-astra` `5.161.243.18` | Team Astra prompt seat — GPT-6 Astra (`gpt-6-astra`), cpx31 Ashburn, id 167204705. Running |
+| **Live** | `agent-team-01-astra` `5.161.80.75` | Team Astra agent seat — GPT-6 Astra, cpx31 Ashburn, id 167204706. Running |
 | **Rename ON** | `prompt-01-claude` `178.156.209.112` | Jumpbox. Aaron override: rename from `claudecode-01` / `claude-code-01` is ON. DNS `claudecode.grotap.com` unchanged. Running. Not `prompt-01-astra`. |
 
 Constraints:
-- Do not put Astra boxes in the Team Claude `agent-0N-claude` pool.
+- Do not put Team Astra boxes in the Team Claude `agent-0N-claude` pool.
 - Do not create `agent-11-codex` unless asked.
 - Do not retire `openreplay-ai-support`.
 - Bootstrap source of truth after merge: this plan + `SERVERS.md` / `agents/config.sh` in grotap-agents (and platform stub if present).
 
-Why multiple Claude workers exist: parallel **throughput** (concurrent sessions), not faster single-job latency. Astra gets speed the same way — dedicated seats, not more Claude boxes.
+Why multiple Claude workers exist: parallel **throughput** (concurrent sessions), not faster single-job latency. Team Astra gets speed the same way — dedicated seats, not more Claude boxes.
 
 ## 2026-09-24 — locked live map (Shadow metal PASS)
 
