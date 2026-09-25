@@ -313,4 +313,37 @@
 #   A follow-up commit, after the merge commit is the tip, must pin
 #   THAT merge commit (second rotation). The merge MUST be
 #   `gh pr merge --merge`.
-f81fb591bea772b1839206c532c2b2380a40444b
+#
+#   Rotated 2026-09-25 from f81fb591bea772b1839206c532c2b2380a40444b to
+#   05f12beeedf6067ce0ef366b4938551e27286577. This SHA is NOT an ancestor
+#   of origin/master. Its parent is 2d84d15a9c5a4072fe75738aecb066d8164935e8
+#   (the previous rotation commit). The commit that records a SHA cannot
+#   contain its own SHA (§ROTATION step 5). 05f12bee is reachable from
+#   origin/master only after this branch lands as a MERGE COMMIT.
+#   MUST merge with `gh pr merge --merge`. A squash or a rebase merge
+#   drops 05f12bee from refs/heads/master. verify_bootstrap_pin then
+#   hard-fails every host that has ~/.grotap_bootstrap_pin_seen, because
+#   fetch is refs/heads/master only.
+#   THE EXECUTABLE RUNNER DELTA on top of f81fb59 is 05f12bee:
+#     ORCH_LOG_TAG is accepted only when it matches ^[A-Za-z0-9]{1,32}$.
+#       Anything else is regenerated from urandom (od -An -N8 -tx8).
+#     The snapshot directory is mktemp -d /tmp/runner-XXXXXXXX, mode 0700.
+#       The parent passes that exact path. The child honours the fetch
+#       skip only when the path is a real directory (not a symlink), owned
+#       by this user, mode 0700, one component under /tmp, no '..', and
+#       $0 is exactly "$snap/orchestrator-run.sh". Otherwise the re-exec
+#       and bootstrap flags are unset, the refusal is logged, and the
+#       pinned checkout runs.
+#     The exit trap rm -rf's only the directory this process recorded
+#       after mktemp or after those checks. It does not build a path
+#       from ORCH_LOG_TAG.
+#     Quota matching uses \b429\b and scans the result text, or non-JSON
+#       stdout. duration_ms 14290, a session id containing 4290, and the
+#       words "rate limiter" are not a quota failure, and the raw JSON
+#       blob is not appended to errors.
+#   agents/GLOBAL.md is UNTOUCHED by 05f12bee.
+#   Per step 5 this rotation commit is itself unblessed. Hosts run
+#   05f12bee once this file is what origin/master's pin fetch reads.
+#   A follow-up commit, after the merge commit is the tip, must pin
+#   THAT merge commit. The merge MUST be `gh pr merge --merge`.
+05f12beeedf6067ce0ef366b4938551e27286577
