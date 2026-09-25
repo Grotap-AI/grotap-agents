@@ -1,13 +1,18 @@
 #!/usr/bin/env bash
 # Install skills/library into the skill roots Claude Code and codex-cli 0.157 scan.
-# Does not deploy. Does not touch bootstrap. Refuses a grotap-agents checkout
-# passed as --repo or --home.
+# Does not deploy. Does not touch bootstrap.
 #
-# Symlink mode relinks an existing symlink. A real directory with the same
-# name is left in place unless --force is set, because ln would nest the
-# link inside it (perf/perf). Copy mode replaces freely except under the
-# real ~/.claude, ~/.agents, or $CODEX_HOME skill roots, which need --force
-# and are backed up first.
+# Refuses a grotap-agents checkout (agents/GLOBAL.md next to skills/library),
+# including when --repo or --home is a subdirectory of that checkout.
+#
+# A real skill directory is left in place unless --force is set, in both
+# symlink and copy mode, and under every --repo and --home root. Symlink mode
+# would otherwise nest the link (perf/perf). Copy mode would otherwise delete
+# it. An identical copy is skipped, with no backup and no rewrite.
+#
+# --force moves the old directory outside every scanned skill root:
+#   ${XDG_STATE_HOME:-$HOME/.local/state}/grotap-skills/backup/<run>/<root-label>/<name>
+# <run> is unique per invocation. Only the last 5 runs are kept.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -17,6 +22,8 @@ REPO=""
 HOME_DEST=""
 DRY=0
 FORCE=0
+BACKUP_KEEP=5
+RUN_BACKUP_DIR=""
 
 usage() {
   cat <<'EOF'
@@ -24,11 +31,12 @@ usage: sync-skills.sh --mode copy|symlink [--repo DIR] [--home DIR] [--force] [-
 
   --repo DIR   project roots: DIR/.claude/skills and DIR/.agents/skills
   --home DIR   user roots: HOME/.claude/skills, HOME/.agents/skills, HOME/.codex/skills
-  --force      back up a blocking real skill directory and replace it
+  --force      back up a differing real skill directory and replace it
   --dry-run    print actions only
 
-Pass --repo, --home, or both. Refuses a directory that contains agents/GLOBAL.md
-next to skills/library (this checkout), whether it is passed as --repo or --home.
+Pass --repo, --home, or both. Refuses a grotap-agents checkout (a directory
+that contains agents/GLOBAL.md next to skills/library), including when the
+path is a subdirectory of that checkout.
 EOF
 }
 
@@ -62,90 +70,124 @@ is_agents_checkout() {
   [[ -f "$dir/agents/GLOBAL.md" && -d "$dir/skills/library" ]]
 }
 
-refuse_agents_checkout() {
-  local dir="$1" label="$2"
-  if is_agents_checkout "$dir"; then
-    echo "refusing to install into the grotap-agents checkout via --${label}: $dir" >&2
-    exit 2
+# Print the checkout root if dir is that checkout or a directory inside it.
+checkout_containing() {
+  local dir="$1"
+  while [[ ! -d "$dir" ]]; do
+    dir="$(dirname "$dir")"
+    [[ "$dir" == "/" ]] && break
+  done
+  if [[ -d "$dir" ]]; then
+    dir="$(cd "$dir" && pwd -P)"
   fi
-}
-
-canon_dir() {
-  local p="$1" parent base
-  if [[ -d "$p" ]]; then
-    (cd "$p" && pwd -P)
-    return 0
-  fi
-  parent="$(dirname "$p")"
-  base="$(basename "$p")"
-  if [[ -d "$parent" ]]; then
-    printf '%s/%s\n' "$(cd "$parent" && pwd -P)" "$base"
-  else
-    printf '%s\n' "$p"
-  fi
-}
-
-is_protected_home_root() {
-  local root="$1" canon candidate
-  [[ -n "${HOME:-}" ]] || return 1
-  canon="$(canon_dir "$root")"
-  for candidate in \
-    "$HOME/.claude/skills" \
-    "$HOME/.agents/skills" \
-    "$HOME/.codex/skills" \
-    "${CODEX_HOME:-$HOME/.codex}/skills"
-  do
-    if [[ "$canon" == "$(canon_dir "$candidate")" ]]; then
+  while [[ "$dir" != "/" ]]; do
+    if is_agents_checkout "$dir"; then
+      printf '%s\n' "$dir"
       return 0
     fi
+    dir="$(dirname "$dir")"
   done
   return 1
 }
 
-if [[ -n "$REPO" ]]; then
-  REPO="$(cd "$REPO" && pwd)"
-  refuse_agents_checkout "$REPO" repo
-fi
-if [[ -n "$HOME_DEST" ]]; then
-  if [[ ! -d "$HOME_DEST" ]]; then
+refuse_agents_checkout() {
+  local dir="$1" label="$2" found
+  if found="$(checkout_containing "$dir")"; then
+    echo "refusing to install into the grotap-agents checkout via --${label}: $dir (checkout $found)" >&2
+    exit 2
+  fi
+}
+
+state_parent() {
+  if [[ -n "${XDG_STATE_HOME:-}" ]]; then
+    printf '%s/grotap-skills/backup\n' "$XDG_STATE_HOME"
+    return 0
+  fi
+  if [[ -z "${HOME:-}" ]]; then
+    echo "HOME is unset; set HOME or XDG_STATE_HOME so backups stay outside skill roots" >&2
+    exit 2
+  fi
+  printf '%s/.local/state/grotap-skills/backup\n' "$HOME"
+}
+
+prune_backups() {
+  local parent="$1" keep="$2" n=0 path
+  [[ -d "$parent" ]] || return 0
+  n=0
+  while IFS= read -r path; do
+    [[ -n "$path" ]] || continue
+    n=$((n + 1))
+    if [[ "$n" -gt "$keep" ]]; then
+      rm -rf "$path"
+    fi
+  done < <(find "$parent" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' | sort -nr | cut -d' ' -f2-)
+}
+
+ensure_run_backup_dir() {
+  local parent
+  if [[ -n "$RUN_BACKUP_DIR" ]]; then
+    return 0
+  fi
+  parent="$(state_parent)"
+  mkdir -p "$parent"
+  RUN_BACKUP_DIR="$(mktemp -d "${parent}/$(date -u +%Y%m%dT%H%M%SZ)-$$-XXXXXX")"
+  prune_backups "$parent" "$BACKUP_KEEP"
+}
+
+backup_move() {
+  local dest="$1" label="$2" name="$3" bak
+  ensure_run_backup_dir
+  mkdir -p "$RUN_BACKUP_DIR/$label"
+  bak="$RUN_BACKUP_DIR/$label/$name"
+  mv "$dest" "$bak"
+  printf '%s\n' "$bak"
+}
+
+prepare_target() {
+  local kind="$1" path="$2"
+  refuse_agents_checkout "$path" "$kind"
+  if [[ ! -d "$path" ]]; then
     if [[ "$DRY" -eq 0 ]]; then
-      mkdir -p "$HOME_DEST"
+      mkdir -p "$path"
     fi
   fi
-  if [[ -d "$HOME_DEST" ]]; then
-    HOME_DEST="$(cd "$HOME_DEST" && pwd)"
-    refuse_agents_checkout "$HOME_DEST" home
+  if [[ -d "$path" ]]; then
+    (cd "$path" && pwd)
+  else
+    printf '%s\n' "$path"
   fi
+}
+
+if [[ -n "$REPO" ]]; then
+  REPO="$(prepare_target repo "$REPO")"
+fi
+if [[ -n "$HOME_DEST" ]]; then
+  HOME_DEST="$(prepare_target home "$HOME_DEST")"
 fi
 
 install_one() {
-  local dest_root="$1" name="$2" src="$3" dest bak needs_force
+  local dest_root="$1" name="$2" src="$3" label="$4" dest bak
   dest="$dest_root/$name"
-  needs_force=0
-  if [[ -d "$dest" && ! -L "$dest" ]]; then
-    if [[ "$MODE" == "symlink" ]]; then
-      needs_force=1
-    elif is_protected_home_root "$dest_root"; then
-      needs_force=1
-    fi
-  fi
 
-  if [[ "$needs_force" -eq 1 && "$FORCE" -ne 1 ]]; then
-    if [[ "$MODE" == "symlink" ]]; then
-      printf 'warning: skip %s (real directory; a symlink would be created inside it). Pass --force to back it up and replace.\n' "$dest" >&2
-    else
-      printf 'warning: skip %s (real skill directory under a home skill root). Pass --force to back it up and replace.\n' "$dest" >&2
-    fi
+  if [[ "$MODE" == "copy" && -e "$dest" ]] && diff -rq "$src" "$dest" >/dev/null 2>&1; then
+    printf 'skip %s (already identical to source)\n' "$dest"
     return 0
   fi
 
-  if [[ "$needs_force" -eq 1 ]]; then
-    bak="${dest}.bak.$(date -u +%Y%m%dT%H%M%SZ)"
+  if [[ -d "$dest" && ! -L "$dest" ]]; then
+    if [[ "$FORCE" -ne 1 ]]; then
+      if [[ "$MODE" == "symlink" ]]; then
+        printf 'warning: skip %s (real directory; a symlink would be created inside it). Pass --force to back it up and replace.\n' "$dest" >&2
+      else
+        printf 'warning: skip %s (real skill directory differs from the library). Pass --force to back it up and replace.\n' "$dest" >&2
+      fi
+      return 0
+    fi
     printf 'warning: replacing real skill directory %s\n' "$dest" >&2
     if [[ "$DRY" -eq 1 ]]; then
-      printf 'would back up %s -> %s\n' "$dest" "$bak"
+      printf 'would back up %s outside scanned skill roots (%s)\n' "$dest" "$label"
     else
-      mv "$dest" "$bak"
+      bak="$(backup_move "$dest" "$label" "$name")"
       printf 'backed up %s -> %s\n' "$dest" "$bak"
     fi
   fi
@@ -177,12 +219,12 @@ for name in "${NAMES[@]}"; do
     continue
   fi
   if [[ -n "$REPO" ]]; then
-    install_one "$REPO/.claude/skills" "$name" "$src"
-    install_one "$REPO/.agents/skills" "$name" "$src"
+    install_one "$REPO/.claude/skills" "$name" "$src" "repo-claude"
+    install_one "$REPO/.agents/skills" "$name" "$src" "repo-agents"
   fi
   if [[ -n "$HOME_DEST" ]]; then
-    install_one "$HOME_DEST/.claude/skills" "$name" "$src"
-    install_one "$HOME_DEST/.agents/skills" "$name" "$src"
-    install_one "$HOME_DEST/.codex/skills" "$name" "$src"
+    install_one "$HOME_DEST/.claude/skills" "$name" "$src" "home-claude"
+    install_one "$HOME_DEST/.agents/skills" "$name" "$src" "home-agents"
+    install_one "$HOME_DEST/.codex/skills" "$name" "$src" "home-codex"
   fi
 done

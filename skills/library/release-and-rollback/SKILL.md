@@ -17,7 +17,7 @@ Run on the team the task names. Keep that team's model. Do not switch models fro
 1. Resolve the forge as `gh`. For each PR, a different team runs `verify-and-prove` against the parent and the head. The result is `PASS`, `PASS+NOTES`, or `FAIL`, posted on that PR.
 2. Walk up from the lowest unmerged PR. Stop at the first one without `PASS` or `PASS+NOTES`. A verified PR above an unverified one does not land. Report the ceiling.
 3. Record the verdict head SHA, base SHA, and `git patch-id` of the base-to-head diff. Before landing, recompute the patch-id. If it changed, re-verify. Matching commit messages or an older green check do not carry the verdict. After a rebase, rerun mergeability and CI at the current head even when the patch-id matches.
-4. Prepare only the bottom PR. Fetch `origin/master`. Rebase onto that tip only when the task allows a rebase, push, and retarget with `gh pr edit <pr> --base master`. Re-check the patch-id. Leave descendants alone.
+4. Prepare only the bottom PR. Fetch `origin/master`. Rebase onto that tip only when the task allows a rebase. Pushing that rebased branch is a force-push: use `git push --force-with-lease` only, and only on your own PR branch. Never force-push `master`, `main`, or any other shared branch. Then retarget with `gh pr edit <pr> --base master`. Re-check the patch-id. Leave descendants alone.
 5. Land one PR at a time, and only when the task says to land. Before merging, check whether this PR must keep a merge commit. That includes a PR that updates `agents/BOOTSTRAP_SHA`, and any PR that says a merge commit is required, such as a grotap-agents pin PR like #7. Squash breaks the host pin chain. Those PRs use a merge commit:
 
 ```bash

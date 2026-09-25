@@ -1,6 +1,6 @@
 # Grotap skills library
 
-Version: see `VERSION` (0.1.1). Shared playbooks for the agent fleet. Nothing
+Version: see `VERSION` (0.1.2). Shared playbooks for the agent fleet. Nothing
 in this folder deploys, syncs to a server, or wires itself into session
 bootstrap.
 
@@ -44,13 +44,16 @@ bash skills/scripts/sync-skills.sh --mode symlink --home "$HOME"
 bash skills/scripts/sync-skills.sh --mode symlink --repo /path/to/grotap-platform
 ```
 
-The installer refuses this checkout for both `--repo` and `--home`. Symlink
-mode leaves a real skill directory in place unless you pass `--force`, which
-moves it to `<name>.bak.<timestamp>` and then links the library skill. A
-symlink into an existing real directory would otherwise land inside it.
-Copy mode does the same under `~/.claude/skills`, `~/.agents/skills`, and
-`$CODEX_HOME/skills` (default `~/.codex/skills`). A copy into another repo
-still replaces a same-named directory.
+The installer refuses this checkout, and any directory inside it, for both
+`--repo` and `--home`. A real skill directory is left in place unless you
+pass `--force`, in symlink mode and in copy mode, under every root you pass.
+That includes a `--home` which is not the invoking user's `$HOME`. A copy
+that is already identical to the library is skipped, so a repeat run does
+not write another backup. `--force` moves the old directory outside every
+scanned skill root, to
+`${XDG_STATE_HOME:-$HOME/.local/state}/grotap-skills/backup/<run>/<root>/<name>`,
+and keeps the last five runs. A symlink into an existing real directory
+would otherwise land inside it.
 
 Codex 0.157 (`openai/codex` tag `rust-v0.157.0`, `codex-rs/ext/skills`) scans:
 

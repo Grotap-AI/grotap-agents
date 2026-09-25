@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.2
+
+- `--force` backups go outside every scanned skill root, under `${XDG_STATE_HOME:-$HOME/.local/state}/grotap-skills/backup/<run>/`, one unique directory per run. The last five runs are kept.
+- Copy mode skips a destination that is already identical to the library, with no backup. A differing real directory under every `--repo` and `--home` root needs `--force`.
+- `--repo` and `--home` pointed at a subdirectory of a grotap-agents checkout are refused.
+- `release-and-rollback` says a rebase push is `git push --force-with-lease` only, and only on your own PR branch.
+
 ## 0.1.1
 
 - `sync-skills.sh` refuses a grotap-agents checkout for `--home` as well as `--repo`.
