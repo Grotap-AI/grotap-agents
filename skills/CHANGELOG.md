@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.3
+
+- One `--force` invocation creates a single backup run directory in the main shell and prunes older runs only after that run is finished, so a run that backs up every skill keeps all of them.
+- `--force` exits 2 before moving anything when both `HOME` and `XDG_STATE_HOME` are unset.
+
 ## 0.1.2
 
 - `--force` backups go outside every scanned skill root, under `${XDG_STATE_HOME:-$HOME/.local/state}/grotap-skills/backup/<run>/`, one unique directory per run. The last five runs are kept.

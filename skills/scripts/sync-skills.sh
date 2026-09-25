@@ -12,8 +12,10 @@
 #
 # --force moves the old directory outside every scanned skill root:
 #   ${XDG_STATE_HOME:-$HOME/.local/state}/grotap-skills/backup/<run>/<root-label>/<name>
-# <run> is unique per invocation. Only the last 5 runs are kept.
+# <run> is created once per invocation, in the main shell. Only the last 5
+# runs are kept, and the current run is never pruned.
 set -euo pipefail
+shopt -s inherit_errexit
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 LIB="$ROOT/library"
@@ -24,6 +26,8 @@ DRY=0
 FORCE=0
 BACKUP_KEEP=5
 RUN_BACKUP_DIR=""
+STATE_PARENT=""
+LAST_BACKUP=""
 
 usage() {
   cat <<'EOF'
@@ -98,49 +102,68 @@ refuse_agents_checkout() {
   fi
 }
 
-state_parent() {
+# Sets STATE_PARENT. Must run in the main shell: exit 2 here has to abort
+# the script, not a command substitution.
+set_state_parent() {
   if [[ -n "${XDG_STATE_HOME:-}" ]]; then
-    printf '%s/grotap-skills/backup\n' "$XDG_STATE_HOME"
+    STATE_PARENT="${XDG_STATE_HOME}/grotap-skills/backup"
     return 0
   fi
   if [[ -z "${HOME:-}" ]]; then
-    echo "HOME is unset; set HOME or XDG_STATE_HOME so backups stay outside skill roots" >&2
+    echo "HOME and XDG_STATE_HOME are unset; refusing to back up a skill directory" >&2
     exit 2
   fi
-  printf '%s/.local/state/grotap-skills/backup\n' "$HOME"
+  STATE_PARENT="${HOME}/.local/state/grotap-skills/backup"
 }
 
+# Drop old run directories. $current is kept even when it is not among the
+# newest, and it counts toward $keep.
 prune_backups() {
-  local parent="$1" keep="$2" n=0 path
+  local parent="$1" keep="$2" current="$3" path kept=0
   [[ -d "$parent" ]] || return 0
-  n=0
+  if [[ -n "$current" && -d "$current" ]]; then
+    kept=1
+  fi
   while IFS= read -r path; do
     [[ -n "$path" ]] || continue
-    n=$((n + 1))
-    if [[ "$n" -gt "$keep" ]]; then
+    if [[ -n "$current" && "$path" == "$current" ]]; then
+      continue
+    fi
+    if [[ "$kept" -lt "$keep" ]]; then
+      kept=$((kept + 1))
+    else
       rm -rf "$path"
     fi
   done < <(find "$parent" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' | sort -nr | cut -d' ' -f2-)
 }
 
+# One directory per invocation. Called only from the main shell, never from $( ).
 ensure_run_backup_dir() {
-  local parent
+  local stamp
   if [[ -n "$RUN_BACKUP_DIR" ]]; then
     return 0
   fi
-  parent="$(state_parent)"
-  mkdir -p "$parent"
-  RUN_BACKUP_DIR="$(mktemp -d "${parent}/$(date -u +%Y%m%dT%H%M%SZ)-$$-XXXXXX")"
-  prune_backups "$parent" "$BACKUP_KEEP"
+  if [[ -z "$STATE_PARENT" ]]; then
+    set_state_parent
+  fi
+  stamp="$(date -u +%Y%m%dT%H%M%SZ)-$$"
+  RUN_BACKUP_DIR="${STATE_PARENT}/${stamp}"
+  if [[ -e "$RUN_BACKUP_DIR" ]]; then
+    echo "backup run directory already exists: $RUN_BACKUP_DIR" >&2
+    exit 2
+  fi
+  mkdir -p "$STATE_PARENT"
+  mkdir "$RUN_BACKUP_DIR"
 }
 
+# Moves $dest and records the new path in LAST_BACKUP. No command substitution:
+# a subshell would create a second run directory and prune the first.
 backup_move() {
-  local dest="$1" label="$2" name="$3" bak
+  local dest="$1" label="$2" name="$3"
   ensure_run_backup_dir
   mkdir -p "$RUN_BACKUP_DIR/$label"
-  bak="$RUN_BACKUP_DIR/$label/$name"
-  mv "$dest" "$bak"
-  printf '%s\n' "$bak"
+  LAST_BACKUP="$RUN_BACKUP_DIR/$label/$name"
+  mv "$dest" "$LAST_BACKUP"
 }
 
 prepare_target() {
@@ -158,6 +181,10 @@ prepare_target() {
   fi
 }
 
+if [[ "$FORCE" -eq 1 && "$DRY" -eq 0 ]]; then
+  set_state_parent
+fi
+
 if [[ -n "$REPO" ]]; then
   REPO="$(prepare_target repo "$REPO")"
 fi
@@ -166,7 +193,7 @@ if [[ -n "$HOME_DEST" ]]; then
 fi
 
 install_one() {
-  local dest_root="$1" name="$2" src="$3" label="$4" dest bak
+  local dest_root="$1" name="$2" src="$3" label="$4" dest
   dest="$dest_root/$name"
 
   if [[ "$MODE" == "copy" && -e "$dest" ]] && diff -rq "$src" "$dest" >/dev/null 2>&1; then
@@ -187,8 +214,8 @@ install_one() {
     if [[ "$DRY" -eq 1 ]]; then
       printf 'would back up %s outside scanned skill roots (%s)\n' "$dest" "$label"
     else
-      bak="$(backup_move "$dest" "$label" "$name")"
-      printf 'backed up %s -> %s\n' "$dest" "$bak"
+      backup_move "$dest" "$label" "$name"
+      printf 'backed up %s -> %s\n' "$dest" "$LAST_BACKUP"
     fi
   fi
 
@@ -228,3 +255,7 @@ for name in "${NAMES[@]}"; do
     install_one "$HOME_DEST/.codex/skills" "$name" "$src" "home-codex"
   fi
 done
+
+if [[ -n "$RUN_BACKUP_DIR" ]]; then
+  prune_backups "${RUN_BACKUP_DIR%/*}" "$BACKUP_KEEP" "$RUN_BACKUP_DIR"
+fi

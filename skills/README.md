@@ -1,6 +1,6 @@
 # Grotap skills library
 
-Version: see `VERSION` (0.1.2). Shared playbooks for the agent fleet. Nothing
+Version: see `VERSION` (0.1.3). Shared playbooks for the agent fleet. Nothing
 in this folder deploys, syncs to a server, or wires itself into session
 bootstrap.
 
@@ -51,9 +51,12 @@ That includes a `--home` which is not the invoking user's `$HOME`. A copy
 that is already identical to the library is skipped, so a repeat run does
 not write another backup. `--force` moves the old directory outside every
 scanned skill root, to
-`${XDG_STATE_HOME:-$HOME/.local/state}/grotap-skills/backup/<run>/<root>/<name>`,
-and keeps the last five runs. A symlink into an existing real directory
-would otherwise land inside it.
+`${XDG_STATE_HOME:-$HOME/.local/state}/grotap-skills/backup/<run>/<root>/<name>`.
+One invocation uses one run directory, so every skill backed up in that run
+stays together. After that, older runs are pruned to the last five, and the
+run just written is kept. If `HOME` and `XDG_STATE_HOME` are both unset,
+`--force` stops before moving anything. A symlink into an existing real
+directory would otherwise land inside it.
 
 Codex 0.157 (`openai/codex` tag `rust-v0.157.0`, `codex-rs/ext/skills`) scans:
 

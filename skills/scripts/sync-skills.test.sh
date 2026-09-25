@@ -188,6 +188,74 @@ retain_count="$(find "$retain_state/grotap-skills/backup" -mindepth 1 -maxdepth 
 assert "only the last 5 backup runs are kept" "[[ '$retain_count' -eq 5 ]]"
 assert "oldest backup run was removed" "[[ ! -d '$(dirname "$(dirname "$first_retain")")' ]]"
 assert "newest backup run remains" "[[ -d '$(dirname "$(dirname "$last_retain")")' && \$(cat '$last_retain/marker') == gen5 ]]"
+assert "retention across separate invocations keeps 5 runs" "[[ '$retain_count' -eq 5 ]]"
+
+# One invocation that backs up every library skill must keep all of them.
+mapfile -t SKILL_NAMES < <(find "$LIB" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort)
+assert "library has more than 5 skills" "[[ ${#SKILL_NAMES[@]} -gt 5 ]]"
+
+seed_real_skills() {
+  local root="$1" prefix="$2" name
+  for name in "${SKILL_NAMES[@]}"; do
+    mkdir -p "$root/$name"
+    printf '%s\n' "${prefix}-${name}" > "$root/$name/marker"
+  done
+}
+
+run_count_under() {
+  local state="$1"
+  local root="$state/grotap-skills/backup"
+  if [[ ! -d "$root" ]]; then
+    printf '0\n'
+    return 0
+  fi
+  find "$root" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' '
+}
+
+many_copy_state="$tmp/state-many-copy"
+many_copy_home="$tmp/many-copy-home"
+mkdir -p "$many_copy_state"
+seed_real_skills "$many_copy_home/.claude/skills" copy
+env HOME="$tmp/many-copy-invoker" XDG_STATE_HOME="$many_copy_state" \
+  bash "$SYNC" --mode copy --home "$many_copy_home" --force >"$tmp/many-copy.out" 2>"$tmp/many-copy.err"
+copy_run="$(find "$many_copy_state/grotap-skills/backup" -mindepth 1 -maxdepth 1 -type d)"
+assert "copy --force of every skill uses one run dir" "[[ \$(run_count_under '$many_copy_state') -eq 1 ]]"
+assert "copy --force reports every skill backup" "[[ \$(grep -c '^backed up ' '$tmp/many-copy.out') -eq ${#SKILL_NAMES[@]} ]]"
+for name in "${SKILL_NAMES[@]}"; do
+  assert "copy backup keeps $name" "[[ \$(cat '$copy_run/home-claude/$name/marker') == copy-$name ]]"
+done
+
+many_link_state="$tmp/state-many-link"
+many_link_home="$tmp/many-link-home"
+mkdir -p "$many_link_state"
+seed_real_skills "$many_link_home/.claude/skills" link
+env HOME="$tmp/many-link-invoker" XDG_STATE_HOME="$many_link_state" \
+  bash "$SYNC" --mode symlink --home "$many_link_home" --force >"$tmp/many-link.out" 2>"$tmp/many-link.err"
+link_run="$(find "$many_link_state/grotap-skills/backup" -mindepth 1 -maxdepth 1 -type d)"
+assert "symlink --force of every skill uses one run dir" "[[ \$(run_count_under '$many_link_state') -eq 1 ]]"
+assert "symlink --force reports every skill backup" "[[ \$(grep -c '^backed up ' '$tmp/many-link.out') -eq ${#SKILL_NAMES[@]} ]]"
+for name in "${SKILL_NAMES[@]}"; do
+  assert "symlink backup keeps $name" "[[ \$(cat '$link_run/home-claude/$name/marker') == link-$name && -L '$many_link_home/.claude/skills/$name' ]]"
+done
+
+# No backup location: fail before moving anything.
+unset_home="$tmp/unset-home"
+mkdir -p "$unset_home/.claude/skills/perf"
+printf 'stay\n' > "$unset_home/.claude/skills/perf/marker"
+root_before="$tmp/root-before"
+root_after="$tmp/root-after"
+{ find / -maxdepth 1 -mindepth 1 -type d -printf '%f\n' 2>/dev/null || true; } | sort > "$root_before"
+set +e
+env -u HOME -u XDG_STATE_HOME bash "$SYNC" --mode copy --home "$unset_home" --force >"$tmp/unset.out" 2>"$tmp/unset.err"
+code=$?
+set -e
+{ find / -maxdepth 1 -mindepth 1 -type d -printf '%f\n' 2>/dev/null || true; } | sort > "$root_after"
+assert "unset HOME and XDG_STATE_HOME exits 2" "[[ $code -eq 2 ]]"
+assert "unset HOME and XDG_STATE_HOME explains why" "grep -q 'HOME and XDG_STATE_HOME are unset' '$tmp/unset.err'"
+assert "unset env leaves the skill dir unchanged" "[[ \$(cat '$unset_home/.claude/skills/perf/marker') == stay && ! -e '$unset_home/.claude/skills/perf/SKILL.md' ]]"
+assert "unset env creates no other skill root" "[[ ! -d '$unset_home/.agents' && ! -d '$unset_home/.codex' ]]"
+assert "unset env creates no root run directory" "cmp -s '$root_before' '$root_after'"
+assert "unset env does not back up" "! grep -q 'backed up ' '$tmp/unset.out' '$tmp/unset.err'"
 
 if [[ "$fail" -ne 0 ]]; then
   printf 'sync-skills tests failed\n' >&2
