@@ -80,6 +80,10 @@ elif [[ "$mode" == "commit" ]]; then
   echo touched > README-golden.txt
   git -c user.email=t@t.com -c user.name=T add README-golden.txt
   git -c user.email=t@t.com -c user.name=T commit -q -m "agent: golden"
+elif [[ "$mode" == "empty" ]]; then
+  # error_max_turns: is_error with an empty result string. Master's tab
+  # split collapsed that empty field, so tokens came out as 5.
+  echo '{"is_error":true,"result":"","subtype":"error_max_turns","usage":{"input_tokens":10,"output_tokens":5},"permission_denials":[]}'
 else
   echo '{"is_error":false,"result":"stub run complete","usage":{"input_tokens":10,"output_tokens":5},"permission_denials":[]}'
 fi
@@ -149,6 +153,23 @@ run() { # payload is $PAYLOAD (global); extra env via "$@"
   RESULT_JSON=$(python3 -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).read_text().strip().splitlines()[-1] if pathlib.Path(sys.argv[1]).read_text().strip() else "")' "$STDOUT_FILE")
 }
 
+# Like run(), but keeps the process status. --merge is the only caller:
+# deploy.ts treats exit 0 as merged, so a refusal must be non-zero.
+RUN_RC=0
+run_merge() {
+  mkdir -p "$TMP/state"
+  rm -f "$TMP/state/claude.argv" "$TMP/state/claude.env"
+  STDOUT_FILE="$TMP/stdout"; STDERR_FILE="$TMP/stderr"
+  RUN_RC=0
+  printf '%s' "$PAYLOAD" | \
+    env PATH="$STUBS:$PATH" HOME="$FAKEHOME" STATE_DIR="$TMP/state" \
+        ANTHROPIC_API_KEY=test-key NODE_SECRET=node-secret-value \
+        DOPPLER_TOKEN=dp.st.fake GITHUB_TOKEN=ghp_fake \
+        "$@" bash "$RUNNER" --merge >"$STDOUT_FILE" 2>"$STDERR_FILE" || RUN_RC=$?
+  [[ $VERBOSE -eq 1 ]] && { echo "--- rc $RUN_RC ---"; echo "--- stdout ---"; cat "$STDOUT_FILE"; echo "--- stderr ---"; cat "$STDERR_FILE"; }
+  RESULT_JSON=$(python3 -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).read_text().strip().splitlines()[-1] if pathlib.Path(sys.argv[1]).read_text().strip() else "")' "$STDOUT_FILE")
+}
+
 # Print a python expression over RESULT_JSON. $1 is the expression, d is the object.
 j() { printf '%s' "$RESULT_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); $1"; }
 
@@ -210,6 +231,11 @@ assert_eq "G1 ran from the /tmp snapshot" \
 assert_eq "G1 driver is claude/sonnet" "$(j 'print(d["driver_result"]["driver"]+" "+d["driver_result"]["model"])')" "claude claude-sonnet-4-6"
 assert_eq "G1 team defaulted to team1" "$(j 'print(d["driver_result"]["team"])')" "team1"
 assert_eq "G1 missing host label did not refuse" "$(j 'print(d["errors"].startswith("error_class=infra"))')" "False"
+assert_eq "G1 driver error_class null" "$(j 'print(d["driver_result"]["error_class"])')" "None"
+assert_eq "G1 re-exec skipped the second fetch" \
+  "$(grep -c 'skipping bootstrap fetch' "$FAKEHOME/logs/orchestrator-run.log")" "1"
+assert_eq "G1 bootstrap checkout happened once" \
+  "$(grep -c 'Bootstrap tree CHECKED OUT' "$FAKEHOME/logs/orchestrator-run.log")" "1"
 
 echo "G2: explicit team=team1 and explicit driver=claude match the same base line"
 build_home g2
@@ -229,6 +255,7 @@ build_home g4
 run CLAUDE_STUB_MODE=err
 assert_eq "G4 base result unchanged" "$(base_matches "$ERROR_GOLDEN")" "yes"
 assert_eq "G4 no verify key" "$(j 'print("verify" in d)')" "False"
+assert_eq "G4 driver error_class task" "$(j 'print(d["driver_result"]["error_class"])')" "task"
 
 echo "G5: cache_read/cache_creation are subsets; back-compat tokens stay 15"
 build_home g5
@@ -251,6 +278,15 @@ PAYLOAD='{"case_id":"CASE-20260915-AAAAAA","branch":"case-20260915-aaaaaa","titl
 run
 assert_eq "G7 opus" "$(grep -x 'claude-opus-4-8' "$TMP/state/claude.argv" >/dev/null && echo yes || echo no)" "yes"
 PAYLOAD="$TEAM1_PAYLOAD"
+
+echo "G8: empty result (error_max_turns) keeps input+output — master parse-bug fix"
+build_home g8
+run CLAUDE_STUB_MODE=empty
+assert_eq "G8 tokens are input plus output" "$(j 'print(d["tokens"])')" "15"
+assert_eq "G8 error text is not the shifted input count" "$(j 'print(d["errors"])')" "Claude CLI error: "
+assert_eq "G8 driver token split" \
+  "$(j 't=d["driver_result"]["tokens"]; print(t["input"], t["output"], t["total"])')" "10 5 15"
+assert_eq "G8 one JSON line" "$(wc -l < "$STDOUT_FILE" | tr -d ' ')" "1"
 
 echo "H1: host label mismatch refuses before any repo access"
 build_home h1
@@ -340,6 +376,50 @@ assert_eq "D3 claude was not the tool" "$(claude_ran)" "no"
 assert_eq "D3 unknown cost fails closed" \
   "$(j 'print(d["status"]=="failed" and d["errors"].startswith("error_class=cost_unknown") and d["driver_result"]["error_class"]=="cost_unknown")')" "True"
 rm -f "$FAKE_DRIVER"; FAKE_DRIVER=""
+PAYLOAD="$TEAM1_PAYLOAD"
+
+echo "D5: a malformed driver result still emits one valid JSON line"
+build_home d5
+FAKE_DRIVER="$SCRIPT_DIR/../scripts/drivers/run-badjson.sh"
+cat > "$FAKE_DRIVER" <<'EOF'
+#!/bin/bash
+printf '%s\n' 'this is not json {' > "$3"
+exit 0
+EOF
+chmod +x "$FAKE_DRIVER"
+PAYLOAD='{"case_id":"CASE-20260915-AAAAAA","branch":"case-20260915-aaaaaa","title":"t","context":"c","requirements":"r","complexity":"simple","attempt":1,"team":"team2","driver":"badjson"}'
+run
+assert_eq "D5 one JSON line" "$(wc -l < "$STDOUT_FILE" | tr -d ' ')" "1"
+assert_eq "D5 parses and is an infra failure" \
+  "$(j 'print(d["status"]=="failed" and d["errors"].startswith("error_class=infra") and "malformed" in d["errors"] and d["driver_result"]["error_class"]=="infra")')" "True"
+rm -f "$FAKE_DRIVER"; FAKE_DRIVER=""
+PAYLOAD="$TEAM1_PAYLOAD"
+
+echo "M1: a refused merge (host label mismatch) is non-zero with merged:false"
+build_home m1
+printf '%s\n' '{"team":"team5"}' > "$FAKEHOME/label.json"
+ORIGIN_BEFORE="$(git -C "$FAKEHOME/platform-origin.git" rev-parse master)"
+AGENTS_BEFORE="$(agents_head)"
+PAYLOAD="$TEAM1_PAYLOAD"
+run_merge ORCH_HOST_LABEL_FILE="$FAKEHOME/label.json"
+assert_eq "M1 exit non-zero" "$([[ "$RUN_RC" -ne 0 ]] && echo yes || echo no)" "yes"
+assert_eq "M1 merged false" \
+  "$(j 'print(d.get("merged") is False and "status" not in d and "host label mismatch" in d.get("error",""))')" "True"
+assert_eq "M1 one JSON line" "$(wc -l < "$STDOUT_FILE" | tr -d ' ')" "1"
+assert_eq "M1 origin untouched" "$(git -C "$FAKEHOME/platform-origin.git" rev-parse master)" "$ORIGIN_BEFORE"
+assert_eq "M1 agents HEAD unchanged" "$(agents_head)" "$AGENTS_BEFORE"
+assert_eq "M1 claude never ran" "$(claude_ran)" "no"
+
+echo "M2: invalid JSON in merge mode is non-zero with merged:false"
+build_home m2
+ORIGIN_BEFORE="$(git -C "$FAKEHOME/platform-origin.git" rev-parse master)"
+PAYLOAD='not-json'
+run_merge
+assert_eq "M2 exit non-zero" "$([[ "$RUN_RC" -ne 0 ]] && echo yes || echo no)" "yes"
+assert_eq "M2 merged false" \
+  "$(j 'print(d.get("merged") is False and "not valid JSON" in d.get("error",""))')" "True"
+assert_eq "M2 one JSON line" "$(wc -l < "$STDOUT_FILE" | tr -d ' ')" "1"
+assert_eq "M2 origin untouched" "$(git -C "$FAKEHOME/platform-origin.git" rev-parse master)" "$ORIGIN_BEFORE"
 PAYLOAD="$TEAM1_PAYLOAD"
 
 echo "D4: team2 with driver=claude still reaches claude (wrapper does not special-case the tool)"

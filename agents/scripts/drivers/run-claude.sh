@@ -30,6 +30,7 @@ ATTEMPTS_INSIDE=0
 DR_STATUS="failed"
 DR_ERRORS="error_class=infra claude driver failed before the model call"
 DR_SUMMARY="Claude driver failed (infra, not a task defect)"
+DR_ERROR_CLASS="infra"
 MODEL=""
 DRIVER_VERSION=""
 TOOL_BIN=""
@@ -41,6 +42,7 @@ write_driver_result() {
   raw="$(mktemp)"
   printf '%s' "$CLAUDE_OUT" > "$raw"
   DR_STATUS="$DR_STATUS" DR_ERRORS="$DR_ERRORS" DR_SUMMARY="$DR_SUMMARY" \
+  DR_ERROR_CLASS="${DR_ERROR_CLASS:-}" \
   DR_STARTED_AT="$DR_STARTED_AT" DR_ENDED_AT="$ended" \
   MODEL="${MODEL:-}" DRIVER_VERSION="${DRIVER_VERSION:-}" TOOL_BIN="${TOOL_BIN:-}" \
   ORCH_TEAM="${ORCH_TEAM:-team1}" ATTEMPTS_INSIDE="$ATTEMPTS_INSIDE" \
@@ -85,6 +87,12 @@ total = total_in + raw_out
 session = raw.get("session_id")
 if not isinstance(session, str) or not session:
     session = None
+raw_class = (os.environ.get("DR_ERROR_CLASS") or "").strip()
+if not raw_class:
+    errs = os.environ.get("DR_ERRORS") or ""
+    if errs.startswith("error_class="):
+        raw_class = errs.split(" ", 1)[0].split("=", 1)[1].strip()
+err_class = raw_class or None
 version = os.environ.get("DRIVER_VERSION") or None
 tool_bin = os.environ.get("TOOL_BIN") or None
 model = os.environ.get("MODEL") or None
@@ -102,7 +110,7 @@ doc = {
     "model": model,
     "profile": None,
     "status": os.environ.get("DR_STATUS") or "failed",
-    "error_class": None,
+    "error_class": err_class,
     "summary": os.environ.get("DR_SUMMARY") or "",
     "errors": os.environ.get("DR_ERRORS") or "",
     "tokens": {
@@ -155,7 +163,7 @@ PROMPT="$(python3 -c 'import pathlib,sys; sys.stdout.write(pathlib.Path(sys.argv
 
 # Recorded before the model call so that call stays the last claude invocation
 # (argv captures keep the real -p line).
-DRIVER_VERSION="$(claude --version 2>/dev/null | head -1 || true)"
+DRIVER_VERSION="$(timeout 10 claude --version 2>/dev/null | head -1 || true)"
 TOOL_BIN="$(command -v claude 2>/dev/null || true)"
 
 # ── Permission policy ────────────────────────────────────────────────────────
@@ -320,11 +328,14 @@ try:
 except Exception:
     print("true\t\t0\t0"); sys.exit(0)
 is_error = str(d.get("is_error", True)).lower()
-result = (d.get("result") or "")[:1000].replace("\n", " ").replace("\t", " ")
+# Unit separator, not tab. Tab is IFS whitespace, so an empty result
+# (error_max_turns) collapsed the next fields and the back-compat token
+# integer became the input count alone. That was a master parse bug.
+result = (d.get("result") or "")[:1000].replace("\n", " ").replace("\t", " ").replace("\x1f", " ")
 u = d.get("usage") or {}
-print("\t".join([is_error, result, str(u.get("input_tokens", 0) or 0), str(u.get("output_tokens", 0) or 0)]))
+print("\x1f".join([is_error, result, str(u.get("input_tokens", 0) or 0), str(u.get("output_tokens", 0) or 0)]))
 ' 2>/dev/null)"
-IFS=$'\t' read -r IS_ERROR RESULT_TEXT IN_TOK OUT_TOK <<< "$CLAUDE_PARSED"
+IFS=$'\x1f' read -r IS_ERROR RESULT_TEXT IN_TOK OUT_TOK <<< "$CLAUDE_PARSED"
 TOKENS=$(( ${IN_TOK:-0} + ${OUT_TOK:-0} ))
 
 # ── Tool-denial visibility ───────────────────────────────────────────────────
@@ -363,10 +374,12 @@ fi
 DR_STATUS="success"
 DR_ERRORS="$DENY_NOTE"
 DR_SUMMARY="$RESULT_TEXT"
+DR_ERROR_CLASS=""
 if [ "$CLAUDE_RC" -ne 0 ] || [ "${IS_ERROR:-true}" = "true" ]; then
   DR_STATUS="failed"
   DR_ERRORS="${DENY_NOTE:+$DENY_NOTE }Claude CLI error: $RESULT_TEXT"
   DR_SUMMARY="Agent run failed"
+  DR_ERROR_CLASS="task"
 fi
 ATTEMPTS_INSIDE=1
 

@@ -158,6 +158,15 @@ print(json.dumps(out), flush=True)
   exit 0
 }
 
+# deploy.ts treats a zero exit from --merge as merged. emit() always exits 0,
+# so a merge-mode refusal must not call it: that recorded a refused merge as
+# merged while origin was untouched. Exit 1 with the merge-shaped object.
+merge_refuse() {
+  dump_run_log
+  python3 -c 'import json, sys; print(json.dumps({"merged": False, "error": sys.argv[1]}))' "$1"
+  exit 1
+}
+
 PAYLOAD="$(cat)"
 
 # ── Self-healing git auth (durability fix, v2) ───────────────────────────────
@@ -409,6 +418,14 @@ checkout_bootstrap_pin() {
 
 # ── Ensure platform repo exists and is current ───────────────────────────────
 ensure_repo() {
+  # The re-exec'd copy already sits on the tree the first process fetched
+  # and checked out. Fetching again doubles the network round trip and can
+  # move HEAD under the run that just pinned it.
+  if [ "${ORCH_BOOTSTRAP_FETCH_DONE:-}" = "1" ]; then
+    log "runner re-exec: skipping bootstrap fetch and checkout"
+    cd "$PLATFORM_DIR" || return 1
+    return 0
+  fi
   ensure_git_auth
   # Self-sync the bootstrap repo: the orchestrator SSH path runs this file straight from
   # ~/grotap-agents and never executes dispatch.sh's bootstrap sync, so runner fixes never
@@ -517,6 +534,10 @@ print("ATTEMPT=" + shlex.quote(str(g("attempt", 1))))
 ')" || PARSE_OK=0
 
 if [ "${PARSE_OK:-0}" != "1" ]; then
+  if [ "${1:-}" = "--merge" ]; then
+    _open_run_log "unknown" "merge"
+    merge_refuse "payload is not valid JSON"
+  fi
   _open_run_log "unknown" "0"
   emit "failed" "" 1 "error_class=infra payload is not valid JSON" \
     "Payload JSON parse failed (infra, not a task defect)" 0
@@ -566,6 +587,9 @@ case "$HOST_LABEL" in
   missing|unreadable)
     log "WARN: host label ${HOST_LABEL} at ${HOST_LABEL_FILE} — proceeding without a team cross-check"
     if [ "${ORCH_REQUIRE_HOST_LABEL:-}" = "1" ]; then
+      if [ "${1:-}" = "--merge" ]; then
+        merge_refuse "error_class=infra host label required but ${HOST_LABEL} at ${HOST_LABEL_FILE}. Refusing before any repo access."
+      fi
       emit "failed" "$BRANCH" 1 \
         "error_class=infra host label required but ${HOST_LABEL} at ${HOST_LABEL_FILE}. Refusing before any repo access." \
         "Host label required (infra, not a task defect)" 0
@@ -575,6 +599,9 @@ case "$HOST_LABEL" in
     _payload_team="${TEAM:-team1}"
     if [ "$_payload_team" != "$HOST_LABEL" ]; then
       log "ERROR: host label mismatch payload.team=${TEAM:-<unset>} host=${HOST_LABEL}"
+      if [ "${1:-}" = "--merge" ]; then
+        merge_refuse "error_class=infra host label mismatch: payload team '${_payload_team}' host team '${HOST_LABEL}' (${HOST_LABEL_FILE}). Refusing before any repo access."
+      fi
       emit "failed" "$BRANCH" 1 \
         "error_class=infra host label mismatch: payload team '${_payload_team}' host team '${HOST_LABEL}' (${HOST_LABEL_FILE}). Refusing before any repo access." \
         "Host label mismatch (infra, not a task defect)" 0
@@ -648,6 +675,9 @@ reexec_snapshot() {
   fi
   log "runner snapshot exec $dest/orchestrator-run.sh"
   export ORCH_RUNNER_REEXECED=1
+  # The copy is the same process image on the same tree. Do not fetch or
+  # checkout again; the first process already did both.
+  export ORCH_BOOTSTRAP_FETCH_DONE=1
   export ORCH_LOG_TAG ORCH_STARTED_AT
   exec bash "$dest/orchestrator-run.sh" "$@" < "$pf"
 }
@@ -875,6 +905,11 @@ TOKENS=0
 DR_STATUS=""
 DR_ERRORS=""
 DR_SUMMARY=""
+# A non-empty but unparseable driver file used to die here under set -u
+# (these two were only assigned inside the eval) and produced no JSON line.
+DR_ERROR_CLASS=""
+DR_COST_SOURCE=""
+DR_PARSE_OK=0
 DRIVER_RC=0
 export COMPLEXITY LOG RUN_LOG
 export ORCH_DRIVER="${ORCH_DRIVER:-$DRIVER}"
@@ -893,7 +928,15 @@ if [ ! -s "$DRIVER_RESULT_FILE" ]; then
 fi
 eval "$(python3 - "$DRIVER_RESULT_FILE" <<'PY'
 import json, shlex, sys
-d = json.load(open(sys.argv[1]))
+try:
+    with open(sys.argv[1]) as fh:
+        d = json.load(fh)
+except Exception:
+    print("DR_PARSE_OK=0")
+    sys.exit(0)
+if not isinstance(d, dict):
+    print("DR_PARSE_OK=0")
+    sys.exit(0)
 tok = d.get("tokens") or {}
 def n(v):
     try:
@@ -912,6 +955,7 @@ src = cost.get("source")
 if src is None:
     src = ""
 err_class = d.get("error_class")
+print("DR_PARSE_OK=1")
 print("DR_STATUS="+shlex.quote(str(d.get("status") or "failed")))
 print("DR_ERRORS="+shlex.quote(str(d.get("errors") or "")))
 print("DR_SUMMARY="+shlex.quote(str(d.get("summary") or "")))
@@ -919,7 +963,12 @@ print("DR_ERROR_CLASS="+shlex.quote("" if err_class is None else str(err_class))
 print("DR_COST_SOURCE="+shlex.quote(str(src)))
 print("TOKENS="+str(back))
 PY
-)"
+)" || true
+if [ "${DR_PARSE_OK:-0}" != "1" ]; then
+  emit "failed" "$BRANCH" "${DRIVER_RC:-1}" \
+    "error_class=infra driver ${DRIVER} produced a malformed driver-result" \
+    "Malformed driver result (infra, not a task defect)" 0
+fi
 # Drivers do not price a miss as success. source=unknown is a hard failure
 # and is not a Claude fallback.
 if [ "$DR_COST_SOURCE" = "unknown" ]; then
