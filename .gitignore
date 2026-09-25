@@ -10,6 +10,17 @@ state/.gh_token
 # Agent-generated state — lives on agent-state branch only
 state/handoffs/
 
+# Per-case dispatch copies. Live dispatch scp's these to an explicit path;
+# they are not source. Keep .gitkeep so the slot directories stay in git.
+agents/tasks/pending/*
+agents/tasks/active/*
+agents/tasks/done/*
+agents/tasks/failed/*
+!agents/tasks/pending/.gitkeep
+!agents/tasks/active/.gitkeep
+!agents/tasks/done/.gitkeep
+!agents/tasks/failed/.gitkeep
+
 # Nested grotap-platform clone (separate private repo — never track here)
 platform/
 
