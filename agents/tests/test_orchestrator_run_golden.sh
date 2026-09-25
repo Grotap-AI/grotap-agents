@@ -97,6 +97,12 @@ elif [[ "$mode" == "r429text0" ]]; then
   echo '429 Too Many Requests: rate limit exceeded'
 elif [[ "$mode" == "credit" ]]; then
   echo '{"is_error":true,"result":"Your credit balance is too low","usage":{"input_tokens":2,"output_tokens":1},"permission_denials":[]}'
+elif [[ "$mode" == "not429" ]]; then
+  # Looks like a 429 only if the whole JSON blob is scanned: duration_ms
+  # 14290, a session id containing 4290, and the words "rate limiter".
+  echo '{"is_error":true,"result":"rate limiter said no","duration_ms":14290,"session_id":"sess-4290abc","usage":{"input_tokens":3,"output_tokens":4},"permission_denials":[]}'
+elif [[ "$mode" == "real429" ]]; then
+  echo '{"is_error":true,"result":"HTTP 429 from the API","duration_ms":12,"session_id":"s","usage":{"input_tokens":1,"output_tokens":1},"permission_denials":[]}'
 else
   echo '{"is_error":false,"result":"stub run complete","usage":{"input_tokens":10,"output_tokens":5},"permission_denials":[]}'
 fi
@@ -376,6 +382,24 @@ assert_eq "X6 credit text kept" "$(j 'print("credit balance is too low" in d["er
 assert_eq "X6 credit error_class quota" "$(j 'print(d["driver_result"]["error_class"])')" "quota"
 assert_eq "X6 detectApiExhaustion still sees the credit text" "$(exhaustion_caught)" "True"
 assert_eq "X6 branch was not pushed" "$(branch_on_origin)" "absent"
+
+echo "X7: duration_ms 14290, a session id with 4290, and 'rate limiter' are not quota"
+build_home x-not429
+run CLAUDE_STUB_MODE=not429
+assert_eq "X7 not429 is a CLI error" "$(cli_fail)" "True"
+assert_eq "X7 not429 error_class task" "$(j 'print(d["driver_result"]["error_class"])')" "task"
+assert_eq "X7 not429 errors are the result text only" "$(j 'print(d["errors"])')" "Claude CLI error: rate limiter said no"
+assert_eq "X7 not429 does not paste duration_ms" "$(j 'print("14290" in d["errors"])')" "False"
+assert_eq "X7 not429 does not paste the session id" "$(j 'print("4290" in d["errors"])')" "False"
+assert_eq "X7 branch was not pushed" "$(branch_on_origin)" "absent"
+
+echo "X8: a 429 word in the result text is still quota"
+build_home x-real429
+run CLAUDE_STUB_MODE=real429
+assert_eq "X8 real429 error_class quota" "$(j 'print(d["driver_result"]["error_class"])')" "quota"
+assert_eq "X8 real429 text kept" "$(j 'print("429" in d["errors"])')" "True"
+assert_eq "X8 detectApiExhaustion still sees 429" "$(exhaustion_caught)" "True"
+assert_eq "X8 branch was not pushed" "$(branch_on_origin)" "absent"
 
 echo "H1: host label mismatch refuses before any repo access"
 build_home h1

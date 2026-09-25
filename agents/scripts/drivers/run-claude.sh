@@ -386,11 +386,20 @@ if [ "$CLAUDE_RC" -ne 0 ] || [ "${IS_ERROR:-true}" = "true" ]; then
   # A model failure is a task defect. 429 and credit exhaustion are quota:
   # the orchestrator's detectApiExhaustion reads the errors string, so the
   # raw text has to stay in that string even when the JSON parse dropped it.
+  # Scan the model text. A JSON blob's duration_ms (14290), a session id
+  # that contains 4290, or the words "rate limiter" are not a 429. When
+  # stdout is not JSON, RESULT_TEXT is empty and the CLI text is the
+  # stdout itself — scan that, and do not paste a JSON blob into errors.
   DR_ERROR_CLASS="task"
-  if printf '%s\n%s\n' "$RESULT_TEXT" "$CLAUDE_OUT" | grep -Eqi '429|rate[_ -]?limit|too many requests|credit balance is too low|insufficient credit|out of credits|credit exhaust|usage limits'; then
+  _quota_re='\b429\b|\brate[-_ ]?limit(ed)?\b|\btoo many requests\b|\bcredit balance is too low\b|\binsufficient credit\b|\bout of credits\b|\bcredit exhaust|\busage limits\b'
+  _quota_src="$RESULT_TEXT"
+  if ! printf '%s' "$CLAUDE_OUT" | python3 -c 'import sys,json; json.load(sys.stdin)' >/dev/null 2>&1; then
+    _quota_src="$CLAUDE_OUT"
+  fi
+  if printf '%s\n' "$_quota_src" | grep -Eqi "$_quota_re"; then
     DR_ERROR_CLASS="quota"
-    if ! printf '%s' "$DR_ERRORS" | grep -Eqi '429|rate[_ -]?limit|too many requests|credit balance is too low|insufficient credit|out of credits|credit exhaust|usage limits'; then
-      _snip="$(printf '%s' "$CLAUDE_OUT" | tr '\n\t\r' '   ' | head -c 400)"
+    if ! printf '%s' "$DR_ERRORS" | grep -Eqi "$_quota_re"; then
+      _snip="$(printf '%s' "$_quota_src" | tr '\n\t\r' '   ' | head -c 400)"
       DR_ERRORS="${DR_ERRORS} ${_snip}"
     fi
   fi

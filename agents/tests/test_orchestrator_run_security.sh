@@ -516,13 +516,14 @@ rm -rf "$DEST"
 
 echo "T18: a re-exec whose HEAD is not the pinned SHA fails closed"
 build_home t18; printf '%s\n' "$PIN_BASE" > "$PIN_FILE"
-TAG="sect18$$"
-DEST="/tmp/runner-${TAG}"
-rm -rf "$DEST"
-mkdir -p "$DEST"
+# A real mktemp directory: mode 0700, one component under /tmp, not a symlink.
+# The child is invoked as that exact path, which is what the parent passes.
+DEST="$(mktemp -d /tmp/runner-XXXXXXXX)"
+chmod 0700 "$DEST"
 cp -a "$RUNNER" "$DEST/orchestrator-run.sh"
 cp -a "$SCRIPT_DIR/../scripts/drivers" "$DEST/drivers"
 chmod +x "$DEST/orchestrator-run.sh" "$DEST/drivers/"*.sh
+TAG="sect18$$"
 HEAD_BEFORE="$(bhead)"
 mkdir -p "$TMP/state"; rm -f "$TMP/state/claude.argv"
 OUT=$(printf '%s' "$PAYLOAD" | \
@@ -531,6 +532,7 @@ OUT=$(printf '%s' "$PAYLOAD" | \
       DOPPLER_TOKEN=dp.st.fake GITHUB_TOKEN=ghp_fake \
       ORCH_RUNNER_REEXECED=1 ORCH_BOOTSTRAP_FETCH_DONE=1 \
       ORCH_BOOTSTRAP_PINNED_SHA=0000000000000000000000000000000000000000 \
+      ORCH_RUNNER_SNAPSHOT="$DEST" \
       ORCH_LOG_TAG="$TAG" \
       bash "$DEST/orchestrator-run.sh" 2>&1) || true
 RESULT_JSON=$(printf '%s\n' "$OUT" | python3 -c '
@@ -554,6 +556,102 @@ assert_eq "T18 HEAD was not moved" "$(bhead)" "$HEAD_BEFORE"
 assert_eq "T18 model never ran" "$([[ -f "$TMP/state/claude.argv" ]] && echo yes || echo no)" "no"
 assert_eq "T18 did not skip the pin" "$(logged 'skipping bootstrap fetch')" "0"
 rm -rf "$DEST"
+
+echo "T19: a symlinked snapshot directory does not skip the pin"
+build_home t19; printf '%s\n' "$PIN_BASE" > "$PIN_FILE"
+LINK="/tmp/runner-evil$$"
+rm -f "$LINK"
+ln -s "$(dirname "$RUNNER")" "$LINK"
+mkdir -p "$TMP/state"; rm -f "$TMP/state/claude.argv"
+OUT=$(printf '%s' "$PAYLOAD" | \
+  env PATH="$STUBS:$PATH" HOME="$FAKEHOME" USERPROFILE="$FAKEHOME" STATE_DIR="$TMP/state" \
+      ANTHROPIC_API_KEY=test-key NODE_SECRET=node-secret-value \
+      DOPPLER_TOKEN=dp.st.fake GITHUB_TOKEN=ghp_fake \
+      ORCH_RUNNER_REEXECED=1 ORCH_BOOTSTRAP_FETCH_DONE=1 \
+      ORCH_BOOTSTRAP_PINNED_SHA="$AGENTS_TIP" \
+      ORCH_RUNNER_SNAPSHOT="$LINK" \
+      ORCH_LOG_TAG="evil$$" \
+      bash "$LINK/orchestrator-run.sh" 2>&1) || true
+RESULT_JSON=$(printf '%s\n' "$OUT" | python3 -c '
+import sys, json
+last = ""
+for line in sys.stdin.read().splitlines():
+    line = line.strip()
+    if line.startswith("{") and line.endswith("}"):
+        try:
+            json.loads(line); last = line
+        except ValueError:
+            pass
+print(last)')
+assert_eq "T19 warned" \
+  "$(atleast1 "$(logged 'ignoring preset ORCH_BOOTSTRAP_FETCH_DONE')")" "yes"
+assert_eq "T19 HEAD is the pinned commit" "$(bhead)" "$PIN_BASE"
+assert_eq "T19 tip content is NOT on disk" \
+  "$([[ -f "$FAKEHOME/grotap-agents/agents/two.txt" ]] && echo present || echo absent)" "absent"
+rm -f "$LINK"
+
+echo "T20: a traversal tag does not skip the pin"
+build_home t20; printf '%s\n' "$PIN_BASE" > "$PIN_FILE"
+mkdir -p /tmp/runner-x
+RUNNER_DIR="$(cd "$(dirname "$RUNNER")" && pwd)"
+REL="$(realpath --relative-to=/tmp/runner-x "$RUNNER_DIR")"
+TAG="x/${REL}"
+mkdir -p "$TMP/state"; rm -f "$TMP/state/claude.argv"
+OUT=$(printf '%s' "$PAYLOAD" | \
+  env PATH="$STUBS:$PATH" HOME="$FAKEHOME" USERPROFILE="$FAKEHOME" STATE_DIR="$TMP/state" \
+      ANTHROPIC_API_KEY=test-key NODE_SECRET=node-secret-value \
+      DOPPLER_TOKEN=dp.st.fake GITHUB_TOKEN=ghp_fake \
+      ORCH_RUNNER_REEXECED=1 ORCH_BOOTSTRAP_FETCH_DONE=1 \
+      ORCH_BOOTSTRAP_PINNED_SHA="$AGENTS_TIP" \
+      ORCH_LOG_TAG="$TAG" \
+      ORCH_RUNNER_SNAPSHOT="/tmp/runner-${TAG}" \
+      bash "$RUNNER" 2>&1) || true
+RESULT_JSON=$(printf '%s\n' "$OUT" | python3 -c '
+import sys, json
+last = ""
+for line in sys.stdin.read().splitlines():
+    line = line.strip()
+    if line.startswith("{") and line.endswith("}"):
+        try:
+            json.loads(line); last = line
+        except ValueError:
+            pass
+print(last)')
+assert_eq "T20 warned" \
+  "$(atleast1 "$(logged 'ignoring preset ORCH_BOOTSTRAP_FETCH_DONE')")" "yes"
+assert_eq "T20 HEAD is the pinned commit" "$(bhead)" "$PIN_BASE"
+assert_eq "T20 tip content is NOT on disk" \
+  "$([[ -f "$FAKEHOME/grotap-agents/agents/two.txt" ]] && echo present || echo absent)" "absent"
+assert_eq "T20 tag was regenerated" \
+  "$(printf '%s' "$(rfield log_tag)" | grep -cE '^[A-Za-z0-9]{1,32}$')" "1"
+assert_eq "T20 regenerated tag is not the traversal" \
+  "$([[ "$(rfield log_tag)" == "$TAG" ]] && echo same || echo different)" "different"
+rmdir /tmp/runner-x 2>/dev/null || true
+
+echo "T21: the exit trap does not follow a traversal tag"
+build_home t21; printf '%s\n' "$PIN_BASE" > "$PIN_FILE"
+VICTIM="$(mktemp -d /tmp/victim-XXXXXXXX)"
+echo keep > "$VICTIM/keep"
+# Old trap: rm -rf "/tmp/runner-${ORCH_LOG_TAG}" with this tag deletes $VICTIM.
+TAG="y/../$(basename "$VICTIM")"
+run ORCH_RUNNER_REEXECED=1 ORCH_BOOTSTRAP_FETCH_DONE=1 \
+    ORCH_BOOTSTRAP_PINNED_SHA="$AGENTS_TIP" \
+    ORCH_LOG_TAG="$TAG" \
+    ORCH_RUNNER_SNAPSHOT="$VICTIM"
+assert_eq "T21 victim directory survives" "$([[ -d "$VICTIM" ]] && echo yes || echo no)" "yes"
+assert_eq "T21 victim file survives" "$([[ -f "$VICTIM/keep" ]] && echo yes || echo no)" "yes"
+assert_eq "T21 HEAD is the pinned commit" "$(bhead)" "$PIN_BASE"
+rm -rf "$VICTIM"
+
+echo "T22: an invalid ORCH_LOG_TAG is regenerated from urandom"
+build_home t22; printf '%s\n' "$PIN_BASE" > "$PIN_FILE"
+run ORCH_LOG_TAG='not valid!'
+assert_eq "T22 warned" \
+  "$(atleast1 "$(logged 'ORCH_LOG_TAG rejected; regenerated')")" "yes"
+assert_eq "T22 log_tag matches the token pattern" \
+  "$(printf '%s' "$(rfield log_tag)" | grep -cE '^[A-Za-z0-9]{1,32}$')" "1"
+assert_eq "T22 rejected value was not kept" \
+  "$([[ "$(rfield log_tag)" == 'not valid!' ]] && echo kept || echo replaced)" "replaced"
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

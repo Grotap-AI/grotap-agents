@@ -422,30 +422,30 @@ ensure_repo() {
   # orchestrator's run_env) must not skip fetch, verify, or checkout.
   # Honour the skip only for the re-exec'd copy, and only after that copy
   # proves it is still on the commit the parent pinned.
-  if [ "${ORCH_BOOTSTRAP_FETCH_DONE:-}" = "1" ]; then
-    # Resolve symlinks. A $0 that merely looks like the snapshot, or a
-    # snapshot path that points back at the repo, is not the re-exec copy.
-    local snap_ok=0
-    local self snap
-    self="$(readlink -f -- "$0" 2>/dev/null || printf '%s' "$0")"
-    snap="$(readlink -f -- "/tmp/runner-${ORCH_LOG_TAG}" 2>/dev/null || printf '%s' "/tmp/runner-${ORCH_LOG_TAG}")"
-    case "$self" in
-      "$snap"|"$snap"/*) snap_ok=1 ;;
-    esac
-    if [ "${ORCH_RUNNER_REEXECED:-}" = "1" ] && [ "$snap_ok" = "1" ]; then
-      local head
-      head="$(git -C "$HOME/grotap-agents" rev-parse HEAD 2>/dev/null || true)"
-      if [ -z "${ORCH_BOOTSTRAP_PINNED_SHA:-}" ] || [ "$head" != "$ORCH_BOOTSTRAP_PINNED_SHA" ]; then
-        BOOTSTRAP_PIN_FAIL="bootstrap pin: re-exec HEAD '${head:-missing}' does not equal pinned '${ORCH_BOOTSTRAP_PINNED_SHA:-unset}'"
-        log "ERROR: $BOOTSTRAP_PIN_FAIL"
-        return 1
-      fi
-      log "runner re-exec: skipping bootstrap fetch and checkout (HEAD $head)"
-      cd "$PLATFORM_DIR" || return 1
-      return 0
+  # The snapshot path is the one the parent created with mktemp and passed
+  # in ORCH_RUNNER_SNAPSHOT. It is not derived from ORCH_LOG_TAG, and it is
+  # not canonicalized: readlink -f is how a symlinked directory or a '..'
+  # tag used to resolve back at this repo and skip the pin.
+  if _snapshot_trusted "${ORCH_RUNNER_SNAPSHOT:-}" \
+      && [ "${ORCH_RUNNER_REEXECED:-}" = "1" ] \
+      && [ "${ORCH_BOOTSTRAP_FETCH_DONE:-}" = "1" ]; then
+    # Validated. This process may remove it on the way out.
+    _ORCH_OWNED_SNAP="$ORCH_RUNNER_SNAPSHOT"
+    local head
+    head="$(git -C "$HOME/grotap-agents" rev-parse HEAD 2>/dev/null || true)"
+    if [ -z "${ORCH_BOOTSTRAP_PINNED_SHA:-}" ] || [ "$head" != "$ORCH_BOOTSTRAP_PINNED_SHA" ]; then
+      BOOTSTRAP_PIN_FAIL="bootstrap pin: re-exec HEAD '${head:-missing}' does not equal pinned '${ORCH_BOOTSTRAP_PINNED_SHA:-unset}'"
+      log "ERROR: $BOOTSTRAP_PIN_FAIL"
+      return 1
     fi
-    log "WARN: ignoring preset ORCH_BOOTSTRAP_FETCH_DONE (not a re-exec under ${snap})"
+    log "runner re-exec: skipping bootstrap fetch and checkout (HEAD $head)"
+    cd "$PLATFORM_DIR" || return 1
+    return 0
+  fi
+  if [ "${ORCH_BOOTSTRAP_FETCH_DONE:-}" = "1" ] || [ "${ORCH_RUNNER_REEXECED:-}" = "1" ]; then
+    log "WARN: ignoring preset ORCH_BOOTSTRAP_FETCH_DONE (snapshot is not a private mktemp dir)"
     unset ORCH_BOOTSTRAP_FETCH_DONE
+    unset ORCH_RUNNER_REEXECED
   fi
   ensure_git_auth
   # Self-sync the bootstrap repo: the orchestrator SSH path runs this file straight from
@@ -512,21 +512,81 @@ _open_run_log() {
   chmod 600 "$RUN_LOG" 2>/dev/null || true
   export RUN_LOG
 }
+# Assigned only after this process creates a directory with mktemp, or after
+# the re-exec child has validated the path the parent passed. Never read from
+# the environment: ~/.env is sourced with set -a, so an exported value would
+# be an attacker-chosen rm -rf target. Unset here, after that source.
+unset _ORCH_OWNED_SNAP
+
+# A directory is safe to remove when it is a real /tmp directory (not a
+# symlink), owned by this user, mode 0700, with exactly one path component
+# and no '..'. The trap uses this so it cannot follow a tag or an env path.
+_snap_removable() {
+  local snap="$1" base owner mode
+  [ -n "$snap" ] || return 1
+  case "$snap" in
+    *..*) return 1 ;;
+    /tmp/*/*) return 1 ;;
+    /tmp/*) ;;
+    *) return 1 ;;
+  esac
+  base="${snap#/tmp/}"
+  [ -n "$base" ] || return 1
+  case "$base" in
+    */*) return 1 ;;
+  esac
+  # test -d follows symlinks. Reject a link before that check.
+  [ ! -L "$snap" ] || return 1
+  [ -d "$snap" ] || return 1
+  owner="$(stat -c '%u' -- "$snap" 2>/dev/null || true)"
+  [ "$owner" = "$(id -u)" ] || return 1
+  mode="$(stat -c '%a' -- "$snap" 2>/dev/null || true)"
+  [ "$mode" = "700" ] || return 1
+  return 0
+}
+
+# The re-exec copy. $0 must be that directory's runner, exactly — a
+# canonicalized path is how a symlink or a '..' tag used to look legitimate.
+_snapshot_trusted() {
+  local snap="$1"
+  _snap_removable "$snap" || return 1
+  [ "$0" = "${snap}/orchestrator-run.sh" ] || return 1
+  return 0
+}
+
 _orch_on_exit() {
-  # The snapshot is a copy. Drop it on the way out; the per-run log stays.
-  if [ "${ORCH_RUNNER_REEXECED:-}" = "1" ] && [ -n "${ORCH_LOG_TAG:-}" ]; then
-    rm -rf "/tmp/runner-${ORCH_LOG_TAG}" 2>/dev/null || true
-    rm -f "/tmp/orch-payload-${ORCH_LOG_TAG}" \
-          "/tmp/orch-prompt-${ORCH_LOG_TAG}.txt" \
-          "/tmp/orch-driver-${ORCH_LOG_TAG}.json" 2>/dev/null || true
+  # The per-run log stays. Remove only the snapshot path this process
+  # recorded after mktemp or after the checks above.
+  if [ -n "${_ORCH_OWNED_SNAP:-}" ] && _snap_removable "$_ORCH_OWNED_SNAP"; then
+    rm -rf -- "$_ORCH_OWNED_SNAP"
   fi
 }
 trap _orch_on_exit EXIT
 
-if [ -z "${ORCH_LOG_TAG:-}" ]; then
-  ORCH_LOG_TAG="$(od -An -N4 -tx1 /dev/urandom 2>/dev/null | tr -d ' \n' || true)"
+# Log tags are path components (per-run log, payload file). Accept only a
+# short alphanumeric token. Anything else — slashes, '..', spaces — is
+# replaced. The generator is urandom, not date+$$.
+_fresh_log_tag() {
+  local t
+  t="$(od -An -N8 -tx8 /dev/urandom 2>/dev/null | tr -d ' \n' || true)"
+  if [[ ! "$t" =~ ^[A-Za-z0-9]{1,32}$ ]]; then
+    t="$(python3 -c 'import os; print(os.urandom(8).hex())' 2>/dev/null || true)"
+  fi
+  printf '%s' "$t"
+}
+if [[ ! "${ORCH_LOG_TAG:-}" =~ ^[A-Za-z0-9]{1,32}$ ]]; then
+  if [ -n "${ORCH_LOG_TAG:-}" ]; then
+    _ORCH_LOG_TAG_REJECTED=1
+  fi
+  ORCH_LOG_TAG="$(_fresh_log_tag)"
+  if [[ ! "${ORCH_LOG_TAG:-}" =~ ^[A-Za-z0-9]{1,32}$ ]]; then
+    echo "FATAL: could not generate ORCH_LOG_TAG" >&2
+    exit 1
+  fi
+  if [ "${_ORCH_LOG_TAG_REJECTED:-}" = "1" ]; then
+    log "WARN: ORCH_LOG_TAG rejected; regenerated"
+  fi
 fi
-[ -n "${ORCH_LOG_TAG:-}" ] || ORCH_LOG_TAG="$(date -u +%H%M%S)$$"
 export ORCH_LOG_TAG
 ORCH_STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 export ORCH_STARTED_AT
@@ -671,11 +731,21 @@ reexec_snapshot() {
     log "runner snapshot active: $0"
     return 0
   fi
-  local dest="/tmp/runner-${ORCH_LOG_TAG}"
-  if ! mkdir -p "$dest"; then
-    log "WARN: runner snapshot mkdir failed ($dest) — continuing in place"
+  # Unpredictable name, mode 0700. The child is told this exact path; it
+  # does not rebuild it from ORCH_LOG_TAG.
+  local dest
+  dest="$(mktemp -d /tmp/runner-XXXXXXXX 2>/dev/null)" || {
+    log "WARN: runner snapshot mktemp failed — continuing in place"
+    return 0
+  }
+  if ! chmod 0700 "$dest"; then
+    log "WARN: runner snapshot chmod failed — continuing in place"
+    rm -rf -- "$dest"
     return 0
   fi
+  # Recorded only after mktemp. The exit trap removes this path. It is a
+  # shell variable, not an export.
+  _ORCH_OWNED_SNAP="$dest"
   if ! cp -a "$HERE/orchestrator-run.sh" "$dest/orchestrator-run.sh"; then
     log "WARN: runner snapshot copy failed — continuing in place"
     return 0
@@ -695,6 +765,7 @@ reexec_snapshot() {
     return 0
   fi
   log "runner snapshot exec $dest/orchestrator-run.sh"
+  export ORCH_RUNNER_SNAPSHOT="$dest"
   export ORCH_RUNNER_REEXECED=1
   # The copy is the same process image on the same tree. Do not fetch or
   # checkout again; the first process already did both. Pass the blessed
