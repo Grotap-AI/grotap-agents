@@ -38,6 +38,32 @@
 # calls it directly; the legacy self-dispatch loop is untouched.
 set -uo pipefail
 
+# Identity and re-exec state, captured before dotfiles. ~/.env is sourced with
+# set -a, so a line there can assign BASH_ARGV0 (bash then rewrites $0) or
+# replace ORCH_RUNNER_SNAPSHOT. The captured values are readonly, so the
+# source cannot overwrite them, and they are copied back afterwards.
+# A process that arrived already re-exec'd never snapshots again.
+_ORCH_ARGV0="$0"
+if [ -n "${BASH_ARGV0+x}" ]; then
+  _ORCH_BASH_ARGV0_SET=1
+  _ORCH_BASH_ARGV0_SAVED="$BASH_ARGV0"
+else
+  _ORCH_BASH_ARGV0_SET=0
+  _ORCH_BASH_ARGV0_SAVED=""
+fi
+_ORCH_HERE="$(cd "$(dirname "$_ORCH_ARGV0")" && pwd)"
+_ORCH_STARTED_REEXECED="${ORCH_RUNNER_REEXECED:-}"
+_ORCH_STARTED_SNAPSHOT="${ORCH_RUNNER_SNAPSHOT:-}"
+_ORCH_STARTED_FETCH_DONE="${ORCH_BOOTSTRAP_FETCH_DONE:-}"
+_ORCH_STARTED_PINNED_SHA="${ORCH_BOOTSTRAP_PINNED_SHA:-}"
+_ORCH_STARTED_PAYLOAD="${ORCH_PAYLOAD_FILE:-}"
+_ORCH_STARTED_DEPTH="${ORCH_RUNNER_DEPTH:-0}"
+[[ "$_ORCH_STARTED_DEPTH" =~ ^[0-9]+$ ]] || _ORCH_STARTED_DEPTH=0
+readonly _ORCH_ARGV0 _ORCH_BASH_ARGV0_SET _ORCH_BASH_ARGV0_SAVED _ORCH_HERE \
+  _ORCH_STARTED_REEXECED _ORCH_STARTED_SNAPSHOT _ORCH_STARTED_FETCH_DONE \
+  _ORCH_STARTED_PINNED_SHA _ORCH_STARTED_PAYLOAD _ORCH_STARTED_DEPTH
+HERE="$_ORCH_HERE"
+
 # This script runs non-interactively over SSH, so login-shell env (where the
 # fleet defines ANTHROPIC_API_KEY and other creds) is NOT loaded. Source it
 # explicitly or Claude CLI fails with "Not logged in". Guard -u while sourcing.
@@ -48,12 +74,18 @@ for envf in "$HOME/.env" "$HOME/.profile" "$HOME/.bashrc"; do
 done
 set -u
 
+if [ "$_ORCH_BASH_ARGV0_SET" = "1" ]; then
+  BASH_ARGV0="$_ORCH_BASH_ARGV0_SAVED"
+else
+  unset BASH_ARGV0
+fi
+HERE="$_ORCH_HERE"
+
 PLATFORM_DIR="$HOME/grotap-platform"
 WORKTREE_ROOT="$HOME/worktrees"
 LOG="$HOME/logs/orchestrator-run.log"
 export LOG
 mkdir -p "$HOME/logs" "$WORKTREE_ROOT"
-HERE="$(cd "$(dirname "$0")" && pwd)"
 HOST_LABEL_FILE="${ORCH_HOST_LABEL_FILE:-/etc/fleet-agent/config.json}"
 
 # Shared fleet log AND the per-run log. RUN_LOG is empty until the payload
@@ -442,10 +474,19 @@ ensure_repo() {
     cd "$PLATFORM_DIR" || return 1
     return 0
   fi
-  if [ "${ORCH_BOOTSTRAP_FETCH_DONE:-}" = "1" ] || [ "${ORCH_RUNNER_REEXECED:-}" = "1" ]; then
+  if [ "${ORCH_BOOTSTRAP_FETCH_DONE:-}" = "1" ] || [ "${ORCH_RUNNER_REEXECED:-}" = "1" ] \
+      || [ "$_ORCH_STARTED_REEXECED" = "1" ] || [ "${_ORCH_STARTED_DEPTH:-0}" -ge 1 ]; then
     log "WARN: ignoring preset ORCH_BOOTSTRAP_FETCH_DONE (snapshot is not a private mktemp dir)"
     unset ORCH_BOOTSTRAP_FETCH_DONE
     unset ORCH_RUNNER_REEXECED
+    # This process already is the re-exec, or it was started at depth >= 1.
+    # Do not snapshot again. Remember the parent's directory so the exit
+    # trap can remove it, and only when it matches the mktemp shape.
+    if [ "$_ORCH_STARTED_REEXECED" = "1" ] || [ "${_ORCH_STARTED_DEPTH:-0}" -ge 1 ]; then
+      if _parent_snap_safe "${_ORCH_STARTED_SNAPSHOT:-}"; then
+        _ORCH_OWNED_SNAP="$_ORCH_STARTED_SNAPSHOT"
+      fi
+    fi
   fi
   ensure_git_auth
   # Self-sync the bootstrap repo: the orchestrator SSH path runs this file straight from
@@ -515,53 +556,172 @@ _open_run_log() {
 # Assigned only after this process creates a directory with mktemp, or after
 # the re-exec child has validated the path the parent passed. Never read from
 # the environment: ~/.env is sourced with set -a, so an exported value would
-# be an attacker-chosen rm -rf target. Unset here, after that source.
+# be an attacker-chosen rm -rf target. Cleared again below, after that source.
 unset _ORCH_OWNED_SNAP
+_ORCH_OWNED_TMPFILES=""
 
-# A directory is safe to remove when it is a real /tmp directory (not a
-# symlink), owned by this user, mode 0700, with exactly one path component
-# and no '..'. The trap uses this so it cannot follow a tag or an env path.
-_snap_removable() {
-  local snap="$1" base owner mode
+# mktemp's eight-character suffix. Exactly this shape: no '..', no extra
+# component, nothing built from ORCH_LOG_TAG.
+_is_runner_snap_path() {
+  case "$1" in
+    /tmp/runner-[A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9])
+      return 0 ;;
+  esac
+  return 1
+}
+_is_orch_tmp_path() {
+  case "$1" in
+    /tmp/orch-payload-[A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9]|\
+    /tmp/orch-prompt-[A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9]|\
+    /tmp/orch-driver-[A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9])
+      return 0 ;;
+  esac
+  return 1
+}
+
+# Mode 0700 without requiring GNU stat -c. A failure here is "not proven",
+# which the caller treats as untrusted. Ownership uses bash -O.
+_mode_is_700() {
+  local mode=""
+  mode="$(stat -c '%a' -- "$1" 2>/dev/null || true)"
+  if [[ ! "$mode" =~ ^0*[0-7]+$ ]]; then
+    mode="$(stat -f '%OLp' -- "$1" 2>/dev/null || true)"
+  fi
+  if [[ ! "$mode" =~ ^0*[0-7]+$ ]]; then
+    mode="$(python3 -c 'import os, sys
+try:
+    print(format(os.stat(sys.argv[1]).st_mode & 0o777, "o"))
+except Exception:
+    pass' "$1" 2>/dev/null || true)"
+  fi
+  [[ "$mode" =~ ^0*700$ ]]
+}
+
+# Safe to rm -rf: the mktemp runner pattern, a real directory, not a symlink,
+# owned by this user. Mode is not required here; a failed trust check still
+# has to drop the parent's directory, and only this shape qualifies.
+_parent_snap_safe() {
+  local snap="$1"
   [ -n "$snap" ] || return 1
-  case "$snap" in
-    *..*) return 1 ;;
-    /tmp/*/*) return 1 ;;
-    /tmp/*) ;;
-    *) return 1 ;;
-  esac
-  base="${snap#/tmp/}"
-  [ -n "$base" ] || return 1
-  case "$base" in
-    */*) return 1 ;;
-  esac
-  # test -d follows symlinks. Reject a link before that check.
+  _is_runner_snap_path "$snap" || return 1
   [ ! -L "$snap" ] || return 1
   [ -d "$snap" ] || return 1
-  owner="$(stat -c '%u' -- "$snap" 2>/dev/null || true)"
-  [ "$owner" = "$(id -u)" ] || return 1
-  mode="$(stat -c '%a' -- "$snap" 2>/dev/null || true)"
-  [ "$mode" = "700" ] || return 1
+  [ -O "$snap" ] || return 1
   return 0
 }
 
-# The re-exec copy. $0 must be that directory's runner, exactly — a
-# canonicalized path is how a symlink or a '..' tag used to look legitimate.
+# Trusted re-exec copy. Mode 0700, and the argv0 captured before dotfiles
+# is exactly that directory's runner. A rewritten $0 does not count.
+_snap_removable() {
+  local snap="$1"
+  _parent_snap_safe "$snap" || return 1
+  _mode_is_700 "$snap" || return 1
+  return 0
+}
 _snapshot_trusted() {
   local snap="$1"
   _snap_removable "$snap" || return 1
-  [ "$0" = "${snap}/orchestrator-run.sh" ] || return 1
+  [ "$_ORCH_ARGV0" = "${snap}/orchestrator-run.sh" ] || return 1
   return 0
 }
 
+_orch_tmp_safe() {
+  local f="$1"
+  [ -n "$f" ] || return 1
+  _is_orch_tmp_path "$f" || return 1
+  [ ! -L "$f" ] || return 1
+  [ -f "$f" ] || return 1
+  [ -O "$f" ] || return 1
+  return 0
+}
+_orch_own_tmp() {
+  _orch_tmp_safe "$1" || return 0
+  _ORCH_OWNED_TMPFILES="${_ORCH_OWNED_TMPFILES}"$'\n'"$1"
+}
+_orch_mktemp_file() {
+  local prefix="$1" f old
+  case "$prefix" in
+    orch-payload|orch-prompt|orch-driver) ;;
+    *) return 1 ;;
+  esac
+  old="$(umask)"
+  umask 077
+  f="$(mktemp "/tmp/${prefix}-XXXXXXXX" 2>/dev/null)" || { umask "$old"; return 1; }
+  umask "$old"
+  chmod 600 "$f" 2>/dev/null || true
+  printf '%s' "$f"
+}
+
 _orch_on_exit() {
-  # The per-run log stays. Remove only the snapshot path this process
-  # recorded after mktemp or after the checks above.
-  if [ -n "${_ORCH_OWNED_SNAP:-}" ] && _snap_removable "$_ORCH_OWNED_SNAP"; then
+  # The per-run log stays. Remove only paths this process recorded after
+  # mktemp or after the checks above. Never a path built from the environment.
+  local f
+  if [ -n "${_ORCH_OWNED_SNAP:-}" ] && _parent_snap_safe "$_ORCH_OWNED_SNAP"; then
     rm -rf -- "$_ORCH_OWNED_SNAP"
+  fi
+  if [ -n "${_ORCH_OWNED_TMPFILES:-}" ]; then
+    while IFS= read -r f; do
+      [ -n "$f" ] || continue
+      if _orch_tmp_safe "$f"; then
+        rm -f -- "$f"
+      fi
+    done <<EOF
+$_ORCH_OWNED_TMPFILES
+EOF
   fi
 }
 trap _orch_on_exit EXIT
+
+# Put the re-exec variables back. Dotfiles have already been sourced; the
+# readonly copies above are what was true at invocation.
+_restore_reexec_state() {
+  HERE="$_ORCH_HERE"
+  unset _ORCH_OWNED_SNAP
+  _ORCH_OWNED_TMPFILES=""
+  if [ "${ORCH_RUNNER_SNAPSHOT:-}" != "$_ORCH_STARTED_SNAPSHOT" ]; then
+    log "WARN: dotfile overrode ORCH_RUNNER_SNAPSHOT; restored the invocation path"
+  fi
+  if [ "$_ORCH_STARTED_REEXECED" = "1" ]; then
+    ORCH_RUNNER_REEXECED=1
+    export ORCH_RUNNER_REEXECED
+  else
+    if [ "${ORCH_RUNNER_REEXECED:-}" = "1" ]; then
+      log "WARN: ignoring preset ORCH_RUNNER_REEXECED (set after startup)"
+    fi
+    unset ORCH_RUNNER_REEXECED
+  fi
+  if [ -n "$_ORCH_STARTED_SNAPSHOT" ]; then
+    ORCH_RUNNER_SNAPSHOT="$_ORCH_STARTED_SNAPSHOT"
+    export ORCH_RUNNER_SNAPSHOT
+  else
+    unset ORCH_RUNNER_SNAPSHOT
+  fi
+  if [ "$_ORCH_STARTED_FETCH_DONE" = "1" ]; then
+    ORCH_BOOTSTRAP_FETCH_DONE=1
+    export ORCH_BOOTSTRAP_FETCH_DONE
+  else
+    if [ "${ORCH_BOOTSTRAP_FETCH_DONE:-}" = "1" ]; then
+      log "WARN: ignoring preset ORCH_BOOTSTRAP_FETCH_DONE (set after startup)"
+    fi
+    unset ORCH_BOOTSTRAP_FETCH_DONE
+  fi
+  if [ -n "$_ORCH_STARTED_PINNED_SHA" ]; then
+    ORCH_BOOTSTRAP_PINNED_SHA="$_ORCH_STARTED_PINNED_SHA"
+    export ORCH_BOOTSTRAP_PINNED_SHA
+  else
+    unset ORCH_BOOTSTRAP_PINNED_SHA
+  fi
+  if [ -n "$_ORCH_STARTED_PAYLOAD" ]; then
+    ORCH_PAYLOAD_FILE="$_ORCH_STARTED_PAYLOAD"
+    export ORCH_PAYLOAD_FILE
+    _orch_own_tmp "$_ORCH_STARTED_PAYLOAD"
+  else
+    unset ORCH_PAYLOAD_FILE
+  fi
+  ORCH_RUNNER_DEPTH="$_ORCH_STARTED_DEPTH"
+  export ORCH_RUNNER_DEPTH
+}
+_restore_reexec_state
 
 # Log tags are path components (per-run log, payload file). Accept only a
 # short alphanumeric token. Anything else — slashes, '..', spaces — is
@@ -727,8 +887,17 @@ fi
 # swap the wrapper or the driver under this run. The copy is what finishes
 # the run. ORCH_RUNNER_REEXECED stops the second process from copying again.
 reexec_snapshot() {
-  if [ "${ORCH_RUNNER_REEXECED:-}" = "1" ]; then
-    log "runner snapshot active: $0"
+  # At most one re-exec. A process that started as the child — even when its
+  # snapshot check failed and it is bootstrapping in place — must not mktemp
+  # and exec again. Dotfiles cannot clear these: they were captured readonly
+  # before the source. Depth >= 1 is the same guard for a caller that passed
+  # the counter without the re-exec flag.
+  if [ "$_ORCH_STARTED_REEXECED" = "1" ] || [ "${_ORCH_STARTED_DEPTH:-0}" -ge 1 ]; then
+    if _snapshot_trusted "${_ORCH_STARTED_SNAPSHOT:-}"; then
+      log "runner snapshot active: $_ORCH_ARGV0"
+    else
+      log "runner re-exec depth ${_ORCH_STARTED_DEPTH:-0}; not snapshotting again"
+    fi
     return 0
   fi
   # Unpredictable name, mode 0700. The child is told this exact path; it
@@ -759,14 +928,22 @@ reexec_snapshot() {
   fi
   chmod +x "$dest/orchestrator-run.sh" 2>/dev/null || true
   chmod +x "$dest/drivers/"*.sh 2>/dev/null || true
-  local pf="/tmp/orch-payload-${ORCH_LOG_TAG}"
+  local pf
+  pf="$(_orch_mktemp_file orch-payload)" || {
+    log "WARN: runner snapshot payload mktemp failed — continuing in place"
+    return 0
+  }
+  _orch_own_tmp "$pf"
   if ! printf '%s' "$PAYLOAD" > "$pf"; then
     log "WARN: runner snapshot payload copy failed — continuing in place"
     return 0
   fi
+  chmod 600 "$pf" 2>/dev/null || true
   log "runner snapshot exec $dest/orchestrator-run.sh"
+  export ORCH_PAYLOAD_FILE="$pf"
   export ORCH_RUNNER_SNAPSHOT="$dest"
   export ORCH_RUNNER_REEXECED=1
+  export ORCH_RUNNER_DEPTH=1
   # The copy is the same process image on the same tree. Do not fetch or
   # checkout again; the first process already did both. Pass the blessed
   # SHA so the child can prove HEAD did not move. Detach mode sets
@@ -1013,11 +1190,22 @@ DRIVER_RC=0
 export COMPLEXITY LOG RUN_LOG
 export ORCH_DRIVER="${ORCH_DRIVER:-$DRIVER}"
 export ORCH_TEAM="${ORCH_TEAM:-${TEAM:-team1}}"
-PROMPT_FILE="/tmp/orch-prompt-${ORCH_LOG_TAG}.txt"
-DRIVER_RESULT_FILE="/tmp/orch-driver-${ORCH_LOG_TAG}.json"
+PROMPT_FILE="$(_orch_mktemp_file orch-prompt)" || {
+  emit "failed" "$BRANCH" 1 \
+    "error_class=infra could not create the prompt file" \
+    "Prompt file (infra, not a task defect)" 0
+}
+DRIVER_RESULT_FILE="$(_orch_mktemp_file orch-driver)" || {
+  emit "failed" "$BRANCH" 1 \
+    "error_class=infra could not create the driver-result file" \
+    "Driver-result file (infra, not a task defect)" 0
+}
+_orch_own_tmp "$PROMPT_FILE"
+_orch_own_tmp "$DRIVER_RESULT_FILE"
 export DRIVER_RESULT_FILE
 printf '%s' "$PROMPT" > "$PROMPT_FILE"
 chmod 600 "$PROMPT_FILE" 2>/dev/null || true
+chmod 600 "$DRIVER_RESULT_FILE" 2>/dev/null || true
 log "Dispatching driver=$DRIVER"
 "$HERE/drivers/run-${DRIVER}.sh" "$WT" "$PROMPT_FILE" "$DRIVER_RESULT_FILE" 2>>"$RUN_LOG" || DRIVER_RC=$?
 if [ ! -s "$DRIVER_RESULT_FILE" ]; then

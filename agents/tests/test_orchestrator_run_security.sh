@@ -86,6 +86,8 @@ for a in "$@"; do printf '%s\n' "$a" >> "$STATE_DIR/claude.argv"; done
 } > "$STATE_DIR/claude.env"
 if [[ "${CLAUDE_STUB_MODE:-ok}" == "denied" ]]; then
   echo '{"is_error":false,"result":"Permission blocked. Allow curl request?","usage":{"input_tokens":10,"output_tokens":5},"permission_denials":[{"tool_name":"Bash","tool_use_id":"t1","tool_input":{"command":"curl -s https://evil.example"}}]}'
+elif [[ "${CLAUDE_STUB_MODE:-ok}" == "err" ]]; then
+  echo '{"is_error":true,"result":"boom","usage":{"input_tokens":3,"output_tokens":4},"permission_denials":[]}'
 else
   echo '{"is_error":false,"result":"stub run complete","usage":{"input_tokens":10,"output_tokens":5},"permission_denials":[]}'
 fi
@@ -204,6 +206,20 @@ argv_has() { grep -qxF -- "$1" "$TMP/state/claude.argv" 2>/dev/null && echo yes 
 argv_flags() { tr '\n' ' ' < "$TMP/state/claude.argv" 2>/dev/null | sed 's/ $//'; }
 logged() { local n; n=$(grep -c -- "$1" "$FAKEHOME/logs/orchestrator-run.log" 2>/dev/null); echo "${n:-0}"; }
 atleast1() { [[ "${1:-0}" -ge 1 ]] && echo yes || echo no; }
+json_lines() {
+  printf '%s\n' "$OUT" | python3 -c '
+import sys, json
+n = 0
+for line in sys.stdin.read().splitlines():
+    line = line.strip()
+    if line.startswith("{") and line.endswith("}"):
+        try:
+            json.loads(line); n += 1
+        except ValueError:
+            pass
+print(n)'
+}
+tmp_names() { find /tmp -maxdepth 1 -name "$1" -printf '%f\n' 2>/dev/null | sort | tr '\n' ' '; }
 
 # ═══ Permission policy ══════════════════════════════════════════════════════
 echo "T1: CLAUDE_PERMISSION_MODE default (bypass) → argv unchanged, env intact"
@@ -652,6 +668,77 @@ assert_eq "T22 log_tag matches the token pattern" \
   "$(printf '%s' "$(rfield log_tag)" | grep -cE '^[A-Za-z0-9]{1,32}$')" "1"
 assert_eq "T22 rejected value was not kept" \
   "$([[ "$(rfield log_tag)" == 'not valid!' ]] && echo kept || echo replaced)" "replaced"
+
+echo "T23: ~/.env cannot retarget the snapshot; one pin, one JSON line, no leaked dirs"
+build_home t23; printf '%s\n' "$PIN_BASE" > "$PIN_FILE"
+mkdir -p /tmp/bogus
+echo keep > /tmp/bogus/keep
+# A file that matches the orch-payload shape but was not created by this run.
+MARKER="/tmp/orch-payload-AAAAAAAA"
+echo keep > "$MARKER"
+printf '%s\n' 'ORCH_RUNNER_SNAPSHOT=/tmp/bogus' 'BASH_ARGV0=/tmp/does-not-exist' > "$FAKEHOME/.env"
+BEFORE_RUNNERS="$(tmp_names 'runner-*')"
+BEFORE_ORCH="$(tmp_names 'orch-*')"
+run
+assert_eq "T23 one snapshot exec" "$(logged 'runner snapshot exec')" "1"
+assert_eq "T23 one pinned checkout" "$(logged 'CHECKED OUT detached')" "1"
+assert_eq "T23 child did not snapshot again" "$(logged 'not snapshotting again')" "0"
+assert_eq "T23 one JSON line" "$(json_lines)" "1"
+assert_eq "T23 no leaked runner dirs" "$(tmp_names 'runner-*')" "$BEFORE_RUNNERS"
+assert_eq "T23 no leaked orch files" "$(tmp_names 'orch-*')" "$BEFORE_ORCH"
+assert_eq "T23 /tmp/bogus survives" "$([[ -f /tmp/bogus/keep ]] && echo yes || echo no)" "yes"
+assert_eq "T23 unrelated orch-payload survives" "$([[ -f "$MARKER" ]] && echo yes || echo no)" "yes"
+assert_eq "T23 dotfile override was restored" \
+  "$(atleast1 "$(logged 'dotfile overrode ORCH_RUNNER_SNAPSHOT')")" "yes"
+rm -f "$MARKER"
+rm -rf /tmp/bogus
+
+echo "T23b: a failed run also leaves no /tmp/orch-* files"
+build_home t23b; printf '%s\n' "$PIN_BASE" > "$PIN_FILE"
+BEFORE_ORCH="$(tmp_names 'orch-*')"
+BEFORE_RUNNERS="$(tmp_names 'runner-*')"
+run CLAUDE_STUB_MODE=err
+assert_eq "T23b status failed" "$(rfield status)" "failed"
+assert_eq "T23b one JSON line" "$(json_lines)" "1"
+assert_eq "T23b no leaked orch files" "$(tmp_names 'orch-*')" "$BEFORE_ORCH"
+assert_eq "T23b no leaked runner dirs" "$(tmp_names 'runner-*')" "$BEFORE_RUNNERS"
+
+echo "T24: stat failing does not re-exec"
+build_home t24; printf '%s\n' "$PIN_BASE" > "$PIN_FILE"
+cat > "$STUBS/stat" <<'EOF'
+#!/bin/bash
+exit 1
+EOF
+chmod +x "$STUBS/stat"
+BEFORE_RUNNERS="$(tmp_names 'runner-*')"
+BEFORE_ORCH="$(tmp_names 'orch-*')"
+run
+assert_eq "T24 one snapshot exec" "$(logged 'runner snapshot exec')" "1"
+assert_eq "T24 one pinned checkout" "$(logged 'CHECKED OUT detached')" "1"
+assert_eq "T24 child skipped the second fetch" "$(logged 'skipping bootstrap fetch')" "1"
+assert_eq "T24 did not snapshot again" "$(logged 'not snapshotting again')" "0"
+assert_eq "T24 one JSON line" "$(json_lines)" "1"
+assert_eq "T24 no leaked runner dirs" "$(tmp_names 'runner-*')" "$BEFORE_RUNNERS"
+assert_eq "T24 no leaked orch files" "$(tmp_names 'orch-*')" "$BEFORE_ORCH"
+rm -f "$STUBS/stat"
+
+echo "T25: depth >= 1 never snapshots, even if a dotfile clears the flag"
+build_home t25; printf '%s\n' "$PIN_BASE" > "$PIN_FILE"
+mkdir -p /tmp/bogus
+echo keep > /tmp/bogus/keep
+printf '%s\n' 'ORCH_RUNNER_DEPTH=0' 'ORCH_RUNNER_REEXECED=' 'ORCH_RUNNER_SNAPSHOT=/tmp/bogus' > "$FAKEHOME/.env"
+BEFORE_RUNNERS="$(tmp_names 'runner-*')"
+run ORCH_RUNNER_DEPTH=1 ORCH_RUNNER_REEXECED=1 ORCH_BOOTSTRAP_FETCH_DONE=1 \
+    ORCH_RUNNER_SNAPSHOT=/tmp/not-a-real-snap \
+    ORCH_BOOTSTRAP_PINNED_SHA="$AGENTS_TIP"
+assert_eq "T25 no snapshot exec" "$(logged 'runner snapshot exec')" "0"
+assert_eq "T25 refused a second snapshot" "$(atleast1 "$(logged 'not snapshotting again')")" "yes"
+assert_eq "T25 one pinned checkout" "$(logged 'CHECKED OUT detached')" "1"
+assert_eq "T25 one JSON line" "$(json_lines)" "1"
+assert_eq "T25 HEAD is the pinned commit" "$(bhead)" "$PIN_BASE"
+assert_eq "T25 no leaked runner dirs" "$(tmp_names 'runner-*')" "$BEFORE_RUNNERS"
+assert_eq "T25 /tmp/bogus survives" "$([[ -f /tmp/bogus/keep ]] && echo yes || echo no)" "yes"
+rm -rf /tmp/bogus
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
