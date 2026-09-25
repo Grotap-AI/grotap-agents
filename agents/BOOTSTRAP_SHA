@@ -346,4 +346,38 @@
 #   05f12bee once this file is what origin/master's pin fetch reads.
 #   A follow-up commit, after the merge commit is the tip, must pin
 #   THAT merge commit. The merge MUST be `gh pr merge --merge`.
-05f12beeedf6067ce0ef366b4938551e27286577
+#
+#   Rotated 2026-09-25 from 05f12beeedf6067ce0ef366b4938551e27286577 to
+#   0eaa7827aaa5d40abfde0fb4479d9ea90406c9bf. This SHA is NOT an ancestor
+#   of origin/master. Its parent is 2aa042e388eed633533623b7f472a19828646080
+#   (the previous rotation commit). The commit that records a SHA cannot
+#   contain its own SHA (§ROTATION step 5). 0eaa782 is reachable from
+#   origin/master only after this branch lands as a MERGE COMMIT.
+#   MUST merge with `gh pr merge --merge`. A squash or a rebase merge
+#   drops 0eaa782 from refs/heads/master. verify_bootstrap_pin then
+#   hard-fails every host that has ~/.grotap_bootstrap_pin_seen, because
+#   fetch is refs/heads/master only. A host whose fetch fails falls back
+#   to the on-disk pin; this file names 0eaa782, which is the loop fix.
+#   The previous content commit 05f12bee still names f81fb591 inside its
+#   own tree. Do not check that tree out as the pin.
+#   THE EXECUTABLE RUNNER DELTA on top of 05f12bee is 0eaa782:
+#     Re-exec state (ORCH_RUNNER_REEXECED, the snapshot path, depth, and
+#       argv0) is captured before dotfiles are sourced and restored after.
+#       ~/.env cannot replace them. The copies are readonly.
+#     A process that started as a re-exec, or with ORCH_RUNNER_DEPTH >= 1,
+#       never mktemps or execs again. A failed snapshot check bootstraps
+#       in place. At most one re-exec.
+#     On a failed check the exit trap removes the parent's snapshot only
+#       when it is /tmp/runner-XXXXXXXX, a real directory, not a symlink,
+#       and owned by this user.
+#     Mode 0700 is read with stat -c, then stat -f, then python. If none
+#       of those prove it, the snapshot is not trusted.
+#     Payload, prompt, and driver-result files are mktemp'd under umask 077
+#       and removed by the same trap. HERE is computed from the argv0
+#       captured before dotfiles, so BASH_ARGV0 in ~/.env cannot move it.
+#   agents/GLOBAL.md is UNTOUCHED by 0eaa782.
+#   Per step 5 this rotation commit is itself unblessed. Hosts run
+#   0eaa782 once this file is what origin/master's pin fetch reads.
+#   A follow-up commit, after the merge commit is the tip, must pin
+#   THAT merge commit. The merge MUST be `gh pr merge --merge`.
+0eaa7827aaa5d40abfde0fb4479d9ea90406c9bf
