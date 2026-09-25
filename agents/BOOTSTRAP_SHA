@@ -246,4 +246,46 @@
 #   Per step 5 this rotation commit is itself unblessed. Hosts run
 #   4d0be2d, which contains the GLOBAL rules. That is the known steady
 #   state, not a fault to chase.
-4d0be2d4db6947d64c26a6d8c9c0b3b5f8e17000
+#
+#   Rotated 2026-09-25 from 4d0be2d4db6947d64c26a6d8c9c0b3b5f8e17000 to
+#   396454cbfdfc632c432535294da418773d4c05e5. Confirmed a strict descendant
+#   of the outgoing pin and of origin/master (aaa25e3c4846e24176880644a9ba26adc8694c7f) with
+#     git merge-base --is-ancestor 4d0be2d4 396454cb   (exit 0)
+#     git merge-base --is-ancestor aaa25e3c 396454cb   (exit 0)
+#   This SHA is the content commit on
+#   cursor/orchestrator-wrapper-claude-driver-f7ea, not a ls-remote of
+#   master: the commit that records a SHA cannot contain its own SHA
+#   (§ROTATION step 5). It is reachable from origin/master only after this
+#   branch lands as a MERGE COMMIT. Squash or rebase drops 396454cb from
+#   refs/heads/master; verify_bootstrap_pin then hard-fails every host that
+#   has ~/.grotap_bootstrap_pin_seen, because fetch is refs/heads/master only.
+#   Reviewed before blessing: 140 commits (4d0be2d4..396454cb).
+#   THE EXECUTABLE RUNNER DELTA is one commit, 396454cb:
+#     agents/scripts/orchestrator-run.sh becomes a generic wrapper.
+#     agents/scripts/drivers/run-claude.sh holds today's model choice,
+#       claude -p call, and JSON parse. One attempt, no retry ladder,
+#       no cross-model fallback.
+#     agents/tests/test_orchestrator_run_golden.sh locks the team1 result
+#       line (added fields only: driver_result, log_tag).
+#   agents/GLOBAL.md is UNTOUCHED in 4d0be2d4..396454cb
+#   (git diff --stat 4d0be2d4..396454cb -- agents/GLOBAL.md is empty).
+#   BOOTSTRAP.md DOES change in the already-merged span, read in full:
+#     one line pointing at the fleet rename docs; scp target agent-06
+#     becomes agent-06-claude (5.161.53.103) and notes agent-05-claude is
+#     OFF; the dispatcher sentence names agent-06-claude; the SSH "never
+#     do" line lists Cloud names (agent-01-claude, agent-10-codex,
+#     monitor-01-deepseek, prompt-01-claude) and the jumpbox. Naming and
+#     roster only — it does not change what the runner executes.
+#   Also already on master in that span, so this pin is what releases it:
+#     9c33fc1 fleet roster locked to the server rename map (#3);
+#     8d04132 / d35696b the previous pin rotation's merge;
+#     dispatch task files; role docs; ssh-key-for.sh, fleet-load.sh,
+#     fleet-model-probe.sh, health-monitor.sh, setup-agent06.sh,
+#     sync-all-agents.sh. No new secret material in the runner diff.
+#   Mirror this same SHA (396454cb) into grotap-platform
+#   agents/BOOTSTRAP_SHA after this commit is on origin/master. Until
+#   that mirror, the two runners disagree about the blessed tree.
+#   Per step 5 this rotation commit is itself unblessed. Hosts run
+#   396454cb. A follow-up commit, after the merge commit is the tip,
+#   must pin THAT merge commit (second rotation). Do not squash this PR.
+396454cbfdfc632c432535294da418773d4c05e5
