@@ -383,11 +383,16 @@ if [ "$CLAUDE_RC" -ne 0 ] || [ "${IS_ERROR:-true}" = "true" ]; then
   DR_STATUS="failed"
   DR_ERRORS="${DENY_NOTE:+$DENY_NOTE }Claude CLI error: $RESULT_TEXT"
   DR_SUMMARY="Agent run failed"
-  # A model failure is a task defect. 429 and credit exhaustion are not:
-  # they are capacity failures and must not be scored as the task's fault.
+  # A model failure is a task defect. 429 and credit exhaustion are quota:
+  # the orchestrator's detectApiExhaustion reads the errors string, so the
+  # raw text has to stay in that string even when the JSON parse dropped it.
   DR_ERROR_CLASS="task"
-  if printf '%s\n%s\n' "$RESULT_TEXT" "$CLAUDE_OUT" | grep -Eqi '429|rate[_ -]?limit|too many requests|credit balance|insufficient credit|out of credits|credit exhaust'; then
-    DR_ERROR_CLASS="infra"
+  if printf '%s\n%s\n' "$RESULT_TEXT" "$CLAUDE_OUT" | grep -Eqi '429|rate[_ -]?limit|too many requests|credit balance is too low|insufficient credit|out of credits|credit exhaust|usage limits'; then
+    DR_ERROR_CLASS="quota"
+    if ! printf '%s' "$DR_ERRORS" | grep -Eqi '429|rate[_ -]?limit|too many requests|credit balance is too low|insufficient credit|out of credits|credit exhaust|usage limits'; then
+      _snip="$(printf '%s' "$CLAUDE_OUT" | tr '\n\t\r' '   ' | head -c 400)"
+      DR_ERRORS="${DR_ERRORS} ${_snip}"
+    fi
   fi
 fi
 ATTEMPTS_INSIDE=1

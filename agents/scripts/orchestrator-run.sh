@@ -423,9 +423,13 @@ ensure_repo() {
   # Honour the skip only for the re-exec'd copy, and only after that copy
   # proves it is still on the commit the parent pinned.
   if [ "${ORCH_BOOTSTRAP_FETCH_DONE:-}" = "1" ]; then
-    local snap="/tmp/runner-${ORCH_LOG_TAG}"
+    # Resolve symlinks. A $0 that merely looks like the snapshot, or a
+    # snapshot path that points back at the repo, is not the re-exec copy.
     local snap_ok=0
-    case "$0" in
+    local self snap
+    self="$(readlink -f -- "$0" 2>/dev/null || printf '%s' "$0")"
+    snap="$(readlink -f -- "/tmp/runner-${ORCH_LOG_TAG}" 2>/dev/null || printf '%s' "/tmp/runner-${ORCH_LOG_TAG}")"
+    case "$self" in
       "$snap"|"$snap"/*) snap_ok=1 ;;
     esac
     if [ "${ORCH_RUNNER_REEXECED:-}" = "1" ] && [ "$snap_ok" = "1" ]; then

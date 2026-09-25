@@ -457,6 +457,16 @@ assert_eq "T16 tip content is NOT on disk" \
   "$([[ -f "$FAKEHOME/grotap-agents/agents/two.txt" ]] && echo present || echo absent)" "absent"
 assert_eq "T16 checkout still ran" "$(atleast1 "$(logged 'CHECKED OUT detached at pinned')")" "yes"
 
+echo "T16b: a ~/.env preset is ignored and the pin still runs"
+build_home t16b; printf '%s\n' "$PIN_BASE" > "$PIN_FILE"
+printf '%s\n' 'ORCH_BOOTSTRAP_FETCH_DONE=1' > "$FAKEHOME/.env"
+run
+assert_eq "T16b warned" \
+  "$(atleast1 "$(logged 'ignoring preset ORCH_BOOTSTRAP_FETCH_DONE')")" "yes"
+assert_eq "T16b HEAD is the pinned commit" "$(bhead)" "$PIN_BASE"
+assert_eq "T16b tip content is NOT on disk" \
+  "$([[ -f "$FAKEHOME/grotap-agents/agents/two.txt" ]] && echo present || echo absent)" "absent"
+
 echo "T17: FETCH_DONE plus re-exec with the wrong \$0 still verifies the pin"
 build_home t17; printf '%s\n' "$PIN_BASE" > "$PIN_FILE"
 run ORCH_RUNNER_REEXECED=1 ORCH_BOOTSTRAP_FETCH_DONE=1 ORCH_BOOTSTRAP_PINNED_SHA="$AGENTS_TIP"
@@ -467,6 +477,42 @@ assert_eq "T17 tip content is NOT on disk" \
   "$([[ -f "$FAKEHOME/grotap-agents/agents/two.txt" ]] && echo present || echo absent)" "absent"
 assert_eq "T17 did not report a HEAD mismatch" \
   "$(printf '%s' "$(rfield errors)" | grep -c 'does not equal pinned')" "0"
+
+echo "T17b: a snapshot path that resolves outside /tmp is not the re-exec copy"
+build_home t17b; printf '%s\n' "$PIN_BASE" > "$PIN_FILE"
+TAG="sym$$"
+DEST="/tmp/runner-${TAG}"
+rm -rf "$DEST"
+mkdir -p "$DEST"
+ln -s "$RUNNER" "$DEST/orchestrator-run.sh"
+cp -a "$SCRIPT_DIR/../scripts/drivers" "$DEST/drivers"
+chmod +x "$DEST/drivers/"*.sh
+mkdir -p "$TMP/state"; rm -f "$TMP/state/claude.argv"
+OUT=$(printf '%s' "$PAYLOAD" | \
+  env PATH="$STUBS:$PATH" HOME="$FAKEHOME" USERPROFILE="$FAKEHOME" STATE_DIR="$TMP/state" \
+      ANTHROPIC_API_KEY=test-key NODE_SECRET=node-secret-value \
+      DOPPLER_TOKEN=dp.st.fake GITHUB_TOKEN=ghp_fake \
+      ORCH_RUNNER_REEXECED=1 ORCH_BOOTSTRAP_FETCH_DONE=1 \
+      ORCH_BOOTSTRAP_PINNED_SHA="$AGENTS_TIP" \
+      ORCH_LOG_TAG="$TAG" \
+      bash "$DEST/orchestrator-run.sh" 2>&1) || true
+RESULT_JSON=$(printf '%s\n' "$OUT" | python3 -c '
+import sys, json
+last = ""
+for line in sys.stdin.read().splitlines():
+    line = line.strip()
+    if line.startswith("{") and line.endswith("}"):
+        try:
+            json.loads(line); last = line
+        except ValueError:
+            pass
+print(last)')
+assert_eq "T17b warned" \
+  "$(atleast1 "$(logged 'ignoring preset ORCH_BOOTSTRAP_FETCH_DONE')")" "yes"
+assert_eq "T17b HEAD is the pinned commit" "$(bhead)" "$PIN_BASE"
+assert_eq "T17b tip content is NOT on disk" \
+  "$([[ -f "$FAKEHOME/grotap-agents/agents/two.txt" ]] && echo present || echo absent)" "absent"
+rm -rf "$DEST"
 
 echo "T18: a re-exec whose HEAD is not the pinned SHA fails closed"
 build_home t18; printf '%s\n' "$PIN_BASE" > "$PIN_FILE"

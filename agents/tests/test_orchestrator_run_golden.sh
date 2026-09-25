@@ -310,11 +310,16 @@ assert_eq "G8 one JSON line" "$(wc -l < "$STDOUT_FILE" | tr -d ' ')" "1"
 #   "Claude CLI error: " and tokens 15. The commit must not become success.
 # empty: master surfaces "Claude CLI error: 10" (tokens 5), not
 #   "No commits produced". We surface "Claude CLI error: " (tokens 15).
-# r429text0: master surfaces "Claude CLI error: 0". A delimiter mismatch
-#   used to fall through to "No commits produced" or a success. We surface
-#   the CLI error and class 429 as infra.
+# r429text0: master surfaces "Claude CLI error: 0" and does not push.
+#   A delimiter mismatch used to push (nonjson0/emptycommit/trunc) or
+#   report "No commits produced" (empty/r429text0). We fail with a CLI
+#   error and do not push. 429 and credit stay in the errors string so
+#   detectApiExhaustion still matches, and error_class is quota.
 cli_fail() {
   j 'print(d["status"]=="failed" and d["summary"]=="Agent run failed" and d["exit_code"]==0 and d["errors"].startswith("Claude CLI error:") and "No commits produced" not in d["errors"] and "verify" not in d)'
+}
+branch_on_origin() {
+  git -C "$FAKEHOME/platform-origin.git" rev-parse --verify "refs/heads/case-20260915-aaaaaa" >/dev/null 2>&1 && echo present || echo absent
 }
 echo "X1: nonjson0 fails as on master (CLI error, not success)"
 build_home x-nonjson
@@ -323,6 +328,7 @@ assert_eq "X1 nonjson0 failed" "$(cli_fail)" "True"
 assert_eq "X1 nonjson0 tokens 0" "$(j 'print(d["tokens"])')" "0"
 assert_eq "X1 nonjson0 empty result kept" "$(j 'print(d["errors"])')" "Claude CLI error: "
 assert_eq "X1 nonjson0 error_class task" "$(j 'print(d["driver_result"]["error_class"])')" "task"
+assert_eq "X1 branch was not pushed" "$(branch_on_origin)" "absent"
 
 echo "X2: emptycommit fails as on master (the commit does not make it a success)"
 build_home x-emptycommit
@@ -330,6 +336,7 @@ run CLAUDE_STUB_MODE=emptycommit
 assert_eq "X2 emptycommit failed" "$(cli_fail)" "True"
 assert_eq "X2 emptycommit tokens are input plus output" "$(j 'print(d["tokens"])')" "15"
 assert_eq "X2 emptycommit surfaces the CLI error" "$(j 'print(d["errors"])')" "Claude CLI error: "
+assert_eq "X2 branch was not pushed" "$(branch_on_origin)" "absent"
 
 echo "X3: trunc fails as on master"
 build_home x-trunc
@@ -337,6 +344,7 @@ run CLAUDE_STUB_MODE=trunc
 assert_eq "X3 trunc failed" "$(cli_fail)" "True"
 assert_eq "X3 trunc tokens 0" "$(j 'print(d["tokens"])')" "0"
 assert_eq "X3 trunc empty result kept" "$(j 'print(d["errors"])')" "Claude CLI error: "
+assert_eq "X3 branch was not pushed" "$(branch_on_origin)" "absent"
 
 echo "X4: empty surfaces the CLI error, not 'No commits produced'"
 build_home x-empty
@@ -344,20 +352,30 @@ run CLAUDE_STUB_MODE=empty
 assert_eq "X4 empty is a CLI error" "$(cli_fail)" "True"
 assert_eq "X4 empty tokens are input plus output" "$(j 'print(d["tokens"])')" "15"
 assert_eq "X4 empty error text" "$(j 'print(d["errors"])')" "Claude CLI error: "
+assert_eq "X4 branch was not pushed" "$(branch_on_origin)" "absent"
 
-echo "X5: r429text0 surfaces the CLI error as infra, not 'No commits produced'"
+# Same phrases detectApiExhaustion matches on the errors string. The class
+# field is quota; the text has to remain or the orchestrator will not see it.
+exhaustion_caught() {
+  j 'import re; print(bool(re.search(r"429|rate[_ -]?limit|too many requests|credit balance is too low|insufficient credit|out of credits|credit exhaust|usage limits", d["errors"], re.I)))'
+}
+echo "X5: r429text0 surfaces the CLI error as quota, not 'No commits produced'"
 build_home x-429
 run CLAUDE_STUB_MODE=r429text0
 assert_eq "X5 r429text0 is a CLI error" "$(cli_fail)" "True"
 assert_eq "X5 r429text0 tokens 0" "$(j 'print(d["tokens"])')" "0"
-assert_eq "X5 r429text0 error_class infra" "$(j 'print(d["driver_result"]["error_class"])')" "infra"
+assert_eq "X5 r429text0 error_class quota" "$(j 'print(d["driver_result"]["error_class"])')" "quota"
+assert_eq "X5 detectApiExhaustion still sees 429" "$(exhaustion_caught)" "True"
+assert_eq "X5 branch was not pushed" "$(branch_on_origin)" "absent"
 
-echo "X6: credit exhaustion is infra, not task"
+echo "X6: credit exhaustion is quota, not task, and the text stays in errors"
 build_home x-credit
 run CLAUDE_STUB_MODE=credit
 assert_eq "X6 credit is a CLI error" "$(cli_fail)" "True"
-assert_eq "X6 credit text kept" "$(j 'print("credit balance" in d["errors"])')" "True"
-assert_eq "X6 credit error_class infra" "$(j 'print(d["driver_result"]["error_class"])')" "infra"
+assert_eq "X6 credit text kept" "$(j 'print("credit balance is too low" in d["errors"])')" "True"
+assert_eq "X6 credit error_class quota" "$(j 'print(d["driver_result"]["error_class"])')" "quota"
+assert_eq "X6 detectApiExhaustion still sees the credit text" "$(exhaustion_caught)" "True"
+assert_eq "X6 branch was not pushed" "$(branch_on_origin)" "absent"
 
 echo "H1: host label mismatch refuses before any repo access"
 build_home h1
@@ -449,7 +467,7 @@ assert_eq "D3 unknown cost fails closed" \
 rm -f "$FAKE_DRIVER"; FAKE_DRIVER=""
 PAYLOAD="$TEAM1_PAYLOAD"
 
-echo "D5: a malformed driver result still emits one valid JSON line"
+echo "D5: badjson builds a failed infra driver_result instead of copying status success"
 build_home d5
 FAKE_DRIVER="$SCRIPT_DIR/../scripts/drivers/run-badjson.sh"
 cat > "$FAKE_DRIVER" <<'EOF'
