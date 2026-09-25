@@ -247,22 +247,21 @@
 #   4d0be2d, which contains the GLOBAL rules. That is the known steady
 #   state, not a fault to chase.
 #
-#   Rotated 2026-09-25 from 61699688528ec24398d34afc40e6109045040c62 to
-#   5bf5613347c03fe890e31369293a2d72e9e6d7c0. This SHA is NOT an ancestor
-#   of origin/master. Its parent is f2cc64fb5f2deeb4a29a2ee1112c8aa138fc94cc
-#   (the previous rotation commit). 61699688, the previous content commit,
-#   has parent e6ebc69fb0f3a7600b91e4e0d1a9ac29cb8b1c6d. 396454cb has parent
-#   aaa25e3c4846e24176880644a9ba26adc8694c7f (origin/master at branch time).
-#   None of those content commits is an ancestor of origin/master.
-#   Confirmed:
-#     git merge-base --is-ancestor aaa25e3c 5bf56133   (exit 0)
-#     git merge-base --is-ancestor 61699688 5bf56133   (exit 0)
-#     git merge-base --is-ancestor 5bf56133 aaa25e3c   (exit 1)
+#   Rotated 2026-09-25 from 5bf5613347c03fe890e31369293a2d72e9e6d7c0 to
+#   f81fb591bea772b1839206c532c2b2380a40444b. This SHA is NOT an ancestor
+#   of origin/master. Its parent is de85b86fa505f4d96e9bd5aa723bc7f11e1867be
+#   (the previous rotation commit). It descends from 61699688 (content
+#   whose parent is e6ebc69) and from 396454cb (parent aaa25e3c, which is
+#   origin/master at branch time). None of those content commits is an
+#   ancestor of origin/master. Confirmed:
+#     git merge-base --is-ancestor aaa25e3c f81fb59    (exit 0)
+#     git merge-base --is-ancestor 61699688 f81fb59    (exit 0)
+#     git merge-base --is-ancestor f81fb59 aaa25e3c    (exit 1)
 #   The commit that records a SHA cannot contain its own SHA (§ROTATION
-#   step 5). 5bf56133 is reachable from origin/master only after this
+#   step 5). f81fb59 is reachable from origin/master only after this
 #   branch lands as a MERGE COMMIT.
 #   MUST merge with `gh pr merge --merge`. A squash or a rebase merge
-#   drops 5bf56133 from refs/heads/master. verify_bootstrap_pin then
+#   drops f81fb59 from refs/heads/master. verify_bootstrap_pin then
 #   hard-fails every host that has ~/.grotap_bootstrap_pin_seen, because
 #   fetch is refs/heads/master only. That failure is reported only in the
 #   runner `errors` string, which evaluateRunnerResult ignores, so every
@@ -270,28 +269,32 @@
 #   Hosts pick the new tree up through this runner's own pin fetch.
 #   dispatch.sh's git pull only keeps agent-03's checkout on master; it
 #   is not what ships the runner.
-#   Reviewed before blessing: 144 commits (4d0be2d4..5bf56133).
-#   THE EXECUTABLE RUNNER DELTA on top of 61699688 is 5bf56133:
-#     Non-JSON Claude output (exit 0) fails with a Claude CLI error.
-#       The fallback record uses the same unit separator as the reader.
-#     ORCH_BOOTSTRAP_FETCH_DONE is honoured only when the process is the
-#       re-exec copy under /tmp/runner-$tag, and that copy checks HEAD
-#       against the SHA the parent passed. A preset flag is ignored.
-#     A malformed driver result is replaced with status failed,
-#       error_class infra. 429 and credit exhaustion are infra, not task.
-#   Verified differential vs master (team1 base lines that still match
-#   once driver_result and log_tag are removed: no-commit, success,
-#   is_error-with-text, cache):
-#     nonjson0, trunc: both fail. Master says "Claude CLI error: 0"
-#       (empty field collapsed). We say "Claude CLI error: " and tokens 0.
-#     emptycommit: both fail and the commit is not a success. Master
-#       says "Claude CLI error: 10", tokens 5. We say "Claude CLI error: ",
-#       tokens 15.
-#     empty, r429text0: both surface a Claude CLI error, not
-#       "No commits produced". empty tokens are 15 here and 5 on master.
-#       r429text0 is error_class infra here; master has no such field.
-#   agents/GLOBAL.md is UNTOUCHED in 4d0be2d4..5bf56133
-#   (git diff --stat 4d0be2d4..5bf56133 -- agents/GLOBAL.md is empty).
+#   Reviewed before blessing: 146 commits (4d0be2d4..f81fb59).
+#   THE EXECUTABLE RUNNER DELTA on top of 5bf56133 is f81fb59:
+#     429 / credit exhaustion is driver_result.error_class=quota, and the
+#       raw text stays in errors so detectApiExhaustion still matches.
+#     ORCH_BOOTSTRAP_FETCH_DONE is honoured only when readlink -f of $0
+#       is under /tmp/runner-$tag AND ORCH_RUNNER_REEXECED=1. The child
+#       checks HEAD against the SHA the parent passed.
+#   Side-by-side of master's tab parser vs this runner (both fail the
+#   CLI path, exit_code 0, no verify, no branch push). Master strings
+#   were measured by replaying its parser:
+#     nonjson0, trunc: master "Claude CLI error: 0", tokens 0.
+#       Here "Claude CLI error: ", tokens 0.
+#     empty, emptycommit: master "Claude CLI error: 10", tokens 5.
+#       Here "Claude CLI error: ", tokens 15. The commit is not a success.
+#     r429text0: master "Claude CLI error: 0", tokens 0 (the 429 text is
+#       lost). Here the errors string still contains "429", tokens 0,
+#       error_class quota.
+#     credit: master "Claude CLI error: Your credit balance is too low",
+#       tokens 3. Here the same text, tokens 3, error_class quota.
+#     badjson: a malformed driver file is replaced with status failed,
+#       error_class infra. It is not copied through as status success.
+#   Team1 lines that still match master once driver_result and log_tag
+#   are removed: no-commit, a committing success, is_error with a
+#   non-empty result ("boom", tokens 7), and the cache case (integer 15).
+#   agents/GLOBAL.md is UNTOUCHED in 4d0be2d4..f81fb59
+#   (git diff --stat 4d0be2d4..f81fb59 -- agents/GLOBAL.md is empty).
 #   BOOTSTRAP.md DOES change in the already-merged span, read in full:
 #     one line pointing at the fleet rename docs; scp target agent-06
 #     becomes agent-06-claude (5.161.53.103) and notes agent-05-claude is
@@ -306,8 +309,8 @@
 #     fleet-model-probe.sh, health-monitor.sh, setup-agent06.sh,
 #     sync-all-agents.sh. No new secret material in the runner diff.
 #   Per step 5 this rotation commit is itself unblessed. Hosts run
-#   5bf56133 once this file is what origin/master's pin fetch reads.
+#   f81fb59 once this file is what origin/master's pin fetch reads.
 #   A follow-up commit, after the merge commit is the tip, must pin
 #   THAT merge commit (second rotation). The merge MUST be
 #   `gh pr merge --merge`.
-5bf5613347c03fe890e31369293a2d72e9e6d7c0
+f81fb591bea772b1839206c532c2b2380a40444b
