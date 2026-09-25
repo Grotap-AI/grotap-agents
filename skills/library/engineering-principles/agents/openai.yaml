@@ -1,0 +1,3 @@
+# Codex 0.157 reads this file. Explicit invoke only ($engineering-principles).
+policy:
+  allow_implicit_invocation: false
