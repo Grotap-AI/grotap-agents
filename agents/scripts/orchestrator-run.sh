@@ -19,7 +19,20 @@
 #
 # Result JSON (last stdout line):
 #   {"status":"success|failed","branch":"...","exit_code":N,
-#    "errors":"...","summary":"...","tokens":N}
+#    "errors":"...","summary":"...","tokens":N,"verify"?:{...},
+#    "driver_result":{...},"log_tag":"..."}
+#
+# tokens stays the historical integer (Claude usage input_tokens + output_tokens,
+# cache excluded). driver_result is schema driver-result/v1. Before that line,
+# stderr carries the per-run log between
+#   =====RUN-LOG-BEGIN <log_tag>=====
+# and
+#   =====RUN-LOG-END=====
+#
+# This file is the generic wrapper. It does not branch on the tool. Model
+# choice, the claude -p invocation, and the JSON parse live in
+# agents/scripts/drivers/run-claude.sh. A missing payload.driver defaults to
+# claude only when the payload has no team or team=team1.
 #
 # This is ADDITIVE — it does not replace the bash coordinator. The orchestrator
 # calls it directly; the legacy self-dispatch loop is untouched.
@@ -38,9 +51,31 @@ set -u
 PLATFORM_DIR="$HOME/grotap-platform"
 WORKTREE_ROOT="$HOME/worktrees"
 LOG="$HOME/logs/orchestrator-run.log"
+export LOG
 mkdir -p "$HOME/logs" "$WORKTREE_ROOT"
+HERE="$(cd "$(dirname "$0")" && pwd)"
+HOST_LABEL_FILE="${ORCH_HOST_LABEL_FILE:-/etc/fleet-agent/config.json}"
 
-log() { echo "[$(date -u +%H:%M:%S)] $*" >> "$LOG"; }
+# Shared fleet log AND the per-run log. RUN_LOG is empty until the payload
+# has been parsed far enough to name the file.
+RUN_LOG=""
+log() {
+  local line="[$(date -u +%H:%M:%S)] $*"
+  echo "$line" >> "$LOG"
+  if [ -n "${RUN_LOG:-}" ]; then
+    echo "$line" >> "$RUN_LOG"
+  fi
+}
+
+# Cat the per-run log to stderr, framed, immediately before the final JSON
+# line. The markers are not written into the file (that would recurse).
+dump_run_log() {
+  [ -n "${ORCH_LOG_TAG:-}" ] || return 0
+  [ -n "${RUN_LOG:-}" ] && [ -f "$RUN_LOG" ] || return 0
+  echo "=====RUN-LOG-BEGIN ${ORCH_LOG_TAG}=====" >&2
+  cat "$RUN_LOG" >&2
+  echo "=====RUN-LOG-END=====" >&2
+}
 
 # ── Shared-repo lock ──────────────────────────────────────────────────────────
 # Up to 3 runners share $PLATFORM_DIR per server; concurrent fetch / worktree
@@ -50,13 +85,24 @@ log() { echo "[$(date -u +%H:%M:%S)] $*" >> "$LOG"; }
 # so emit()'s exit paths can never leak a held lock.
 REPO_LOCK="$HOME/.grotap-platform.git.lock"
 repo_lock()   { exec 9>"$REPO_LOCK"; flock -w 300 9 || log "WARN: repo lock timeout — proceeding unlocked"; }
-repo_unlock() { exec 9>&- 2>/dev/null || true; }
+# Close fd 9 only. `exec 9>&- 2>/dev/null` with no command applies EVERY
+# redirection to this shell, which discarded stderr for the rest of the run
+# (the per-run log frame never reached the orchestrator). Do not put a
+# redirection on this exec.
+repo_unlock() { exec 9>&- || true; }
 
 # Emit the machine-readable result line and exit. python3 handles JSON escaping.
 # Optional 7th arg = a verify JSON object string (Layer 9 build/lint evidence).
+# Existing fields stay in their historical order. driver_result and log_tag are
+# appended. tokens is the integer the caller passed (back-compat total).
 emit() {
+  dump_run_log
+  DRIVER_RESULT_FILE="${DRIVER_RESULT_FILE:-}" \
+  ORCH_LOG_TAG="${ORCH_LOG_TAG:-}" \
+  ORCH_TEAM="${ORCH_TEAM:-${TEAM:-}}" \
+  ORCH_DRIVER="${ORCH_DRIVER:-${DRIVER:-}}" \
   python3 -c '
-import sys, json
+import sys, json, os
 status, branch, code, errors, summary, tokens = sys.argv[1:7]
 out = {"status": status, "branch": branch, "exit_code": int(code),
        "errors": errors, "summary": summary, "tokens": int(tokens)}
@@ -64,7 +110,50 @@ verify = sys.argv[7] if len(sys.argv) > 7 else ""
 if verify:
     try: out["verify"] = json.loads(verify)
     except Exception: pass
-print(json.dumps(out))
+
+def load_driver():
+    path = os.environ.get("DRIVER_RESULT_FILE") or ""
+    if path and os.path.isfile(path) and os.path.getsize(path) > 0:
+        try:
+            with open(path) as fh:
+                return json.load(fh)
+        except Exception:
+            return None
+    return None
+
+dr = load_driver()
+if not isinstance(dr, dict):
+    err_class = None
+    if errors.startswith("error_class="):
+        err_class = errors.split(" ", 1)[0].split("=", 1)[1] or None
+    now = os.environ.get("ORCH_STARTED_AT") or ""
+    team = os.environ.get("ORCH_TEAM") or None
+    driver = os.environ.get("ORCH_DRIVER") or None
+    dr = {
+        "schema": "driver-result/v1",
+        "team": team,
+        "driver": driver,
+        "driver_version": None,
+        "tool_bin": None,
+        "provider": None,
+        "model": None,
+        "profile": None,
+        "status": "failed" if status != "success" else "success",
+        "error_class": err_class,
+        "summary": summary,
+        "errors": errors,
+        "tokens": {"input": 0, "cached_input": 0, "cache_write_input": 0,
+                   "output": 0, "reasoning": 0, "total": 0},
+        "cost": {"usd": None, "source": "not_priced", "price_table_version": None,
+                 "long_context_multiplier_applied": False},
+        "attempts_inside_driver": 0,
+        "session_id": None,
+        "started_at": now or None,
+        "ended_at": now or None,
+    }
+out["driver_result"] = dr
+out["log_tag"] = os.environ.get("ORCH_LOG_TAG") or ""
+print(json.dumps(out), flush=True)
 ' "$1" "$2" "$3" "$4" "$5" "$6" "${7:-}"
   exit 0
 }
@@ -365,21 +454,220 @@ ensure_repo() {
   git fetch origin master --quiet >> "$LOG" 2>&1 || { sleep 5; git fetch origin master --quiet >> "$LOG" 2>&1; }
 }
 
+# ── Per-run log, host-label cross-check, driver name ─────────────────────────
+# All of this is before any git operation on the repos. A host-label mismatch
+# or a missing driver for a non-team1 payload emits error_class=infra and
+# returns without touching ~/grotap-agents or ~/grotap-platform.
+_safe_component() {
+  local s
+  s="$(printf '%s' "$1" | tr -c 'A-Za-z0-9._-' '_')"
+  [ -n "$s" ] || s="unknown"
+  printf '%s' "$s"
+}
+_open_run_log() {
+  local c a
+  c="$(_safe_component "$1")"
+  a="$(_safe_component "$2")"
+  mkdir -p "$HOME/logs/runs"
+  RUN_LOG="$HOME/logs/runs/${c}-${a}-${ORCH_LOG_TAG}.log"
+  touch "$RUN_LOG"
+  chmod 600 "$RUN_LOG" 2>/dev/null || true
+  export RUN_LOG
+}
+_orch_on_exit() {
+  # The snapshot is a copy. Drop it on the way out; the per-run log stays.
+  if [ "${ORCH_RUNNER_REEXECED:-}" = "1" ] && [ -n "${ORCH_LOG_TAG:-}" ]; then
+    rm -rf "/tmp/runner-${ORCH_LOG_TAG}" 2>/dev/null || true
+    rm -f "/tmp/orch-payload-${ORCH_LOG_TAG}" \
+          "/tmp/orch-prompt-${ORCH_LOG_TAG}.txt" \
+          "/tmp/orch-driver-${ORCH_LOG_TAG}.json" 2>/dev/null || true
+  fi
+}
+trap _orch_on_exit EXIT
+
+if [ -z "${ORCH_LOG_TAG:-}" ]; then
+  ORCH_LOG_TAG="$(od -An -N4 -tx1 /dev/urandom 2>/dev/null | tr -d ' \n' || true)"
+fi
+[ -n "${ORCH_LOG_TAG:-}" ] || ORCH_LOG_TAG="$(date -u +%H%M%S)$$"
+export ORCH_LOG_TAG
+ORCH_STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+export ORCH_STARTED_AT
+
+CASE_ID=""; BRANCH=""; TEAM=""; DRIVER=""; ATTEMPT="1"; PARSE_OK=0
+eval "$(printf '%s' "$PAYLOAD" | python3 -c '
+import sys, json, shlex
+raw = sys.stdin.read()
+try:
+    d = json.loads(raw)
+except Exception:
+    print("PARSE_OK=0")
+    sys.exit(0)
+if not isinstance(d, dict):
+    print("PARSE_OK=0")
+    sys.exit(0)
+def g(k, default=""):
+    v = d.get(k, default)
+    return default if v is None else v
+print("PARSE_OK=1")
+print("CASE_ID=" + shlex.quote(str(g("case_id"))))
+print("BRANCH="  + shlex.quote(str(g("branch"))))
+print("TEAM="    + shlex.quote(str(g("team"))))
+print("DRIVER="  + shlex.quote(str(g("driver"))))
+print("ATTEMPT=" + shlex.quote(str(g("attempt", 1))))
+')" || PARSE_OK=0
+
+if [ "${PARSE_OK:-0}" != "1" ]; then
+  _open_run_log "unknown" "0"
+  emit "failed" "" 1 "error_class=infra payload is not valid JSON" \
+    "Payload JSON parse failed (infra, not a task defect)" 0
+fi
+
+if [ "${1:-}" = "--merge" ]; then
+  _open_run_log "${CASE_ID:-unknown}" "merge"
+else
+  _open_run_log "${CASE_ID:-unknown}" "${ATTEMPT:-1}"
+  # Historical payloads omit team; that is team1. Named here so an infra
+  # result emitted before the driver runs still carries it.
+  export ORCH_TEAM="${TEAM:-team1}"
+fi
+
+# Host label is a refuse-on-mismatch cross-check only. It never selects a team.
+# Missing file / missing team key: warn and proceed, unless
+# ORCH_REQUIRE_HOST_LABEL=1. An empty payload.team is the historical team1
+# payload, so a PRESENT label is compared against team1.
+_host_label_value() {
+  local f="$1"
+  if [ ! -e "$f" ]; then
+    echo missing
+    return 0
+  fi
+  python3 -c '
+import json, sys
+path = sys.argv[1]
+try:
+    with open(path) as fh:
+        data = json.load(fh)
+except Exception:
+    print("unreadable")
+    sys.exit(0)
+if not isinstance(data, dict):
+    print("missing")
+    sys.exit(0)
+team = data.get("team")
+if team is None or str(team).strip() == "":
+    print("missing")
+else:
+    print(str(team).strip())
+' "$f" 2>/dev/null || echo unreadable
+}
+HOST_LABEL="$(_host_label_value "$HOST_LABEL_FILE")"
+HOST_LABEL="${HOST_LABEL:-unreadable}"
+case "$HOST_LABEL" in
+  missing|unreadable)
+    log "WARN: host label ${HOST_LABEL} at ${HOST_LABEL_FILE} — proceeding without a team cross-check"
+    if [ "${ORCH_REQUIRE_HOST_LABEL:-}" = "1" ]; then
+      emit "failed" "$BRANCH" 1 \
+        "error_class=infra host label required but ${HOST_LABEL} at ${HOST_LABEL_FILE}. Refusing before any repo access." \
+        "Host label required (infra, not a task defect)" 0
+    fi
+    ;;
+  *)
+    _payload_team="${TEAM:-team1}"
+    if [ "$_payload_team" != "$HOST_LABEL" ]; then
+      log "ERROR: host label mismatch payload.team=${TEAM:-<unset>} host=${HOST_LABEL}"
+      emit "failed" "$BRANCH" 1 \
+        "error_class=infra host label mismatch: payload team '${_payload_team}' host team '${HOST_LABEL}' (${HOST_LABEL_FILE}). Refusing before any repo access." \
+        "Host label mismatch (infra, not a task defect)" 0
+    fi
+    log "Host label OK: ${HOST_LABEL}"
+    ;;
+esac
+
+# Driver name only. The tool itself is selected by executing
+# drivers/run-$DRIVER.sh — there is no per-tool branch here.
+# Missing driver defaults to claude ONLY for no-team / team1.
+if [ "${1:-}" != "--merge" ]; then
+  if [ -z "$DRIVER" ]; then
+    if [ -z "$TEAM" ] || [ "$TEAM" = "team1" ]; then
+      DRIVER="claude"
+    else
+      export ORCH_TEAM="$TEAM"
+      emit "failed" "$BRANCH" 1 \
+        "error_class=infra driver required for ${TEAM}; refusing to default a non-team1 run" \
+        "Driver required (infra, not a task defect)" 0
+    fi
+  fi
+  export ORCH_DRIVER="$DRIVER"
+  export ORCH_TEAM="${TEAM:-team1}"
+  case "$DRIVER" in
+    *[!a-z0-9_-]*)
+      emit "failed" "$BRANCH" 1 \
+        "error_class=infra unknown driver ${DRIVER}" \
+        "Unknown driver (infra, not a task defect)" 0
+      ;;
+  esac
+  if [ ! -x "$HERE/drivers/run-${DRIVER}.sh" ]; then
+    emit "failed" "$BRANCH" 1 \
+      "error_class=infra unknown driver ${DRIVER}" \
+      "Unknown driver (infra, not a task defect)" 0
+  fi
+  export ORCH_DRIVER="$DRIVER"
+  export ORCH_TEAM="${TEAM:-team1}"
+fi
+
+# After the pin checkout, re-exec a private copy so a later checkout cannot
+# swap the wrapper or the driver under this run. The copy is what finishes
+# the run. ORCH_RUNNER_REEXECED stops the second process from copying again.
+reexec_snapshot() {
+  if [ "${ORCH_RUNNER_REEXECED:-}" = "1" ]; then
+    log "runner snapshot active: $0"
+    return 0
+  fi
+  local dest="/tmp/runner-${ORCH_LOG_TAG}"
+  if ! mkdir -p "$dest"; then
+    log "WARN: runner snapshot mkdir failed ($dest) — continuing in place"
+    return 0
+  fi
+  if ! cp -a "$HERE/orchestrator-run.sh" "$dest/orchestrator-run.sh"; then
+    log "WARN: runner snapshot copy failed — continuing in place"
+    return 0
+  fi
+  if [ -d "$HERE/drivers" ]; then
+    rm -rf "$dest/drivers"
+    if ! cp -a "$HERE/drivers" "$dest/drivers"; then
+      log "WARN: runner snapshot drivers copy failed — continuing in place"
+      return 0
+    fi
+  fi
+  chmod +x "$dest/orchestrator-run.sh" 2>/dev/null || true
+  chmod +x "$dest/drivers/"*.sh 2>/dev/null || true
+  local pf="/tmp/orch-payload-${ORCH_LOG_TAG}"
+  if ! printf '%s' "$PAYLOAD" > "$pf"; then
+    log "WARN: runner snapshot payload copy failed — continuing in place"
+    return 0
+  fi
+  log "runner snapshot exec $dest/orchestrator-run.sh"
+  export ORCH_RUNNER_REEXECED=1
+  export ORCH_LOG_TAG ORCH_STARTED_AT
+  exec bash "$dest/orchestrator-run.sh" "$@" < "$pf"
+}
+
 # ── Merge mode ───────────────────────────────────────────────────────────────
 if [ "${1:-}" = "--merge" ]; then
   BRANCH="$(printf '%s' "$PAYLOAD" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("branch",""))')"
   repo_lock  # held until exit — merge mode checkouts/pulls the shared clone directly
-  ensure_repo || { python3 -c '
+  ensure_repo || { dump_run_log; python3 -c '
 import json, sys
 print(json.dumps({"merged": False,
                   "error": sys.argv[1] or "repo unavailable"}))
 ' "${BOOTSTRAP_PIN_FAIL:-}"; exit 1; }
+  reexec_snapshot "$@"
   # ensure_repo fetches ONLY master, so on any host that didn't execute this
   # case origin/$BRANCH is missing (or stale) and the merge fails — which the
   # catch-all below used to misreport as "merge conflict". Fetch the branch
   # explicitly, force-updating the remote-tracking ref.
   git fetch origin "+refs/heads/$BRANCH:refs/remotes/origin/$BRANCH" >> "$LOG" 2>&1 \
-    || { echo '{"merged": false, "error": "branch not found on origin"}'; exit 1; }
+    || { dump_run_log; echo '{"merged": false, "error": "branch not found on origin"}'; exit 1; }
   log "Merging $BRANCH → master"
   git checkout master --quiet >> "$LOG" 2>&1
   git pull origin master --quiet >> "$LOG" 2>&1
@@ -391,10 +679,12 @@ print(json.dumps({"merged": False,
     git push origin --delete "$BRANCH" >> "$LOG" 2>&1 || true
     git worktree remove --force "$WORKTREE_ROOT/${BRANCH#case-}" >> "$LOG" 2>&1 || true
     git branch -D "$BRANCH" >> "$LOG" 2>&1 || true
+    dump_run_log
     echo '{"merged": true, "branch_deleted": true}'
     exit 0
   else
     git merge --abort >> "$LOG" 2>&1 || true
+    dump_run_log
     echo '{"merged": false, "error": "merge conflict"}'
     exit 1
   fi
@@ -434,6 +724,9 @@ ensure_repo || {
   [ -n "${BOOTSTRAP_PIN_FAIL:-}" ] && _EC="error_class=infra "
   emit "failed" "$BRANCH" 1     "${_EC}${BOOTSTRAP_PIN_FAIL:-Platform repo unavailable}"     "${BOOTSTRAP_PIN_FAIL:+Bootstrap pin check failed (infra, not a task defect)}${BOOTSTRAP_PIN_FAIL:-Could not clone/fetch grotap-platform}" 0
 }
+# Pin is on disk now. Finish the run from a private copy of this wrapper
+# and drivers/ so the checkout cannot change the code under us.
+reexec_snapshot "$@"
 
 # Worktree GC + inode guard (fleet incident 2026-07-08: hundreds of stale
 # done-case worktrees, each carrying a node_modules, exhausted inodes on
@@ -571,206 +864,95 @@ $RETRY_BLOCK
 - Before finishing, validate: run 'npx tsc --noEmit' in any frontend/TS package you changed, and 'python3 -m py_compile' on any backend .py file you changed.
 - If you cannot complete the task, explain why clearly."
 
-# ── Permission policy ────────────────────────────────────────────────────────
-# Replaces --dangerously-skip-permissions with an explicit allow/deny policy so
-# the agent can do normal dev work (git/npm/tsc/python/file edits) but CANNOT
-# exfiltrate (curl/wget/ssh/scp/nc), read secrets (.env, ~/.ssh, doppler), or
-# run destructive/privileged commands. `deny` always wins over `allow`.
-#
-# The settings file lives OUTSIDE the worktree (so it's never committed) and is
-# passed via --settings (highest precedence). Rollout is env-gated per the
-# CLAUDE.md "framework change → staging first" rule. The orchestrator is LIVE,
-# so the DEFAULT preserves current behavior; flip the env in Doppler to enforce
-# after validating on one server (a headless permission prompt would hang a slot
-# until the SSH timeout, so prove the allow-list is complete before fleet-wide):
-#   CLAUDE_PERMISSION_MODE=bypass       (default) — current behavior (skip perms)
-#   CLAUDE_PERMISSION_MODE=acceptEdits            — enforce allow/deny policy
-#   CLAUDE_PERMISSION_MODE=dontAsk                — strict fail-closed (deny, no prompt)
-#
-# ── What the two enforcing modes ACTUALLY do (measured 2026-09-15, claude CLI
-#    2.1.273, against this exact policy file — not inferred) ─────────────────
-#   acceptEdits : the `allow` list is NOT a reliable whitelist for Bash.
-#                 `rm -rf dist` is in neither `allow` nor `deny`, and RAN — no
-#                 prompt, no denial. But do NOT generalise that to "acceptEdits
-#                 enforces nothing": `dd if=/dev/zero of=...` and `tar -cf ...`,
-#                 equally unlisted, were DENIED under the same mode. So the CLI
-#                 appears to carry an internal, undocumented carve-out for
-#                 certain commands (at least `rm`, and `hostname`) rather than a
-#                 general absence of enforcement. What is safe to rely on:
-#                 `deny` always bites, and an unlisted command MAY run. Treat
-#                 acceptEdits as "bypass minus the deny list, plus an
-#                 unspecified extra" — not as a whitelist.
-#                 Externally-reaching tools are still gated: WebFetch denied.
-#                 Unexplained rather than assumed absent: `hostname` ran
-#                 unprompted even under dontAsk, which looks like a separate
-#                 inert-command carve-out. Nobody has read the CLI source for
-#                 either carve-out; both are black-box observations.
-#   dontAsk     : the `allow` list IS a whitelist. The same `rm -rf dist2` was
-#                 DENIED in 7 seconds, recorded in permission_denials, directory
-#                 left in place.
-#   NEITHER MODE HUNG. The header's warning below about a headless prompt
-#   hanging a slot until the SSH timeout did not reproduce on this CLI version;
-#   denials came back clean and fast in both modes. That lowers the cost of
-#   flipping the env — but agents/setup-server.sh installs @anthropic-ai/
-#   claude-code UNPINNED, so re-measure against the version actually on the box
-#   before trusting it fleet-wide.
-#
-# ── What this policy cannot do, stated plainly ──────────────────────────────
-# `Bash(python3 *)` and `Bash(node *)` are in `allow` and are REQUIRED (the
-# prompt above tells the agent to run python3 -m py_compile; npm/npx run
-# arbitrary package scripts). An interpreter is a general-purpose file-read and
-# process-spawn primitive, so the allow list is not a containment boundary.
-# Measured: `node -e "...readFileSync(...)"` ran with permission_denials EMPTY.
-# The same prompt aimed at .env was refused — but by the MODEL, not the policy,
-# and model judgment is not a control. What the deny list does buy is real and
-# worth keeping: the direct network-egress verbs and the obvious secret paths
-# are blocked, including via head/grep/sed/awk (all four were denied against a
-# canary .env — the engine matches the path, not just the verb).
-# Do NOT add Bash(bash *), Bash(sh *), Bash(xargs *), Bash(timeout *) or
-# Bash(tar *) to `allow`: each is a launcher that would void the list wholesale.
-PERM_MODE="${CLAUDE_PERMISSION_MODE:-bypass}"
-SETTINGS_FILE="$HOME/.config/orchestrator/claude-settings.json"
-mkdir -p "$(dirname "$SETTINGS_FILE")"
-# Atomic write. Up to 3 slots share this box and this path is FIXED, so a plain
-# `cat >` truncate-in-place lets a peer read a half-written file — and `claude
-# -p` SILENTLY IGNORES a settings file that fails validation (documented in
-# `claude --help`), i.e. the policy would vanish with no error. The trust stamp
-# for ~/.claude.json above takes the same precaution for the same reason.
-_SETTINGS_TMP="${SETTINGS_FILE}.$$.tmp"
-cat > "$_SETTINGS_TMP" <<'JSON'
-{
-  "permissions": {
-    "allow": [
-      "Read", "Edit", "Write", "Glob", "Grep",
-      "Bash(git *)",
-      "Bash(npm *)", "Bash(npx *)", "Bash(pnpm *)", "Bash(yarn *)", "Bash(node *)",
-      "Bash(python *)", "Bash(python3 *)", "Bash(pip *)", "Bash(pip3 *)",
-      "Bash(pytest *)", "Bash(ruff *)", "Bash(mypy *)",
-      "Bash(tsc *)", "Bash(eslint *)", "Bash(prettier *)", "Bash(vite *)",
-      "Bash(ls *)", "Bash(cat *)", "Bash(head *)", "Bash(tail *)",
-      "Bash(grep *)", "Bash(rg *)", "Bash(find *)", "Bash(wc *)",
-      "Bash(sort *)", "Bash(uniq *)", "Bash(diff *)",
-      "Bash(mkdir *)", "Bash(cp *)", "Bash(mv *)", "Bash(touch *)",
-      "Bash(echo *)", "Bash(sed *)", "Bash(awk *)",
-      "Bash(cd *)", "Bash(pwd)", "Bash(test *)", "Bash(env)",
-      "Bash(printf *)", "Bash(which *)",
-      "Bash(date *)", "Bash(tr *)", "Bash(cut *)",
-      "Bash(basename *)", "Bash(dirname *)", "Bash(true)"
-    ],
-    "deny": [
-      "Bash(curl *)", "Bash(wget *)",
-      "Bash(ssh *)", "Bash(scp *)", "Bash(sftp *)", "Bash(rsync *)",
-      "Bash(nc *)", "Bash(ncat *)", "Bash(telnet *)",
-      "Bash(doppler *)", "Bash(sudo *)",
-      "Bash(cat *.env*)", "Bash(cat *secret*)", "Bash(cat *.pem)",
-      "Bash(cat ~/.ssh/*)", "Bash(cat ~/.aws/*)",
-      "Read(.env)", "Read(.env.*)", "Read(**/.env)", "Read(**/.env.*)",
-      "Read(~/.ssh/**)", "Read(~/.aws/**)", "Read(~/.config/doppler/**)",
-      "Read(**/id_rsa*)", "Read(**/*.pem)",
-      "WebFetch", "WebSearch",
-      "Bash(git push origin master)", "Bash(git push origin main)",
-      "Bash(git push --force *)", "Bash(git push -f *)"
-    ]
-  }
-}
-JSON
-mv -f "$_SETTINGS_TMP" "$SETTINGS_FILE"
-
-# ── Model selection by complexity (cost control — #5) ────────────────────────
-# Default the heavy coding model to the task's complexity tier; override with
-# CODING_MODEL to pin a single model fleet-wide.
-# Resolved from Doppler FIRST: this script runs on the box outside
-# `doppler run --`, so a value set in Doppler is NOT in the environment here.
-# Reading only $CODING_MODEL made the documented fleet-wide pin silently inert
-# (2026-09-14). Env var still wins if the caller exported one.
-_PINNED_MODEL="$(doppler secrets get CODING_MODEL --plain 2>/dev/null || echo "${CODING_MODEL:-}")"
-case "$COMPLEXITY" in
-  complex) MODEL="${_PINNED_MODEL:-claude-opus-4-8}" ;;
-  *)       MODEL="${_PINNED_MODEL:-claude-sonnet-4-6}" ;;
-esac
-
-# ── Run Claude CLI headless ──────────────────────────────────────────────────
-# Secret narrowing rides the SAME env gate as the permission policy — no second
-# flag. On bypass the invocation below is byte-identical to what it always was.
-#
-# This script is NOT run under `doppler run --` (see the CODING_MODEL comment
-# above, which is load-bearing: a Doppler value is not in this environment). So
-# there is no whole-config injection to undo here. What the agent DOES inherit
-# is everything ~/.env, ~/.profile and ~/.bashrc export — they are sourced with
-# `set -a` at the top of this file, so every one of those values is exported
-# into claude. `Bash(env)` is in the allow list, which makes that inheritance
-# directly readable by the agent.
-# GITHUB_TOKEN is stripped too: the runner's own push happens outside this
-# invocation, and git inside the worktree still authenticates because
-# git-credential-doppler falls back to `doppler secrets get` — a helper git
-# spawns itself, which the Bash(doppler *) deny rule does not touch.
-if [ "$PERM_MODE" = "bypass" ]; then
-  PERM_ARGS=(--dangerously-skip-permissions)
-else
-  PERM_ARGS=(--permission-mode "$PERM_MODE" --settings "$SETTINGS_FILE")
-fi
-log "Running Claude: model=$MODEL perm_mode=$PERM_MODE"
-if [ "$PERM_MODE" = "bypass" ]; then
-  CLAUDE_OUT="$(claude -p "$PROMPT" --model "$MODEL" --output-format json "${PERM_ARGS[@]}" 2>>"$LOG")"
-  CLAUDE_RC=$?
-else
-  CLAUDE_OUT="$(env -u NODE_SECRET -u DOPPLER_TOKEN -u GITHUB_TOKEN \
-      -u DATABASE_URL -u TENANT_DATABASE_URL -u OPEN_MODEL_API_KEY \
-      claude -p "$PROMPT" --model "$MODEL" --output-format json "${PERM_ARGS[@]}" 2>>"$LOG")"
-  CLAUDE_RC=$?
-fi
-
-# Parse claude's JSON result → tab-separated: is_error, result, input_tok, output_tok
-CLAUDE_PARSED="$(printf '%s' "$CLAUDE_OUT" | python3 -c '
-import sys, json
-try:
-    d = json.load(sys.stdin)
-except Exception:
-    print("true\t\t0\t0"); sys.exit(0)
-is_error = str(d.get("is_error", True)).lower()
-result = (d.get("result") or "")[:1000].replace("\n", " ").replace("\t", " ")
-u = d.get("usage") or {}
-print("\t".join([is_error, result, str(u.get("input_tokens", 0) or 0), str(u.get("output_tokens", 0) or 0)]))
-' 2>/dev/null)"
-IFS=$'\t' read -r IS_ERROR RESULT_TEXT IN_TOK OUT_TOK <<< "$CLAUDE_PARSED"
-TOKENS=$(( ${IN_TOK:-0} + ${OUT_TOK:-0} ))
-
-# ── Tool-denial visibility ───────────────────────────────────────────────────
-# A tool refused by the permission policy does NOT make claude exit non-zero and
-# does NOT set is_error: measured, a denied Bash returns is_error=false with the
-# assistant asking for approval. The run then dies further down as "No commits
-# produced on $BRANCH" — which is indistinguishable from an Anthropic API or
-# credit failure, and that misdiagnosis has burned repeated sessions on the
-# status page. So name it, from a structural signal rather than a text grep:
-# `claude --output-format json` emits a top-level "permission_denials" array,
-# one entry per refusal, carrying tool_name and tool_input (verified against
-# claude CLI 2.1.273, for both --disallowedTools and a --settings deny list).
-DENIED_TOOLS="$(printf '%s' "$CLAUDE_OUT" | python3 -c '
-import sys, json
-try:
-    d = json.load(sys.stdin)
-except Exception:
-    d = None
-out = []
-for e in ((d or {}).get("permission_denials") or []):
-    if not isinstance(e, dict):
-        continue
-    name = e.get("tool_name") or "?"
-    ti = e.get("tool_input") if isinstance(e.get("tool_input"), dict) else {}
-    detail = ti.get("command") or ti.get("file_path") or ti.get("url") or ""
-    out.append("%s: %s" % (name, str(detail)[:120]) if detail else name)
-print(" | ".join(out[:10]))
-' 2>/dev/null)"
-
+# ── Dispatch the named driver ────────────────────────────────────────────────
+# No per-tool branch. run-$DRIVER.sh owns the model call. It must not retry
+# or fall back across models; the graph owns retries. A non-success driver
+# status is returned as-is (the Claude driver builds the historical
+# "Claude CLI error:" errors string). cost.source=unknown fails closed.
 DENY_NOTE=""
-if [ -n "$DENIED_TOOLS" ]; then
-  DENY_NOTE="TOOL DENIED BY THE RUNNER PERMISSION POLICY (CLAUDE_PERMISSION_MODE=$PERM_MODE, $SETTINGS_FILE): ${DENIED_TOOLS}. This is NOT an Anthropic API or credit failure — do not go read the status page. Widen the allow list in orchestrator-run.sh, or set CLAUDE_PERMISSION_MODE=bypass to restore unconfined runs."
-  log "$DENY_NOTE"
+RESULT_TEXT=""
+TOKENS=0
+DR_STATUS=""
+DR_ERRORS=""
+DR_SUMMARY=""
+DRIVER_RC=0
+export COMPLEXITY LOG RUN_LOG
+export ORCH_DRIVER="${ORCH_DRIVER:-$DRIVER}"
+export ORCH_TEAM="${ORCH_TEAM:-${TEAM:-team1}}"
+PROMPT_FILE="/tmp/orch-prompt-${ORCH_LOG_TAG}.txt"
+DRIVER_RESULT_FILE="/tmp/orch-driver-${ORCH_LOG_TAG}.json"
+export DRIVER_RESULT_FILE
+printf '%s' "$PROMPT" > "$PROMPT_FILE"
+chmod 600 "$PROMPT_FILE" 2>/dev/null || true
+log "Dispatching driver=$DRIVER"
+"$HERE/drivers/run-${DRIVER}.sh" "$WT" "$PROMPT_FILE" "$DRIVER_RESULT_FILE" 2>>"$RUN_LOG" || DRIVER_RC=$?
+if [ ! -s "$DRIVER_RESULT_FILE" ]; then
+  emit "failed" "$BRANCH" "${DRIVER_RC:-1}" \
+    "error_class=infra driver ${DRIVER} produced no driver-result" \
+    "Driver produced no result (infra, not a task defect)" 0
 fi
+eval "$(python3 - "$DRIVER_RESULT_FILE" <<'PY'
+import json, shlex, sys
+d = json.load(open(sys.argv[1]))
+tok = d.get("tokens") or {}
+def n(v):
+    try:
+        return int(v or 0)
+    except Exception:
+        return 0
+inp = n(tok.get("input"))
+cached = n(tok.get("cached_input"))
+cw = n(tok.get("cache_write_input"))
+outp = n(tok.get("output"))
+back = inp - cached - cw + outp
+if back < 0:
+    back = n(tok.get("total"))
+cost = d.get("cost") or {}
+src = cost.get("source")
+if src is None:
+    src = ""
+err_class = d.get("error_class")
+print("DR_STATUS="+shlex.quote(str(d.get("status") or "failed")))
+print("DR_ERRORS="+shlex.quote(str(d.get("errors") or "")))
+print("DR_SUMMARY="+shlex.quote(str(d.get("summary") or "")))
+print("DR_ERROR_CLASS="+shlex.quote("" if err_class is None else str(err_class)))
+print("DR_COST_SOURCE="+shlex.quote(str(src)))
+print("TOKENS="+str(back))
+PY
+)"
+# Drivers do not price a miss as success. source=unknown is a hard failure
+# and is not a Claude fallback.
+if [ "$DR_COST_SOURCE" = "unknown" ]; then
+  log "ERROR: driver cost.source=unknown — failing closed (error_class=cost_unknown)"
+  python3 - "$DRIVER_RESULT_FILE" <<'PY'
+import json, sys
+path = sys.argv[1]
+with open(path) as fh:
+    d = json.load(fh)
+d["status"] = "failed"
+d["error_class"] = "cost_unknown"
+err = d.get("errors") or ""
+if not str(err).startswith("error_class=cost_unknown"):
+    d["errors"] = ("error_class=cost_unknown " + str(err)).strip()
+with open(path, "w") as fh:
+    json.dump(d, fh)
+    fh.write("\n")
+PY
+  DR_STATUS="failed"
+  DR_ERROR_CLASS="cost_unknown"
+  case "$DR_ERRORS" in
+    error_class=cost_unknown*) ;;
+    *) DR_ERRORS="error_class=cost_unknown ${DR_ERRORS}" ;;
+  esac
+fi
+if [ "$DR_STATUS" != "success" ]; then
+  emit "failed" "$BRANCH" "$DRIVER_RC" "$DR_ERRORS" "${DR_SUMMARY:-Agent run failed}" "$TOKENS"
+fi
+# On success the driver's errors field is the tool-denial note (empty when
+# nothing was denied). The no-commits guard below prepends it, same as before.
+DENY_NOTE="$DR_ERRORS"
+RESULT_TEXT="$DR_SUMMARY"
 
-if [ "$CLAUDE_RC" -ne 0 ] || [ "${IS_ERROR:-true}" = "true" ]; then
-  emit "failed" "$BRANCH" "$CLAUDE_RC" "${DENY_NOTE:+$DENY_NOTE }Claude CLI error: $RESULT_TEXT" "Agent run failed" "$TOKENS"
-fi
 
 # ── Verify (Layer 9) ─────────────────────────────────────────────────────────
 # Real on-server verification, stronger than a typecheck: full `npm run build`
