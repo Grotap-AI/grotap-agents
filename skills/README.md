@@ -133,7 +133,11 @@ bash skills/scripts/load-test.sh --home /tmp/skills-test-home
 
 The script skips Codex or Claude Code when that binary is absent, and it
 skips a live Codex list when the binary is not 0.157.x. Static token numbers
-still print.
+still print. Codex 0.157 omits a skill from the model-visible list when
+`agents/openai.yaml` sets `allow_implicit_invocation: false`, so the live
+check proves repo discovery with a scratch probe and expects the nine
+library skills to be absent from that list. The orchestrator still names
+them.
 
 ## Proof tool
 

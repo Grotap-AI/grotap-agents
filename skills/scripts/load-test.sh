@@ -126,21 +126,65 @@ else
     echo "codex_cwd: $SCRATCH"
     echo "codex_expected_repo_root: $SCRATCH/.agents/skills"
     echo "codex_expected_user_roots: $HOME_DEST/.agents/skills $HOME_DEST/.codex/skills"
+    write_probe() {
+      local dir="$1" name="$2" desc="$3"
+      mkdir -p "$dir"
+      cat > "$dir/SKILL.md" <<EOF
+---
+name: ${name}
+description: "${desc}"
+---
+probe
+EOF
+      echo "scratch_probe: $dir/SKILL.md"
+    }
+    write_probe "$SCRATCH/.agents/skills/loadtest-repo-probe" loadtest-repo-probe \
+      "Scratch repo probe with implicit invocation left on. Not part of the Grotap library."
+    write_probe "$HOME_DEST/.agents/skills/loadtest-user-probe" loadtest-user-probe \
+      "Scratch user-root probe. Not part of the Grotap library."
+    write_probe "$HOME_DEST/.codex/skills/loadtest-codex-home-probe" loadtest-codex-home-probe \
+      "Scratch CODEX_HOME skills probe. Not part of the Grotap library."
     echo "codex_debug_prompt_input:"
     set +e
-    timeout 25s env HOME="$HOME_DEST" CODEX_HOME="$HOME_DEST/.codex" \
-      "$CODEX_BIN" debug prompt-input 'list installed skills' \
-      >"$HOME_DEST/codex-prompt-input.txt" 2>"$HOME_DEST/codex-prompt-input.err"
+    (
+      cd "$SCRATCH"
+      timeout 25s env HOME="$HOME_DEST" CODEX_HOME="$HOME_DEST/.codex" \
+        "$CODEX_BIN" debug prompt-input 'list installed skills' \
+        >"$HOME_DEST/codex-prompt-input.txt" 2>"$HOME_DEST/codex-prompt-input.err"
+    )
     code=$?
     set -e
     echo "exit: $code"
-    echo "--- stdout ---"
-    cat "$HOME_DEST/codex-prompt-input.txt" || true
     echo "--- stderr ---"
     cat "$HOME_DEST/codex-prompt-input.err" || true
-    echo "--- skill paths mentioned ---"
-    grep -E 'SKILL\.md|Available skills|engineering-principles|verify-and-prove' \
-      "$HOME_DEST/codex-prompt-input.txt" "$HOME_DEST/codex-prompt-input.err" || true
+    echo "--- skills section (unescaped) ---"
+    node -e '
+      const fs = require("fs");
+      const raw = fs.readFileSync(process.argv[1], "utf8");
+      const text = raw.replace(/\\n/g, "\n").replace(/\\"/g, "\"");
+      const start = text.indexOf("## Skills");
+      const end = text.indexOf("</skills_instructions>");
+      if (start < 0) { console.log("(no skills_instructions block)"); process.exit(0); }
+      console.log(text.slice(start, end < 0 ? start + 4000 : end));
+    ' "$HOME_DEST/codex-prompt-input.txt" || true
+    echo "--- discovery flags ---"
+    for probe_name in loadtest-repo-probe loadtest-user-probe loadtest-codex-home-probe; do
+      if grep -q "$probe_name" "$HOME_DEST/codex-prompt-input.txt"; then
+        echo "probe_listed: $probe_name yes"
+      else
+        echo "probe_listed: $probe_name no"
+      fi
+    done
+    grotap_hits=0
+    for name in engineering-principles verify-and-prove bug-repro-and-fix ci-failure-triage feature-and-open-pr db-migrations gardener release-and-rollback perf; do
+      if grep -q "$name" "$HOME_DEST/codex-prompt-input.txt"; then
+        echo "explicit_skill_in_prompt: $name"
+        grotap_hits=$((grotap_hits + 1))
+      fi
+    done
+    echo "explicit_library_skills_in_prompt: $grotap_hits"
+    echo "note: rust-v0.157.0 host.rs hides a skill from the prompt when agents/openai.yaml sets allow_implicit_invocation false. Repo discovery is the probe above. The orchestrator must name the library skill."
+    echo "full_stdout: $HOME_DEST/codex-prompt-input.txt"
   else
     echo "SKIP codex live list: binary is not 0.157.x"
   fi
@@ -157,9 +201,9 @@ else
   echo "claude_version_raw:"
   "$CLAUDE_BIN" --version 2>&1 || true
   echo "project_skills:"
-  find "$SCRATCH/.claude/skills" -name SKILL.md | sort
+  find -L "$SCRATCH/.claude/skills" -name SKILL.md | sort
   echo "user_skills_under_throwaway_home:"
-  find "$HOME_DEST/.claude/skills" -name SKILL.md | sort
+  find -L "$HOME_DEST/.claude/skills" -name SKILL.md | sort
   echo "claude_help_skills_lines:"
   set +e
   timeout 20s env HOME="$HOME_DEST" "$CLAUDE_BIN" --help >"$HOME_DEST/claude-help.txt" 2>"$HOME_DEST/claude-help.err"
@@ -175,9 +219,12 @@ else
   fi
   echo "claude_package_root_guess: ${search_root:-none}"
   if [[ -n "$search_root" && -d "$search_root" ]]; then
-    echo "package_mentions_of_.claude/skills:"
-    grep -R -l --include='*.js' --include='*.mjs' --include='*.cjs' --include='*.json' \
-      -e '.claude/skills' "$search_root" 2>/dev/null | head -n 20 || echo "(no matches or package not readable)"
+    echo "binary_mentions_of_.claude/skills:"
+    if [[ -n "$resolved" && -f "$resolved" ]]; then
+      grep -a -o '.claude/skills' "$resolved" | wc -l | awk '{print $1 " matches in the claude binary"}'
+    else
+      echo "(binary path unknown)"
+    fi
   fi
   if [[ -z "${ANTHROPIC_API_KEY:-}${CLAUDE_API_KEY:-}" ]]; then
     echo "SKIP claude live session: no API key"
