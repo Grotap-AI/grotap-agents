@@ -320,13 +320,17 @@ cat "$_claude_err" >> "$LOG" 2>/dev/null || true
 cat "$_claude_err" >&2 || true
 rm -f "$_claude_err"
 
-# Parse claude's JSON result → tab-separated: is_error, result, input_tok, output_tok
+# Parse claude's JSON result into one record: is_error, result, input_tok,
+# output_tok, joined by a unit separator. Tab is IFS whitespace, so an empty
+# result (or the non-JSON fallback's empty field) collapsed and IS_ERROR
+# swallowed the rest of the line. Both producers below use \x1f. The only
+# consumer is the IFS=$'\x1f' read immediately under them.
 CLAUDE_PARSED="$(printf '%s' "$CLAUDE_OUT" | python3 -c '
 import sys, json
 try:
     d = json.load(sys.stdin)
 except Exception:
-    print("true\t\t0\t0"); sys.exit(0)
+    print("true\x1f\x1f0\x1f0"); sys.exit(0)
 is_error = str(d.get("is_error", True)).lower()
 # Unit separator, not tab. Tab is IFS whitespace, so an empty result
 # (error_max_turns) collapsed the next fields and the back-compat token
@@ -379,7 +383,12 @@ if [ "$CLAUDE_RC" -ne 0 ] || [ "${IS_ERROR:-true}" = "true" ]; then
   DR_STATUS="failed"
   DR_ERRORS="${DENY_NOTE:+$DENY_NOTE }Claude CLI error: $RESULT_TEXT"
   DR_SUMMARY="Agent run failed"
+  # A model failure is a task defect. 429 and credit exhaustion are not:
+  # they are capacity failures and must not be scored as the task's fault.
   DR_ERROR_CLASS="task"
+  if printf '%s\n%s\n' "$RESULT_TEXT" "$CLAUDE_OUT" | grep -Eqi '429|rate[_ -]?limit|too many requests|credit balance|insufficient credit|out of credits|credit exhaust'; then
+    DR_ERROR_CLASS="infra"
+  fi
 fi
 ATTEMPTS_INSIDE=1
 

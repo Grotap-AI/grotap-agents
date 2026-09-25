@@ -84,6 +84,19 @@ elif [[ "$mode" == "empty" ]]; then
   # error_max_turns: is_error with an empty result string. Master's tab
   # split collapsed that empty field, so tokens came out as 5.
   echo '{"is_error":true,"result":"","subtype":"error_max_turns","usage":{"input_tokens":10,"output_tokens":5},"permission_denials":[]}'
+elif [[ "$mode" == "nonjson0" ]]; then
+  echo 'not-json'
+elif [[ "$mode" == "trunc" ]]; then
+  printf '%s' '{"is_error":false,"result":"partial"'
+elif [[ "$mode" == "emptycommit" ]]; then
+  echo '{"is_error":true,"result":"","usage":{"input_tokens":10,"output_tokens":5},"permission_denials":[]}'
+  echo touched > README-golden.txt
+  git -c user.email=t@t.com -c user.name=T add README-golden.txt
+  git -c user.email=t@t.com -c user.name=T commit -q -m "agent: empty result"
+elif [[ "$mode" == "r429text0" ]]; then
+  echo '429 Too Many Requests: rate limit exceeded'
+elif [[ "$mode" == "credit" ]]; then
+  echo '{"is_error":true,"result":"Your credit balance is too low","usage":{"input_tokens":2,"output_tokens":1},"permission_denials":[]}'
 else
   echo '{"is_error":false,"result":"stub run complete","usage":{"input_tokens":10,"output_tokens":5},"permission_denials":[]}'
 fi
@@ -288,6 +301,64 @@ assert_eq "G8 driver token split" \
   "$(j 't=d["driver_result"]["tokens"]; print(t["input"], t["output"], t["total"])')" "10 5 15"
 assert_eq "G8 one JSON line" "$(wc -l < "$STDOUT_FILE" | tr -d ' ')" "1"
 
+# Differential against master's tab-split parser. Master fails all five.
+# nonjson0 / trunc: master errors are "Claude CLI error: 0", tokens 0,
+#   because the empty fallback field collapsed. We keep the empty result,
+#   so the error text is "Claude CLI error: " and tokens stay 0. Both fail.
+# emptycommit: master fails before the commit counts, with
+#   "Claude CLI error: 10" and tokens 5. We fail the same way with
+#   "Claude CLI error: " and tokens 15. The commit must not become success.
+# empty: master surfaces "Claude CLI error: 10" (tokens 5), not
+#   "No commits produced". We surface "Claude CLI error: " (tokens 15).
+# r429text0: master surfaces "Claude CLI error: 0". A delimiter mismatch
+#   used to fall through to "No commits produced" or a success. We surface
+#   the CLI error and class 429 as infra.
+cli_fail() {
+  j 'print(d["status"]=="failed" and d["summary"]=="Agent run failed" and d["exit_code"]==0 and d["errors"].startswith("Claude CLI error:") and "No commits produced" not in d["errors"] and "verify" not in d)'
+}
+echo "X1: nonjson0 fails as on master (CLI error, not success)"
+build_home x-nonjson
+run CLAUDE_STUB_MODE=nonjson0
+assert_eq "X1 nonjson0 failed" "$(cli_fail)" "True"
+assert_eq "X1 nonjson0 tokens 0" "$(j 'print(d["tokens"])')" "0"
+assert_eq "X1 nonjson0 empty result kept" "$(j 'print(d["errors"])')" "Claude CLI error: "
+assert_eq "X1 nonjson0 error_class task" "$(j 'print(d["driver_result"]["error_class"])')" "task"
+
+echo "X2: emptycommit fails as on master (the commit does not make it a success)"
+build_home x-emptycommit
+run CLAUDE_STUB_MODE=emptycommit
+assert_eq "X2 emptycommit failed" "$(cli_fail)" "True"
+assert_eq "X2 emptycommit tokens are input plus output" "$(j 'print(d["tokens"])')" "15"
+assert_eq "X2 emptycommit surfaces the CLI error" "$(j 'print(d["errors"])')" "Claude CLI error: "
+
+echo "X3: trunc fails as on master"
+build_home x-trunc
+run CLAUDE_STUB_MODE=trunc
+assert_eq "X3 trunc failed" "$(cli_fail)" "True"
+assert_eq "X3 trunc tokens 0" "$(j 'print(d["tokens"])')" "0"
+assert_eq "X3 trunc empty result kept" "$(j 'print(d["errors"])')" "Claude CLI error: "
+
+echo "X4: empty surfaces the CLI error, not 'No commits produced'"
+build_home x-empty
+run CLAUDE_STUB_MODE=empty
+assert_eq "X4 empty is a CLI error" "$(cli_fail)" "True"
+assert_eq "X4 empty tokens are input plus output" "$(j 'print(d["tokens"])')" "15"
+assert_eq "X4 empty error text" "$(j 'print(d["errors"])')" "Claude CLI error: "
+
+echo "X5: r429text0 surfaces the CLI error as infra, not 'No commits produced'"
+build_home x-429
+run CLAUDE_STUB_MODE=r429text0
+assert_eq "X5 r429text0 is a CLI error" "$(cli_fail)" "True"
+assert_eq "X5 r429text0 tokens 0" "$(j 'print(d["tokens"])')" "0"
+assert_eq "X5 r429text0 error_class infra" "$(j 'print(d["driver_result"]["error_class"])')" "infra"
+
+echo "X6: credit exhaustion is infra, not task"
+build_home x-credit
+run CLAUDE_STUB_MODE=credit
+assert_eq "X6 credit is a CLI error" "$(cli_fail)" "True"
+assert_eq "X6 credit text kept" "$(j 'print("credit balance" in d["errors"])')" "True"
+assert_eq "X6 credit error_class infra" "$(j 'print(d["driver_result"]["error_class"])')" "infra"
+
 echo "H1: host label mismatch refuses before any repo access"
 build_home h1
 LABEL="$FAKEHOME/label.json"
@@ -391,7 +462,7 @@ PAYLOAD='{"case_id":"CASE-20260915-AAAAAA","branch":"case-20260915-aaaaaa","titl
 run
 assert_eq "D5 one JSON line" "$(wc -l < "$STDOUT_FILE" | tr -d ' ')" "1"
 assert_eq "D5 parses and is an infra failure" \
-  "$(j 'print(d["status"]=="failed" and d["errors"].startswith("error_class=infra") and "malformed" in d["errors"] and d["driver_result"]["error_class"]=="infra")')" "True"
+  "$(j 'print(d["status"]=="failed" and d["errors"].startswith("error_class=infra") and "malformed" in d["errors"] and d["driver_result"]["status"]=="failed" and d["driver_result"]["error_class"]=="infra")')" "True"
 rm -f "$FAKE_DRIVER"; FAKE_DRIVER=""
 PAYLOAD="$TEAM1_PAYLOAD"
 

@@ -418,13 +418,30 @@ checkout_bootstrap_pin() {
 
 # ── Ensure platform repo exists and is current ───────────────────────────────
 ensure_repo() {
-  # The re-exec'd copy already sits on the tree the first process fetched
-  # and checked out. Fetching again doubles the network round trip and can
-  # move HEAD under the run that just pinned it.
+  # A preset ORCH_BOOTSTRAP_FETCH_DONE=1 (from ~/.env, dotfiles, or the
+  # orchestrator's run_env) must not skip fetch, verify, or checkout.
+  # Honour the skip only for the re-exec'd copy, and only after that copy
+  # proves it is still on the commit the parent pinned.
   if [ "${ORCH_BOOTSTRAP_FETCH_DONE:-}" = "1" ]; then
-    log "runner re-exec: skipping bootstrap fetch and checkout"
-    cd "$PLATFORM_DIR" || return 1
-    return 0
+    local snap="/tmp/runner-${ORCH_LOG_TAG}"
+    local snap_ok=0
+    case "$0" in
+      "$snap"|"$snap"/*) snap_ok=1 ;;
+    esac
+    if [ "${ORCH_RUNNER_REEXECED:-}" = "1" ] && [ "$snap_ok" = "1" ]; then
+      local head
+      head="$(git -C "$HOME/grotap-agents" rev-parse HEAD 2>/dev/null || true)"
+      if [ -z "${ORCH_BOOTSTRAP_PINNED_SHA:-}" ] || [ "$head" != "$ORCH_BOOTSTRAP_PINNED_SHA" ]; then
+        BOOTSTRAP_PIN_FAIL="bootstrap pin: re-exec HEAD '${head:-missing}' does not equal pinned '${ORCH_BOOTSTRAP_PINNED_SHA:-unset}'"
+        log "ERROR: $BOOTSTRAP_PIN_FAIL"
+        return 1
+      fi
+      log "runner re-exec: skipping bootstrap fetch and checkout (HEAD $head)"
+      cd "$PLATFORM_DIR" || return 1
+      return 0
+    fi
+    log "WARN: ignoring preset ORCH_BOOTSTRAP_FETCH_DONE (not a re-exec under ${snap})"
+    unset ORCH_BOOTSTRAP_FETCH_DONE
   fi
   ensure_git_auth
   # Self-sync the bootstrap repo: the orchestrator SSH path runs this file straight from
@@ -676,7 +693,14 @@ reexec_snapshot() {
   log "runner snapshot exec $dest/orchestrator-run.sh"
   export ORCH_RUNNER_REEXECED=1
   # The copy is the same process image on the same tree. Do not fetch or
-  # checkout again; the first process already did both.
+  # checkout again; the first process already did both. Pass the blessed
+  # SHA so the child can prove HEAD did not move. Detach mode sets
+  # BOOTSTRAP_PIN_SHA; off/ancestor run the tip, so HEAD is the check.
+  local _pin_sha="${BOOTSTRAP_PIN_SHA:-}"
+  if [ -z "$_pin_sha" ]; then
+    _pin_sha="$(git -C "$HOME/grotap-agents" rev-parse HEAD 2>/dev/null || true)"
+  fi
+  export ORCH_BOOTSTRAP_PINNED_SHA="$_pin_sha"
   export ORCH_BOOTSTRAP_FETCH_DONE=1
   export ORCH_LOG_TAG ORCH_STARTED_AT
   exec bash "$dest/orchestrator-run.sh" "$@" < "$pf"
@@ -934,7 +958,7 @@ try:
 except Exception:
     print("DR_PARSE_OK=0")
     sys.exit(0)
-if not isinstance(d, dict):
+if not isinstance(d, dict) or d.get("schema") != "driver-result/v1":
     print("DR_PARSE_OK=0")
     sys.exit(0)
 tok = d.get("tokens") or {}
@@ -950,21 +974,55 @@ outp = n(tok.get("output"))
 back = inp - cached - cw + outp
 if back < 0:
     back = n(tok.get("total"))
-cost = d.get("cost") or {}
+cost = d.get("cost") if isinstance(d.get("cost"), dict) else {}
 src = cost.get("source")
 if src is None:
     src = ""
 err_class = d.get("error_class")
-print("DR_PARSE_OK=1")
 print("DR_STATUS="+shlex.quote(str(d.get("status") or "failed")))
 print("DR_ERRORS="+shlex.quote(str(d.get("errors") or "")))
 print("DR_SUMMARY="+shlex.quote(str(d.get("summary") or "")))
 print("DR_ERROR_CLASS="+shlex.quote("" if err_class is None else str(err_class)))
 print("DR_COST_SOURCE="+shlex.quote(str(src)))
 print("TOKENS="+str(back))
+print("DR_PARSE_OK=1")
 PY
 )" || true
 if [ "${DR_PARSE_OK:-0}" != "1" ]; then
+  # Do not leave the driver's file for emit() to load. A JSON-looking
+  # document can still say status success; replace it with our own
+  # failed/infra result before the result line is built.
+  python3 - "$DRIVER_RESULT_FILE" <<'PY'
+import json, os, sys
+path = sys.argv[1]
+now = os.environ.get("ORCH_STARTED_AT") or None
+driver = os.environ.get("ORCH_DRIVER") or None
+doc = {
+    "schema": "driver-result/v1",
+    "team": os.environ.get("ORCH_TEAM") or None,
+    "driver": driver,
+    "driver_version": None,
+    "tool_bin": None,
+    "provider": None,
+    "model": None,
+    "profile": None,
+    "status": "failed",
+    "error_class": "infra",
+    "summary": "Malformed driver result (infra, not a task defect)",
+    "errors": "error_class=infra driver %s produced a malformed driver-result" % (driver or ""),
+    "tokens": {"input": 0, "cached_input": 0, "cache_write_input": 0,
+               "output": 0, "reasoning": 0, "total": 0},
+    "cost": {"usd": None, "source": "not_priced", "price_table_version": None,
+             "long_context_multiplier_applied": False},
+    "attempts_inside_driver": 0,
+    "session_id": None,
+    "started_at": now,
+    "ended_at": now,
+}
+with open(path, "w") as fh:
+    json.dump(doc, fh)
+    fh.write("\n")
+PY
   emit "failed" "$BRANCH" "${DRIVER_RC:-1}" \
     "error_class=infra driver ${DRIVER} produced a malformed driver-result" \
     "Malformed driver result (infra, not a task defect)" 0

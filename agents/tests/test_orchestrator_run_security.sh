@@ -447,6 +447,68 @@ assert_eq "T15 read from the fetched remote, not the working tree" \
 assert_eq "T15 not reported as unpinned" "$(logged 'UNPINNED')" "0"
 assert_eq "T15 the commented pin was enforced" "$(bhead)" "$PIN_BASE"
 
+echo "T16: a preset ORCH_BOOTSTRAP_FETCH_DONE without re-exec still verifies the pin"
+build_home t16; printf '%s\n' "$PIN_BASE" > "$PIN_FILE"
+run ORCH_BOOTSTRAP_FETCH_DONE=1
+assert_eq "T16 warned and did not honour the preset" \
+  "$(atleast1 "$(logged 'ignoring preset ORCH_BOOTSTRAP_FETCH_DONE')")" "yes"
+assert_eq "T16 HEAD is the pinned commit" "$(bhead)" "$PIN_BASE"
+assert_eq "T16 tip content is NOT on disk" \
+  "$([[ -f "$FAKEHOME/grotap-agents/agents/two.txt" ]] && echo present || echo absent)" "absent"
+assert_eq "T16 checkout still ran" "$(atleast1 "$(logged 'CHECKED OUT detached at pinned')")" "yes"
+
+echo "T17: FETCH_DONE plus re-exec with the wrong \$0 still verifies the pin"
+build_home t17; printf '%s\n' "$PIN_BASE" > "$PIN_FILE"
+run ORCH_RUNNER_REEXECED=1 ORCH_BOOTSTRAP_FETCH_DONE=1 ORCH_BOOTSTRAP_PINNED_SHA="$AGENTS_TIP"
+assert_eq "T17 warned" \
+  "$(atleast1 "$(logged 'ignoring preset ORCH_BOOTSTRAP_FETCH_DONE')")" "yes"
+assert_eq "T17 HEAD is the pinned commit, not the passed tip" "$(bhead)" "$PIN_BASE"
+assert_eq "T17 tip content is NOT on disk" \
+  "$([[ -f "$FAKEHOME/grotap-agents/agents/two.txt" ]] && echo present || echo absent)" "absent"
+assert_eq "T17 did not report a HEAD mismatch" \
+  "$(printf '%s' "$(rfield errors)" | grep -c 'does not equal pinned')" "0"
+
+echo "T18: a re-exec whose HEAD is not the pinned SHA fails closed"
+build_home t18; printf '%s\n' "$PIN_BASE" > "$PIN_FILE"
+TAG="sect18$$"
+DEST="/tmp/runner-${TAG}"
+rm -rf "$DEST"
+mkdir -p "$DEST"
+cp -a "$RUNNER" "$DEST/orchestrator-run.sh"
+cp -a "$SCRIPT_DIR/../scripts/drivers" "$DEST/drivers"
+chmod +x "$DEST/orchestrator-run.sh" "$DEST/drivers/"*.sh
+HEAD_BEFORE="$(bhead)"
+mkdir -p "$TMP/state"; rm -f "$TMP/state/claude.argv"
+OUT=$(printf '%s' "$PAYLOAD" | \
+  env PATH="$STUBS:$PATH" HOME="$FAKEHOME" USERPROFILE="$FAKEHOME" STATE_DIR="$TMP/state" \
+      ANTHROPIC_API_KEY=test-key NODE_SECRET=node-secret-value \
+      DOPPLER_TOKEN=dp.st.fake GITHUB_TOKEN=ghp_fake \
+      ORCH_RUNNER_REEXECED=1 ORCH_BOOTSTRAP_FETCH_DONE=1 \
+      ORCH_BOOTSTRAP_PINNED_SHA=0000000000000000000000000000000000000000 \
+      ORCH_LOG_TAG="$TAG" \
+      bash "$DEST/orchestrator-run.sh" 2>&1) || true
+RESULT_JSON=$(printf '%s\n' "$OUT" | python3 -c '
+import sys, json
+last = ""
+for line in sys.stdin.read().splitlines():
+    line = line.strip()
+    if line.startswith("{") and line.endswith("}"):
+        try:
+            json.loads(line); last = line
+        except ValueError:
+            pass
+print(last)')
+assert_eq "T18 status failed" "$(rfield status)" "failed"
+assert_eq "T18 names the HEAD mismatch" \
+  "$(printf '%s' "$(rfield errors)" | grep -c 'does not equal pinned')" "1"
+assert_eq "T18 error_class infra" "$(rfield errors | awk '{print $1}')" "error_class=infra"
+assert_eq "T18 driver_result error_class infra" \
+  "$(printf '%s' "$RESULT_JSON" | python3 -c 'import sys,json; print(json.load(sys.stdin)["driver_result"]["error_class"])')" "infra"
+assert_eq "T18 HEAD was not moved" "$(bhead)" "$HEAD_BEFORE"
+assert_eq "T18 model never ran" "$([[ -f "$TMP/state/claude.argv" ]] && echo yes || echo no)" "no"
+assert_eq "T18 did not skip the pin" "$(logged 'skipping bootstrap fetch')" "0"
+rm -rf "$DEST"
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 [[ $FAIL -eq 0 ]]
