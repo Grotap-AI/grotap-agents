@@ -631,7 +631,7 @@ Retiring the key without minting keys for these nine removes all SSH access to t
 > gone: `agent-21`, `agent-31` and `agent-41` were deleted in Hetzner on 2026-09-16 and
 > `agent-30` on 2026-09-20. All four addresses above are RELEASED, and Hetzner recycles
 > released addresses — never SSH them and never mint a key for them. Five hosts remain
-> in scope for the key work: `agent-20`, `agent-40`, `GEX131`/`llm-gpu-02`, `maps-01`,
+> in scope for the key work: `agent-10-codex` (was `agent-20`), `monitor-01-deepseek` (was `agent-40`), `GEX131`/`llm-gpu-02`, `maps-01`,
 > `claudecode-01`.
 
 **Thirteen workstation scripts each duplicate the same fallback line** — `agents/dispatch.sh:30`
