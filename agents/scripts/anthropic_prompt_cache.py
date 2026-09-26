@@ -8,10 +8,12 @@ model minimum (1024 tokens for Sonnet/Opus, 2048 for Haiku). Per-request
 content — case ids, diffs, timestamps — stays after that prefix and is
 never marked.
 
-Claude Code CLI caching is automatic. This module also builds the
-orchestrator user prompt so its stable rules precede the per-case payload,
-and it reads cache_creation_input_tokens / cache_read_input_tokens off CLI
-usage payloads.
+Claude Code caches its own system prompt only when every
+DISABLE_PROMPT_CACHING* switch is unset. The orchestrator user prompt is
+one `claude -p` string. Its rules block is under the 1024-token minimum,
+so putting the rules first is not a cache breakpoint. This module still
+builds that prompt (rules, then the per-case payload) and reads
+cache_creation_input_tokens / cache_read_input_tokens off CLI usage.
 """
 
 from __future__ import annotations
@@ -76,11 +78,13 @@ def _attempt(value: Any) -> int:
 
 
 def build_orchestrator_prompt(payload: dict) -> str:
-    """User prompt for `claude -p`. Stable rules first, request fields after.
+    """User prompt for one `claude -p` string. Standing rules, then request fields.
 
-    case_id, branch, and attempt are not interpolated into the stable prefix.
-    They only appear if the caller already put them in a per-request field
-    (title, context, requirements, plan, context pack, or prior errors).
+    The rules block is under the 1024-token cache minimum. Ordering it first
+    does not create a cache breakpoint. case_id, branch, and attempt are not
+    interpolated into the rules. They only appear if the caller already put
+    them in a per-request field (title, context, requirements, plan, context
+    pack, or prior errors).
     """
     title = _s(payload.get("title"))
     context = _s(payload.get("context"))
@@ -336,25 +340,37 @@ def extract_usage(payload: dict) -> tuple[int, int, int, int]:
     return input_tokens, output_tokens, creation, read
 
 
-def parse_cli_usage_line(raw: str) -> str:
-    """Tab line: is_error, result, input, output, cache_creation, cache_read.
+# Unit separator, not tab. Bash `read` treats tab as IFS whitespace and
+# collapses an empty result field, which shifts every token count left.
+USAGE_FIELD_SEP = "\x1f"
 
-    Matches the previous orchestrator parser for the first four fields
-    (is_error defaults to true, result clipped to 1000 chars, newlines and
-    tabs stripped) and appends the two cache counters.
+
+def _usage_record(is_error: str, result: str, input_tokens: int, output_tokens: int, creation: int, read: int) -> str:
+    safe_result = (
+        result.replace("\n", " ").replace("\t", " ").replace("\r", " ").replace(USAGE_FIELD_SEP, " ")
+    )
+    return USAGE_FIELD_SEP.join(
+        [is_error, safe_result, str(input_tokens), str(output_tokens), str(creation), str(read)]
+    )
+
+
+def parse_cli_usage_line(raw: str) -> str:
+    """Unit-separator line: is_error, result, input, output, cache_creation, cache_read.
+
+    is_error defaults to true. result is clipped to 1000 chars. Newlines,
+    tabs, and the field separator are stripped so an empty result stays an
+    empty field instead of shifting the token counts.
     """
     try:
         payload = json.loads(raw)
     except Exception:
-        return "true\t\t0\t0\t0\t0"
+        return _usage_record("true", "", 0, 0, 0, 0)
     if not isinstance(payload, dict):
-        return "true\t\t0\t0\t0\t0"
+        return _usage_record("true", "", 0, 0, 0, 0)
     is_error = str(payload.get("is_error", True)).lower()
-    result = (payload.get("result") or "")[:1000].replace("\n", " ").replace("\t", " ")
+    result = (payload.get("result") or "")[:1000]
     input_tokens, output_tokens, creation, read = extract_usage(payload)
-    return "\t".join(
-        [is_error, result, str(input_tokens), str(output_tokens), str(creation), str(read)]
-    )
+    return _usage_record(is_error, result, input_tokens, output_tokens, creation, read)
 
 
 def main(argv: list[str]) -> int:

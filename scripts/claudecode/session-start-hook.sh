@@ -17,16 +17,17 @@
 #      docs/CLAUDE_CODE_CLOUD_ENV.md when doppler is missing.
 #
 # CONTRACT: must NEVER fail or block the session — every step guarded, exit 0.
-# stdout is appended to the session's context. Claude Code prompt-caches that
-# leading context, so the byte-stable rule is printed first and every per-run
-# sha, count, and timestamp is buffered until after prompt-cache-prefix-end.
+# stdout is appended to the session's context. Per-run shas and counts are
+# buffered until after prompt-cache-prefix-end. That marker is a few tokens,
+# under the cache minimum; it does not by itself create a cache hit. The
+# file:line RULE line is printed only when the checkout is behind
+# origin/master, same as before.
 set -u
 
 # Quoted heredoc: nothing in here is expanded. Keep it free of dates, shas,
-# case ids, and command substitutions — it is the cached prefix.
+# case ids, and command substitutions. This is not a cache breakpoint.
 print_prompt_cache_prefix() {
   cat <<'EOF'
-[bootstrap] !! RULE: never quote a file:line from this tree in a report, a correction or an argument without re-reading it via `git show origin/master:<path>` (prefix MSYS_NO_PATHCONV=1 when the path starts with a dot).
 [bootstrap] prompt-cache-prefix-end
 EOF
 }
@@ -118,6 +119,7 @@ main() {
         say "[bootstrap] freshness: CURRENT with origin/master (0 behind, $ST_AHEAD ahead, $ST_DIRTY dirty) on $ST_BRANCH"
       else
         say "[bootstrap] !! STALE CHECKOUT: $ST_BEHIND commits BEHIND origin/master ($ST_AHEAD ahead, $ST_DIRTY dirty paths) on branch '$ST_BRANCH' -- $ST_TOP"
+        say "[bootstrap] !! RULE: never quote a file:line from this tree in a report, a correction or an argument without re-reading it via \`git show origin/master:<path>\` (prefix MSYS_NO_PATHCONV=1 when the path starts with a dot)."
       fi
     else
       say "[bootstrap] freshness: unknown (no origin/master ref here -- counts unavailable)"

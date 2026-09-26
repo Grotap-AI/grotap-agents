@@ -253,6 +253,10 @@ class PrefixStabilityTest(unittest.TestCase):
         self.assertIn("do NOT push", prefix)
         self.assertIn("retry attempt 3", second)
         self.assertNotIn("retry attempt", first)
+        # (len+3)//4. Under the Sonnet/Opus floor, so this block is not a
+        # breakpoint. A later pad past 1024 has to update this assertion
+        # and the PR claim together.
+        self.assertLess(mod.estimate_tokens(prefix), 1024)
 
     def test_cli_prompt_prefix_matches_across_payloads(self):
         def run(payload: dict) -> str:
@@ -269,6 +273,9 @@ class PrefixStabilityTest(unittest.TestCase):
 
 
 class UsageLoggingTest(unittest.TestCase):
+    def _parts(self, line: str) -> list[str]:
+        return line.split("\x1f")
+
     def test_flat_usage_fields(self):
         line = mod.parse_cli_usage_line(
             json.dumps(
@@ -284,8 +291,63 @@ class UsageLoggingTest(unittest.TestCase):
                 }
             )
         )
-        parts = line.split("\t")
-        self.assertEqual(parts, ["false", "ok line", "3", "4", "100", "50"])
+        self.assertEqual(self._parts(line), ["false", "ok line", "3", "4", "100", "50"])
+        self.assertNotIn("\t", line)
+
+    def test_empty_result_does_not_shift_token_fields(self):
+        cases = (
+            (
+                {
+                    "subtype": "error_max_turns",
+                    "is_error": True,
+                    "result": "",
+                    "usage": {
+                        "input_tokens": 6000,
+                        "output_tokens": 42,
+                        "cache_creation_input_tokens": 400000,
+                        "cache_read_input_tokens": 0,
+                    },
+                },
+                ["true", "", "6000", "42", "400000", "0"],
+            ),
+            (
+                {
+                    "is_error": True,
+                    "usage": {
+                        "input_tokens": 7,
+                        "output_tokens": 8,
+                        "cache_creation_input_tokens": 9,
+                        "cache_read_input_tokens": 10,
+                    },
+                },
+                ["true", "", "7", "8", "9", "10"],
+            ),
+            (
+                {
+                    "is_error": False,
+                    "result": "",
+                    "usage": {
+                        "input_tokens": 11,
+                        "output_tokens": 22,
+                        "cache_creation_input_tokens": 33,
+                        "cache_read_input_tokens": 44,
+                    },
+                },
+                ["false", "", "11", "22", "33", "44"],
+            ),
+        )
+        reader = r"""
+IFS=$'\x1f' read -r is_error result in_tok out_tok cache_create cache_read <<< "$1"
+printf '%s\n' "$is_error" "$result" "$in_tok" "$out_tok" "$cache_create" "$cache_read"
+"""
+        for payload, expected in cases:
+            line = mod.parse_cli_usage_line(json.dumps(payload))
+            self.assertEqual(self._parts(line), expected)
+            read = subprocess.check_output(
+                ["bash", "-c", reader, "bash", line],
+                text=True,
+            ).splitlines()
+            self.assertEqual(read, expected)
 
     def test_nested_cache_creation_and_model_usage_fallback(self):
         creation, read = mod._cache_pair(
@@ -314,24 +376,55 @@ class UsageLoggingTest(unittest.TestCase):
         self.assertEqual((input_tokens, output_tokens, creation, read), (3, 4, 8, 9))
 
     def test_invalid_cli_payload_is_zeroed(self):
-        self.assertEqual(mod.parse_cli_usage_line("not-json"), "true\t\t0\t0\t0\t0")
+        self.assertEqual(mod.parse_cli_usage_line("not-json"), "true\x1f\x1f0\x1f0\x1f0\x1f0")
 
 
 class ClaudeCliCacheSwitchTest(unittest.TestCase):
-    def test_helper_unsets_disable_switches(self):
+    def test_helper_unsets_every_disable_variant(self):
         script = r"""
 set -u
 export DISABLE_PROMPT_CACHING=1
+export DISABLE_PROMPT_CACHING_SONNET=1
+export DISABLE_PROMPT_CACHING_OPUS=1
+export DISABLE_PROMPT_CACHING_HAIKU=1
+export DISABLE_PROMPT_CACHING_FABLE=1
+export DISABLE_PROMPT_CACHING_FUTURE=1
 export CLAUDE_CODE_DISABLE_PROMPT_CACHING=1
+export CLAUDE_CODE_DISABLE_PROMPT_CACHING_EXTRA=1
+export KEEP_SENTINEL=kept
 . "$1"
-if [ -n "${DISABLE_PROMPT_CACHING+x}" ]; then echo still-set-disable; exit 1; fi
-if [ -n "${CLAUDE_CODE_DISABLE_PROMPT_CACHING+x}" ]; then echo still-set-prefixed; exit 1; fi
+for name in \
+  DISABLE_PROMPT_CACHING \
+  DISABLE_PROMPT_CACHING_SONNET \
+  DISABLE_PROMPT_CACHING_OPUS \
+  DISABLE_PROMPT_CACHING_HAIKU \
+  DISABLE_PROMPT_CACHING_FABLE \
+  DISABLE_PROMPT_CACHING_FUTURE \
+  CLAUDE_CODE_DISABLE_PROMPT_CACHING \
+  CLAUDE_CODE_DISABLE_PROMPT_CACHING_EXTRA
+do
+  if [ -n "${!name+x}" ]; then echo "still-set $name"; exit 1; fi
+done
+if [ "${KEEP_SENTINEL}" != kept ]; then echo sentinel-lost; exit 1; fi
 # unset of an already-absent variable must not trip set -u
 . "$1"
-echo ok
+if [ "${KEEP_SENTINEL}" != kept ]; then echo sentinel-lost-second; exit 1; fi
+echo sourced-ok
 """
         out = subprocess.check_output(["bash", "-c", script, "bash", str(ENV_PATH)], text=True)
-        self.assertEqual(out.strip(), "ok")
+        self.assertEqual(out.strip(), "sourced-ok")
+
+        exec_script = r"""
+set -u
+export DISABLE_PROMPT_CACHING_HAIKU=from-parent
+export KEEP_SENTINEL=kept
+bash "$1" bash -c 'if [ -n "${DISABLE_PROMPT_CACHING_HAIKU+x}" ]; then echo haiku-set; exit 1; fi; if [ "${KEEP_SENTINEL}" != kept ]; then echo sentinel-lost; exit 1; fi; echo exec-ok'
+"""
+        executed = subprocess.check_output(
+            ["bash", "-c", exec_script, "bash", str(ENV_PATH)],
+            text=True,
+        )
+        self.assertEqual(executed.strip(), "exec-ok")
 
     def test_drivers_source_the_helper_before_claude(self):
         needles = {
@@ -347,6 +440,13 @@ echo ok
             )
             self.assertIn("claude-prompt-cache.sh", code, path.name)
             self.assertLess(code.index("claude-prompt-cache.sh"), code.index(needle), path.name)
+            self.assertNotIn("unset DISABLE_PROMPT_CACHING", code, path.name)
+        gate = "\n".join(
+            line
+            for line in GATE_PATH.read_text().splitlines()
+            if not line.strip().startswith("#")
+        )
+        self.assertLess(gate.index('bash "$_CACHE_SH"'), gate.index("claude -p "))
 
     def test_probe_builds_the_body_through_the_placer(self):
         text = PROBE_PATH.read_text()
@@ -373,9 +473,11 @@ print_prompt_cache_prefix
         second = subprocess.check_output(["bash", "-c", script], text=True)
         self.assertEqual(first, second)
         self.assertIn("prompt-cache-prefix-end", first)
+        self.assertNotIn("!! RULE", first)
         self.assertNotIn("CASE-", first)
         self.assertNotRegex(first, r"\d{4}-\d{2}-\d{2}T")
         self.assertNotIn("$(", first)
+        self.assertLess(mod.estimate_tokens(first), 1024)
         hook = HOOK_PATH.read_text()
         flush_body = hook[hook.index("flush_session_context()"):]
         self.assertLess(
@@ -424,6 +526,57 @@ print_prompt_cache_prefix
         self.assertEqual(out_left[: len(prefix)], out_right[: len(prefix)])
         self.assertNotIn(sha_left, out_left[: len(prefix)])
         self.assertIn(sha_left, out_left[len(prefix) :])
+        self.assertNotIn("!! RULE", out_left)
+        self.assertNotIn("!! RULE", out_right)
+
+    def test_rule_line_prints_only_when_checkout_is_stale(self):
+        prefix = subprocess.check_output(
+            ["bash", "-c", f'source "{HOOK_PATH}"; print_prompt_cache_prefix'],
+            text=True,
+        )
+
+        def run_in(repo: Path) -> str:
+            env = os.environ.copy()
+            env["HOME"] = str(repo / "home")
+            env["CLAUDE_PROJECT_DIR"] = str(repo)
+            (repo / "home").mkdir(parents=True, exist_ok=True)
+            return subprocess.check_output(
+                ["bash", str(HOOK_PATH)],
+                cwd=str(repo),
+                env=env,
+                text=True,
+                timeout=30,
+            )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            origin = Path(tmp) / "origin.git"
+            subprocess.check_call(["git", "init", "--bare", "-q", str(origin)])
+            (origin / "HEAD").write_text("ref: refs/heads/master\n")
+            work = Path(tmp) / "work"
+            subprocess.check_call(["git", "clone", "-q", str(origin), str(work)])
+            subprocess.check_call(["git", "config", "user.email", "t@t.com"], cwd=work)
+            subprocess.check_call(["git", "config", "user.name", "T"], cwd=work)
+            (work / "file.txt").write_text("one\n")
+            subprocess.check_call(["git", "add", "file.txt"], cwd=work)
+            subprocess.check_call(["git", "commit", "-q", "-m", "one"], cwd=work)
+            subprocess.check_call(["git", "push", "-q", "origin", "master"], cwd=work)
+            (work / "file.txt").write_text("two\n")
+            subprocess.check_call(["git", "add", "file.txt"], cwd=work)
+            subprocess.check_call(["git", "commit", "-q", "-m", "two"], cwd=work)
+            subprocess.check_call(["git", "push", "-q", "origin", "master"], cwd=work)
+            subprocess.check_call(["git", "reset", "--hard", "HEAD~1"], cwd=work)
+
+            stale = run_in(work)
+            self.assertTrue(stale.startswith(prefix), stale[:400])
+            self.assertNotIn("!! RULE", stale[: len(prefix)])
+            self.assertIn("!! STALE CHECKOUT", stale)
+            self.assertLess(stale.index("!! STALE CHECKOUT"), stale.index("!! RULE"))
+
+            subprocess.check_call(["git", "reset", "--hard", "origin/master"], cwd=work)
+            current = run_in(work)
+            self.assertTrue(current.startswith(prefix), current[:400])
+            self.assertIn("CURRENT with origin/master", current)
+            self.assertNotIn("!! RULE", current)
 
 
 if __name__ == "__main__":

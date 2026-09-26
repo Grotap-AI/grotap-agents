@@ -538,10 +538,11 @@ fi
 cd "$WT" || emit "failed" "$BRANCH" 1 "Worktree missing" "cd into worktree failed" 0
 
 # ── Build the Claude CLI prompt ──────────────────────────────────────────────
-# Stable rules first, per-request fields after. Claude Code caches the
-# leading prefix of the user message; a case id or timestamp above the rules
-# would miss that cache on every dispatch. The builder does not interpolate
-# case_id into the prefix.
+# Standing rules first, per-case fields after. The rules block is under the
+# 1024-token cache minimum and this is one `claude -p` user message, so the
+# reorder is not a cache breakpoint and is not claimed as a hit-rate win.
+# Claude Code caches its own system prompt only when DISABLE_PROMPT_CACHING*
+# is unset. The builder does not interpolate case_id into the rules.
 _CACHE_PY="$(cd "$(dirname "$0")" && pwd)/anthropic_prompt_cache.py"
 if ! PROMPT="$(printf '%s' "$PAYLOAD" | python3 "$_CACHE_PY" build-orchestrator-prompt 2>>"$LOG")"; then
   emit "failed" "$BRANCH" 1 "Could not build Claude prompt" "prompt cache builder failed" 0
@@ -685,17 +686,12 @@ if [ "$PERM_MODE" = "bypass" ]; then
 else
   PERM_ARGS=(--permission-mode "$PERM_MODE" --settings "$SETTINGS_FILE")
 fi
-# Claude Code caches tools, the system prompt, and CLAUDE.md unless a parent
-# environment exported a switch that turns caching off. Clear those before
-# both invocation paths (bypass does not go through `env -u`).
+# Clear every DISABLE_PROMPT_CACHING* switch in this shell. Both claude
+# invocations below inherit it; the acceptEdits path's `env -u` does not
+# put those variables back. There is no doppler run around this claude.
 _CACHE_SH="$(cd "$(dirname "$0")" && pwd)/claude-prompt-cache.sh"
-if [ -f "$_CACHE_SH" ]; then
-  # shellcheck source=claude-prompt-cache.sh
-  . "$_CACHE_SH"
-else
-  unset DISABLE_PROMPT_CACHING
-  unset CLAUDE_CODE_DISABLE_PROMPT_CACHING
-fi
+# shellcheck source=claude-prompt-cache.sh
+. "$_CACHE_SH"
 
 log "Running Claude: model=$MODEL perm_mode=$PERM_MODE"
 if [ "$PERM_MODE" = "bypass" ]; then
@@ -708,11 +704,14 @@ else
   CLAUDE_RC=$?
 fi
 
-# Parse claude's JSON result → tab-separated:
-# is_error, result, input_tok, output_tok, cache_creation, cache_read
+# Parse claude's JSON result. Fields are separated by ASCII 0x1f, not tab:
+# bash read treats tab as IFS whitespace and collapses an empty result
+# (error_max_turns, is_error with no result text), which shifts every
+# token count one field left.
+_US=$'\x1f'
 CLAUDE_PARSED="$(printf '%s' "$CLAUDE_OUT" | python3 "$_CACHE_PY" parse-cli-usage 2>>"$LOG")" \
-  || CLAUDE_PARSED="$(printf 'true\t\t0\t0\t0\t0')"
-IFS=$'\t' read -r IS_ERROR RESULT_TEXT IN_TOK OUT_TOK CACHE_CREATE CACHE_READ <<< "$CLAUDE_PARSED"
+  || CLAUDE_PARSED="true${_US}${_US}0${_US}0${_US}0${_US}0"
+IFS=$'\x1f' read -r IS_ERROR RESULT_TEXT IN_TOK OUT_TOK CACHE_CREATE CACHE_READ <<< "$CLAUDE_PARSED"
 _toknum() { case "$1" in ''|*[!0-9]*) printf '0' ;; *) printf '%s' "$1" ;; esac; }
 IN_TOK="$(_toknum "${IN_TOK:-0}")"
 OUT_TOK="$(_toknum "${OUT_TOK:-0}")"

@@ -129,16 +129,11 @@ fi
 # browser install rather than downloading per-seat copies.
 # --------------------------------------------------------------------------
 export PLAYWRIGHT_BROWSERS_PATH=/opt/playwright
-# Remote Control is a Claude Code session: prompt caching is automatic.
-# Do not inherit DISABLE_PROMPT_CACHING from the seat environment.
+# Remote Control is a Claude Code session. Clear every DISABLE_PROMPT_CACHING*
+# name in this shell before the subshell inherits the environment.
 _CACHE_SH="${WORKSPACE}/agents/scripts/claude-prompt-cache.sh"
-if [ -f "$_CACHE_SH" ]; then
-  # shellcheck source=/dev/null
-  . "$_CACHE_SH"
-else
-  unset DISABLE_PROMPT_CACHING
-  unset CLAUDE_CODE_DISABLE_PROMPT_CACHING
-fi
+# shellcheck source=/dev/null
+. "$_CACHE_SH"
 _start_epoch="$(date +%s)"
 _claude_rc=0
 
