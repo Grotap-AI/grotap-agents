@@ -246,4 +246,138 @@
 #   Per step 5 this rotation commit is itself unblessed. Hosts run
 #   4d0be2d, which contains the GLOBAL rules. That is the known steady
 #   state, not a fault to chase.
-4d0be2d4db6947d64c26a6d8c9c0b3b5f8e17000
+#
+#   Rotated 2026-09-25 from 5bf5613347c03fe890e31369293a2d72e9e6d7c0 to
+#   f81fb591bea772b1839206c532c2b2380a40444b. This SHA is NOT an ancestor
+#   of origin/master. Its parent is de85b86fa505f4d96e9bd5aa723bc7f11e1867be
+#   (the previous rotation commit). It descends from 61699688 (content
+#   whose parent is e6ebc69) and from 396454cb (parent aaa25e3c, which is
+#   origin/master at branch time). None of those content commits is an
+#   ancestor of origin/master. Confirmed:
+#     git merge-base --is-ancestor aaa25e3c f81fb59    (exit 0)
+#     git merge-base --is-ancestor 61699688 f81fb59    (exit 0)
+#     git merge-base --is-ancestor f81fb59 aaa25e3c    (exit 1)
+#   The commit that records a SHA cannot contain its own SHA (§ROTATION
+#   step 5). f81fb59 is reachable from origin/master only after this
+#   branch lands as a MERGE COMMIT.
+#   MUST merge with `gh pr merge --merge`. A squash or a rebase merge
+#   drops f81fb59 from refs/heads/master. verify_bootstrap_pin then
+#   hard-fails every host that has ~/.grotap_bootstrap_pin_seen, because
+#   fetch is refs/heads/master only. That failure is reported only in the
+#   runner `errors` string, which evaluateRunnerResult ignores, so every
+#   host takes strikes and hard-stop holds.
+#   Hosts pick the new tree up through this runner's own pin fetch.
+#   dispatch.sh's git pull only keeps agent-03's checkout on master; it
+#   is not what ships the runner.
+#   Reviewed before blessing: 146 commits (4d0be2d4..f81fb59).
+#   THE EXECUTABLE RUNNER DELTA on top of 5bf56133 is f81fb59:
+#     429 / credit exhaustion is driver_result.error_class=quota, and the
+#       raw text stays in errors so detectApiExhaustion still matches.
+#     ORCH_BOOTSTRAP_FETCH_DONE is honoured only when readlink -f of $0
+#       is under /tmp/runner-$tag AND ORCH_RUNNER_REEXECED=1. The child
+#       checks HEAD against the SHA the parent passed.
+#   Side-by-side of master's tab parser vs this runner (both fail the
+#   CLI path, exit_code 0, no verify, no branch push). Master strings
+#   were measured by replaying its parser:
+#     nonjson0, trunc: master "Claude CLI error: 0", tokens 0.
+#       Here "Claude CLI error: ", tokens 0.
+#     empty, emptycommit: master "Claude CLI error: 10", tokens 5.
+#       Here "Claude CLI error: ", tokens 15. The commit is not a success.
+#     r429text0: master "Claude CLI error: 0", tokens 0 (the 429 text is
+#       lost). Here the errors string still contains "429", tokens 0,
+#       error_class quota.
+#     credit: master "Claude CLI error: Your credit balance is too low",
+#       tokens 3. Here the same text, tokens 3, error_class quota.
+#     badjson: a malformed driver file is replaced with status failed,
+#       error_class infra. It is not copied through as status success.
+#   Team1 lines that still match master once driver_result and log_tag
+#   are removed: no-commit, a committing success, is_error with a
+#   non-empty result ("boom", tokens 7), and the cache case (integer 15).
+#   agents/GLOBAL.md is UNTOUCHED in 4d0be2d4..f81fb59
+#   (git diff --stat 4d0be2d4..f81fb59 -- agents/GLOBAL.md is empty).
+#   BOOTSTRAP.md DOES change in the already-merged span, read in full:
+#     one line pointing at the fleet rename docs; scp target agent-06
+#     becomes agent-06-claude (5.161.53.103) and notes agent-05-claude is
+#     OFF; the dispatcher sentence names agent-06-claude; the SSH "never
+#     do" line lists Cloud names (agent-01-claude, agent-10-codex,
+#     monitor-01-deepseek, prompt-01-claude) and the jumpbox. Naming and
+#     roster only — it does not change what the runner executes.
+#   Also already on master in that span, so this pin is what releases it:
+#     9c33fc1 fleet roster locked to the server rename map (#3);
+#     8d04132 / d35696b the previous pin rotation's merge;
+#     dispatch task files; role docs; ssh-key-for.sh, fleet-load.sh,
+#     fleet-model-probe.sh, health-monitor.sh, setup-agent06.sh,
+#     sync-all-agents.sh. No new secret material in the runner diff.
+#   Per step 5 this rotation commit is itself unblessed. Hosts run
+#   f81fb59 once this file is what origin/master's pin fetch reads.
+#   A follow-up commit, after the merge commit is the tip, must pin
+#   THAT merge commit (second rotation). The merge MUST be
+#   `gh pr merge --merge`.
+#
+#   Rotated 2026-09-25 from f81fb591bea772b1839206c532c2b2380a40444b to
+#   05f12beeedf6067ce0ef366b4938551e27286577. This SHA is NOT an ancestor
+#   of origin/master. Its parent is 2d84d15a9c5a4072fe75738aecb066d8164935e8
+#   (the previous rotation commit). The commit that records a SHA cannot
+#   contain its own SHA (§ROTATION step 5). 05f12bee is reachable from
+#   origin/master only after this branch lands as a MERGE COMMIT.
+#   MUST merge with `gh pr merge --merge`. A squash or a rebase merge
+#   drops 05f12bee from refs/heads/master. verify_bootstrap_pin then
+#   hard-fails every host that has ~/.grotap_bootstrap_pin_seen, because
+#   fetch is refs/heads/master only.
+#   THE EXECUTABLE RUNNER DELTA on top of f81fb59 is 05f12bee:
+#     ORCH_LOG_TAG is accepted only when it matches ^[A-Za-z0-9]{1,32}$.
+#       Anything else is regenerated from urandom (od -An -N8 -tx8).
+#     The snapshot directory is mktemp -d /tmp/runner-XXXXXXXX, mode 0700.
+#       The parent passes that exact path. The child honours the fetch
+#       skip only when the path is a real directory (not a symlink), owned
+#       by this user, mode 0700, one component under /tmp, no '..', and
+#       $0 is exactly "$snap/orchestrator-run.sh". Otherwise the re-exec
+#       and bootstrap flags are unset, the refusal is logged, and the
+#       pinned checkout runs.
+#     The exit trap rm -rf's only the directory this process recorded
+#       after mktemp or after those checks. It does not build a path
+#       from ORCH_LOG_TAG.
+#     Quota matching uses \b429\b and scans the result text, or non-JSON
+#       stdout. duration_ms 14290, a session id containing 4290, and the
+#       words "rate limiter" are not a quota failure, and the raw JSON
+#       blob is not appended to errors.
+#   agents/GLOBAL.md is UNTOUCHED by 05f12bee.
+#   Per step 5 this rotation commit is itself unblessed. Hosts run
+#   05f12bee once this file is what origin/master's pin fetch reads.
+#   A follow-up commit, after the merge commit is the tip, must pin
+#   THAT merge commit. The merge MUST be `gh pr merge --merge`.
+#
+#   Rotated 2026-09-25 from 05f12beeedf6067ce0ef366b4938551e27286577 to
+#   0eaa7827aaa5d40abfde0fb4479d9ea90406c9bf. This SHA is NOT an ancestor
+#   of origin/master. Its parent is 2aa042e388eed633533623b7f472a19828646080
+#   (the previous rotation commit). The commit that records a SHA cannot
+#   contain its own SHA (§ROTATION step 5). 0eaa782 is reachable from
+#   origin/master only after this branch lands as a MERGE COMMIT.
+#   MUST merge with `gh pr merge --merge`. A squash or a rebase merge
+#   drops 0eaa782 from refs/heads/master. verify_bootstrap_pin then
+#   hard-fails every host that has ~/.grotap_bootstrap_pin_seen, because
+#   fetch is refs/heads/master only. A host whose fetch fails falls back
+#   to the on-disk pin; this file names 0eaa782, which is the loop fix.
+#   The previous content commit 05f12bee still names f81fb591 inside its
+#   own tree. Do not check that tree out as the pin.
+#   THE EXECUTABLE RUNNER DELTA on top of 05f12bee is 0eaa782:
+#     Re-exec state (ORCH_RUNNER_REEXECED, the snapshot path, depth, and
+#       argv0) is captured before dotfiles are sourced and restored after.
+#       ~/.env cannot replace them. The copies are readonly.
+#     A process that started as a re-exec, or with ORCH_RUNNER_DEPTH >= 1,
+#       never mktemps or execs again. A failed snapshot check bootstraps
+#       in place. At most one re-exec.
+#     On a failed check the exit trap removes the parent's snapshot only
+#       when it is /tmp/runner-XXXXXXXX, a real directory, not a symlink,
+#       and owned by this user.
+#     Mode 0700 is read with stat -c, then stat -f, then python. If none
+#       of those prove it, the snapshot is not trusted.
+#     Payload, prompt, and driver-result files are mktemp'd under umask 077
+#       and removed by the same trap. HERE is computed from the argv0
+#       captured before dotfiles, so BASH_ARGV0 in ~/.env cannot move it.
+#   agents/GLOBAL.md is UNTOUCHED by 0eaa782.
+#   Per step 5 this rotation commit is itself unblessed. Hosts run
+#   0eaa782 once this file is what origin/master's pin fetch reads.
+#   A follow-up commit, after the merge commit is the tip, must pin
+#   THAT merge commit. The merge MUST be `gh pr merge --merge`.
+0eaa7827aaa5d40abfde0fb4479d9ea90406c9bf
