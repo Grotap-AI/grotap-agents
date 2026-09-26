@@ -6,8 +6,10 @@
 # `bash ~/grotap-agents/agents/scripts/orchestrator-run.sh`).
 #
 #   Permission policy / secret narrowing (CLAUDE_PERMISSION_MODE)
-#     T1  bypass (DEFAULT) → claude argv byte-identical to the pre-change argv,
-#                            no --settings, no env stripping
+#     T1  bypass (DEFAULT) → permission argv unchanged (no --settings, no env
+#                            stripping). Prompt rules precede per-case text.
+#                            Parsed usage records cache_creation_input_tokens
+#                            and cache_read_input_tokens.
 #     T2  acceptEdits      → --permission-mode + --settings passed, and
 #                            NODE_SECRET / DOPPLER_TOKEN / GITHUB_TOKEN are
 #                            absent from claude's environment
@@ -176,7 +178,7 @@ rewrite_agents_history() {
   )
 }
 
-PAYLOAD='{"case_id":"CASE-20260915-AAAAAA","branch":"case-20260915-aaaaaa","title":"t","context":"c","requirements":"r","complexity":"simple","attempt":1}'
+PAYLOAD='{"case_id":"CASE-20260915-AAAAAA","branch":"case-20260915-aaaaaa","title":"t","context":"CASE-20260915-AAAAAA 2026-09-15T00:00:00Z diff --git a/x b/x","requirements":"r","complexity":"simple","attempt":1}'
 
 run() { # env KEY=VAL ... → sets OUT, RESULT_JSON
   mkdir -p "$TMP/state"; rm -f "$TMP/state/claude.argv" "$TMP/state/claude.env"
@@ -215,6 +217,13 @@ assert_eq "T1 no --settings" "$(argv_has '--settings')" "no"
 assert_eq "T1 no --permission-mode" "$(argv_has '--permission-mode')" "no"
 assert_eq "T1 NODE_SECRET still inherited" "$(grep -c '^NODE_SECRET=node-secret-value$' "$TMP/state/claude.env")" "1"
 assert_eq "T1 GITHUB_TOKEN still inherited" "$(grep -c '^GITHUB_TOKEN=ghp_fake$' "$TMP/state/claude.env")" "1"
+assert_eq "T1 prompt rules precede the task" "$(awk 'index($0,"## Rules"){r=NR} index($0,"# Task:"){t=NR} END{print (r && t && r<t)?"yes":"no"}' "$TMP/state/claude.argv")" "yes"
+assert_eq "T1 case id is not above the rules" "$(awk 'index($0,"## Rules"){exit} /CASE-20260915-AAAAAA/{f=1} END{print f?"yes":"no"}' "$TMP/state/claude.argv")" "no"
+assert_eq "T1 case id is below the rules" "$(awk 'index($0,"## Rules"){seen=1; next} seen && /CASE-20260915-AAAAAA/{f=1} END{print f?"yes":"no"}' "$TMP/state/claude.argv")" "yes"
+assert_eq "T1 logs cache_creation_input_tokens" "$(atleast1 "$(logged 'cache_creation_input_tokens=')")" "yes"
+assert_eq "T1 logs cache_read_input_tokens" "$(atleast1 "$(logged 'cache_read_input_tokens=')")" "yes"
+assert_eq "T1 result records cache_creation_input_tokens" "$(rfield cache_creation_input_tokens)" "0"
+assert_eq "T1 result records cache_read_input_tokens" "$(rfield cache_read_input_tokens)" "0"
 
 echo "T2: acceptEdits → policy passed and credentials stripped"
 build_home t2; printf '%s\n' "$PIN_BASE" > "$PIN_FILE"
