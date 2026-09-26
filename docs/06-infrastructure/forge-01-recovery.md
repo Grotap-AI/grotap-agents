@@ -4,6 +4,20 @@ Recovery procedure for the Forgejo host behind `https://forge.grotap.com`. Writt
 2026-09-15 against the live box; every value below was read from the running system, the Hetzner
 API, the Cloudflare API or Doppler, not copied from a design document.
 
+## Protected infrastructure
+
+**forge-01** (Forgejo at `forge.grotap.com`, Ashburn cpx21) is protected infrastructure. Protected by owner order 2026-09-26 after accidental deletion. Restore is in progress from Hetzner snapshot `436438026`. The documented address stays as written until a replacement IP is known.
+
+It matters because:
+
+- It is the local git mirror of the four GitHub repos (`grotap-platform`, `grotap-agents`, `grotap-landing`, `grotap-platform-docs`), as pull mirrors every 10 minutes.
+- CI runners on the agent servers register to it.
+- It reduces GitHub API and rate-limit hits and makes fetches faster for multi-team jobs.
+- It keeps a nightly encrypted Wasabi backup.
+- It holds a copy of the code if GitHub is down.
+
+**Rule:** forge-01 is never on any delete, downsize, or cost-cut list. Hetzner delete protection and rebuild protection stay on. Changes need Aaron's explicit approval.
+
 ## What a total loss actually costs
 
 **GitHub is still the source of truth.** All four repositories on the forge — `grotap-platform`,
