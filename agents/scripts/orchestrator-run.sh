@@ -19,7 +19,11 @@
 #
 # Result JSON (last stdout line):
 #   {"status":"success|failed","branch":"...","exit_code":N,
-#    "errors":"...","summary":"...","tokens":N}
+#    "errors":"...","summary":"...","tokens":N,
+#    "cache_creation_input_tokens":N,"cache_read_input_tokens":N}
+# The two cache fields are present once a model response was parsed, so a
+# 24-hour hit rate is cache_read / (cache_read + cache_creation + input_tokens).
+# input_tokens excludes tokens served from cache.
 #
 # This is ADDITIVE — it does not replace the bash coordinator. The orchestrator
 # calls it directly; the legacy self-dispatch loop is untouched.
@@ -56,7 +60,7 @@ repo_unlock() { exec 9>&- 2>/dev/null || true; }
 # Optional 7th arg = a verify JSON object string (Layer 9 build/lint evidence).
 emit() {
   python3 -c '
-import sys, json
+import sys, json, os
 status, branch, code, errors, summary, tokens = sys.argv[1:7]
 out = {"status": status, "branch": branch, "exit_code": int(code),
        "errors": errors, "summary": summary, "tokens": int(tokens)}
@@ -64,6 +68,13 @@ verify = sys.argv[7] if len(sys.argv) > 7 else ""
 if verify:
     try: out["verify"] = json.loads(verify)
     except Exception: pass
+# Set only after a CLI usage payload was parsed. Absent on infra failures
+# that never reached the model, so a zero there is a measured zero.
+cc = os.environ.get("ORCH_CACHE_CREATION_INPUT_TOKENS")
+cr = os.environ.get("ORCH_CACHE_READ_INPUT_TOKENS")
+if cc is not None and cr is not None:
+    out["cache_creation_input_tokens"] = int(cc or 0)
+    out["cache_read_input_tokens"] = int(cr or 0)
 print(json.dumps(out))
 ' "$1" "$2" "$3" "$4" "$5" "$6" "${7:-}"
   exit 0
@@ -527,49 +538,14 @@ fi
 cd "$WT" || emit "failed" "$BRANCH" 1 "Worktree missing" "cd into worktree failed" 0
 
 # ── Build the Claude CLI prompt ──────────────────────────────────────────────
-RETRY_BLOCK=""
-if [ "$ATTEMPT" -gt 1 ] && [ -n "$PRIOR_ERRORS" ]; then
-  RETRY_BLOCK="
-
-## This is retry attempt $ATTEMPT. The previous attempt(s) failed. Fix these issues (real output below):
-$PRIOR_ERRORS"
+# Stable rules first, per-request fields after. Claude Code caches the
+# leading prefix of the user message; a case id or timestamp above the rules
+# would miss that cache on every dispatch. The builder does not interpolate
+# case_id into the prefix.
+_CACHE_PY="$(cd "$(dirname "$0")" && pwd)/anthropic_prompt_cache.py"
+if ! PROMPT="$(printf '%s' "$PAYLOAD" | python3 "$_CACHE_PY" build-orchestrator-prompt 2>>"$LOG")"; then
+  emit "failed" "$BRANCH" 1 "Could not build Claude prompt" "prompt cache builder failed" 0
 fi
-
-PLAN_BLOCK=""
-if [ -n "$PLAN" ]; then
-  PLAN_BLOCK="
-
-## Execution Plan (from triage — follow it unless it's clearly wrong)
-$PLAN"
-fi
-
-KNOWLEDGE_BLOCK=""
-if [ -n "$CONTEXT_PACK" ]; then
-  KNOWLEDGE_BLOCK="
-
-## Platform Knowledge (grounded from our docs — prefer this over assumptions)
-$CONTEXT_PACK"
-fi
-
-PROMPT="You are an autonomous engineer working in an isolated git worktree on the grotap-platform repo.
-
-# Task: $TITLE
-
-## Context
-$CONTEXT
-
-## Requirements
-$REQUIREMENTS
-$KNOWLEDGE_BLOCK
-$PLAN_BLOCK
-$RETRY_BLOCK
-
-## Rules
-- Follow the repo CLAUDE.md and agents/GLOBAL.md rules exactly.
-- Make the minimal correct change. Commit your work with git (do NOT push — the runner pushes).
-- Never symlink node_modules (or any path) from the shared ~/grotap-platform clone into this worktree. If a package needs deps, run 'npm ci' inside that package here — the shared install may be stale and a symlink breaks build verification.
-- Before finishing, validate: run 'npx tsc --noEmit' in any frontend/TS package you changed, and 'python3 -m py_compile' on any backend .py file you changed.
-- If you cannot complete the task, explain why clearly."
 
 # ── Permission policy ────────────────────────────────────────────────────────
 # Replaces --dangerously-skip-permissions with an explicit allow/deny policy so
@@ -709,6 +685,18 @@ if [ "$PERM_MODE" = "bypass" ]; then
 else
   PERM_ARGS=(--permission-mode "$PERM_MODE" --settings "$SETTINGS_FILE")
 fi
+# Claude Code caches tools, the system prompt, and CLAUDE.md unless a parent
+# environment exported a switch that turns caching off. Clear those before
+# both invocation paths (bypass does not go through `env -u`).
+_CACHE_SH="$(cd "$(dirname "$0")" && pwd)/claude-prompt-cache.sh"
+if [ -f "$_CACHE_SH" ]; then
+  # shellcheck source=claude-prompt-cache.sh
+  . "$_CACHE_SH"
+else
+  unset DISABLE_PROMPT_CACHING
+  unset CLAUDE_CODE_DISABLE_PROMPT_CACHING
+fi
+
 log "Running Claude: model=$MODEL perm_mode=$PERM_MODE"
 if [ "$PERM_MODE" = "bypass" ]; then
   CLAUDE_OUT="$(claude -p "$PROMPT" --model "$MODEL" --output-format json "${PERM_ARGS[@]}" 2>>"$LOG")"
@@ -720,20 +708,23 @@ else
   CLAUDE_RC=$?
 fi
 
-# Parse claude's JSON result → tab-separated: is_error, result, input_tok, output_tok
-CLAUDE_PARSED="$(printf '%s' "$CLAUDE_OUT" | python3 -c '
-import sys, json
-try:
-    d = json.load(sys.stdin)
-except Exception:
-    print("true\t\t0\t0"); sys.exit(0)
-is_error = str(d.get("is_error", True)).lower()
-result = (d.get("result") or "")[:1000].replace("\n", " ").replace("\t", " ")
-u = d.get("usage") or {}
-print("\t".join([is_error, result, str(u.get("input_tokens", 0) or 0), str(u.get("output_tokens", 0) or 0)]))
-' 2>/dev/null)"
-IFS=$'\t' read -r IS_ERROR RESULT_TEXT IN_TOK OUT_TOK <<< "$CLAUDE_PARSED"
-TOKENS=$(( ${IN_TOK:-0} + ${OUT_TOK:-0} ))
+# Parse claude's JSON result → tab-separated:
+# is_error, result, input_tok, output_tok, cache_creation, cache_read
+CLAUDE_PARSED="$(printf '%s' "$CLAUDE_OUT" | python3 "$_CACHE_PY" parse-cli-usage 2>>"$LOG")" \
+  || CLAUDE_PARSED="$(printf 'true\t\t0\t0\t0\t0')"
+IFS=$'\t' read -r IS_ERROR RESULT_TEXT IN_TOK OUT_TOK CACHE_CREATE CACHE_READ <<< "$CLAUDE_PARSED"
+_toknum() { case "$1" in ''|*[!0-9]*) printf '0' ;; *) printf '%s' "$1" ;; esac; }
+IN_TOK="$(_toknum "${IN_TOK:-0}")"
+OUT_TOK="$(_toknum "${OUT_TOK:-0}")"
+CACHE_CREATE="$(_toknum "${CACHE_CREATE:-0}")"
+CACHE_READ="$(_toknum "${CACHE_READ:-0}")"
+TOKENS=$(( IN_TOK + OUT_TOK ))
+# Exported for emit(). input_tokens excludes cache reads and cache writes;
+# hit rate over a day is cache_read / (cache_read + cache_creation + input_tokens).
+ORCH_CACHE_CREATION_INPUT_TOKENS="$CACHE_CREATE"
+ORCH_CACHE_READ_INPUT_TOKENS="$CACHE_READ"
+export ORCH_CACHE_CREATION_INPUT_TOKENS ORCH_CACHE_READ_INPUT_TOKENS
+log "usage case=$CASE_ID input_tokens=$IN_TOK output_tokens=$OUT_TOK cache_creation_input_tokens=$CACHE_CREATE cache_read_input_tokens=$CACHE_READ"
 
 # ── Tool-denial visibility ───────────────────────────────────────────────────
 # A tool refused by the permission policy does NOT make claude exit non-zero and

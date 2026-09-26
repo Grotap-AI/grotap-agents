@@ -282,6 +282,17 @@ cd "$PLATFORM_REPO"
 # them. Set BEFORE the invocation, not after: the timeout SIGKILL is exactly the
 # path that needs the release, and it never returns to the next line.
 CLAUDE_LAUNCHED=1
+# review-gate-task.md is a byte-stable standing prompt (no per-run timestamp
+# or case id in the file). Claude Code caches it automatically unless a parent
+# environment turned caching off.
+_CACHE_SH="$(cd "$(dirname "$0")" && pwd)/claude-prompt-cache.sh"
+if [ -f "$_CACHE_SH" ]; then
+  # shellcheck source=claude-prompt-cache.sh
+  . "$_CACHE_SH"
+else
+  unset DISABLE_PROMPT_CACHING
+  unset CLAUDE_CODE_DISABLE_PROMPT_CACHING
+fi
 timeout "$TIMEOUT_SECS" doppler run --project grotap --config prd -- \
   claude -p "$(cat "$TASK")" \
     --permission-mode bypassPermissions \

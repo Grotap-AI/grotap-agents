@@ -59,8 +59,29 @@ say() { [[ "$QUIET" -eq 1 ]] || printf '%s\n' "$*"; }
 # Deliberately NOT a models-list or a key-validity call — those SUCCEED while capped, which
 # is exactly the wrong-probe mistake this script exists to prevent.
 #
+# The body is built by anthropic_prompt_cache.py, which attaches ephemeral
+# cache_control breakpoints when a stable prefix meets the model minimum
+# (2048 tokens for Haiku, 1024 for Sonnet/Opus). This probe has no tools, no
+# system prompt, and a one-token user message, so the placer correctly emits
+# no breakpoint. Padding it up to the minimum would make every probe more
+# expensive, which defeats the "smallest call that still hits the cap" job.
+#
 # It also prints a sha256 prefix of the resolved key, never the key. A claim about capability
 # has to say which credential it is a claim about; that was the whole defect on 2026-09-15.
+_CACHE_PY="$(cd "$(dirname "$0")" && pwd)/anthropic_prompt_cache.py"
+_PROBE_ERR="$(mktemp)"
+if ! PROBE_BODY="$(python3 "$_CACHE_PY" build-probe-body --model "$MODEL" 2>"$_PROBE_ERR")"; then
+  say "UNREACHABLE  could not build the probe request body."
+  say "$(cat "$_PROBE_ERR" 2>/dev/null)"
+  rm -f "$_PROBE_ERR"
+  exit 2
+fi
+rm -f "$_PROBE_ERR"
+case "$PROBE_BODY" in
+  *\'*)
+    say "UNREACHABLE  probe body could not be quoted safely."
+    exit 2 ;;
+esac
 read -r -d '' PROBE_CMD <<INNER || true
 printf 'keyfp=%s\n' "\$(printf '%s' "\$ANTHROPIC_API_KEY" | sha256sum | cut -c1-16)"
 curl -s --max-time 20 -o /tmp/fmp.\$\$.json -w 'code=%{http_code}\n' \
@@ -68,7 +89,7 @@ curl -s --max-time 20 -o /tmp/fmp.\$\$.json -w 'code=%{http_code}\n' \
   -H "x-api-key: \$ANTHROPIC_API_KEY" \
   -H "anthropic-version: 2023-06-01" \
   -H "content-type: application/json" \
-  -d '{"model":"${MODEL}","max_tokens":1,"messages":[{"role":"user","content":"hi"}]}'
+  -d '${PROBE_BODY}'
 cat /tmp/fmp.\$\$.json 2>/dev/null
 rm -f /tmp/fmp.\$\$.json
 INNER
