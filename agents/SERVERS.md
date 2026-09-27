@@ -190,7 +190,7 @@ Not dispatch executors. Not in `config.sh` pools. `5.161.243.18` was released wi
 One active account (**K0281854926**, console.hetzner.cloud). Verified via API 7/4: all cloud servers are visible to the single `HETZNER_API_TOKEN`; `HETZNER_API_TOKEN_2` is DEAD. Cobrowse runners live in their own project/token (above). Account `K0390490726` CANCELLED 6/30.
 
 ## Retired / cancelled — never dispatch, never re-add
-- **prompt-01-claude** (`178.156.209.112`, Hetzner id 149250118, was `claudecode-01` / `claude-code-01`, DNS `claudecode.grotap.com`). **Deleted 2026-09-26.** Hetzner has no server by that name. Not `prompt-01-astra`.
+- **prompt-01-claude** (`178.156.209.112`, Hetzner server ID 149250118, Hetzner project `ClaudeCode`, was `claudecode-01` / `claude-code-01`, DNS `claudecode.grotap.com`). **Deleted 2026-09-26.** Hetzner has no server by that name. Not `prompt-01-astra`.
 - **Deleted agent-01** (5.161.189.143, deleted 6/29 — IP recycled to openreplay-01, former cobrowse-01). That address is not `agent-01-claude`. Live `agent-01-claude` is `5.161.74.39`. · **agent-07** (89.167.66.105, gone with cancelled account) · **agent-08** (77.42.42.213, deleted; old dispatch box). The Hillsboro box is `agent-05-claude` and is OFF. Live ops is `agent-06-claude`.
 - **`agent-11-codex`** — reserved name only. Do not provision.
 - **agent-09/10/11** (46.62.184.50/.52/.51, Robot EX44s) — cancelled in Hetzner **Robot** 6/29 (separate from cloud console); they answer ping until their termination date, then get wiped. Verify each shows a cancellation date in Robot.
