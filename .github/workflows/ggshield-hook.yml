@@ -1,0 +1,34 @@
+name: ggshield-hook
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: shellcheck
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq shellcheck
+          shellcheck -x \
+            agents/scripts/ggshield-lib.sh \
+            agents/scripts/ggshield-pre-commit.sh \
+            agents/scripts/install-ggshield-hook.sh \
+            agents/scripts/ggshield-canary.sh \
+            agents/scripts/ggshield-hook.test.sh
+
+      - name: hook tests (stub ggshield, no API key)
+        run: bash agents/scripts/ggshield-hook.test.sh
+
+      - name: hashed ggshield install
+        run: |
+          sudo apt-get install -y -qq python3-venv
+          python3 -m venv /tmp/ggshield-ci
+          /tmp/ggshield-ci/bin/pip install --disable-pip-version-check --require-hashes \
+            -r agents/scripts/ggshield-requirements.txt
+          test "$(/tmp/ggshield-ci/bin/ggshield --version)" = "ggshield, version 1.54.0"

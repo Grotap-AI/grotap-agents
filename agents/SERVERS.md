@@ -214,3 +214,7 @@ One active account (**K0281854926**, console.hetzner.cloud). Verified via API 7/
 3. Git auth: install `/home/agent/bin/git-credential-doppler` as `credential.helper` (per GLOBAL) — never a static token.
 4. Add to `agents/config.sh` (IP, roles, overflow flag); verify it appears in `./agents/server-status.sh` before dispatching.
 5. If provisioning a per-host key pair for this box (SSH key retirement, phase 2b started 2026-09-16): add its entry to the `HOST_BY_IP` table in `agents/scripts/ssh-key-for.sh` (kept in BOTH grotap-agents and grotap-platform — see that file's header), and drop `grotap_from<source>_<this-host>` into `~/.ssh/` for both `root` and `agent` on the source box. Until that exists, every script that talks to this host goes on resolving to the shared fleet key automatically — no code change required.
+
+## Shared-host ggshield pre-commit hook
+
+Seats on `agent-21-shared` (`claude`, `astra`) and `agent-22-shared` (`codex`, `grok`, `monitor`) can install a GitGuardian `ggshield` pre-commit hook with `agents/scripts/install-ggshield-hook.sh`. The hook is off after install. `--canary` enables it only for `codex` on `agent-22-shared`. Runbook: `docs/06-infrastructure/ggshield-seat-hook.md`. Do not install it on `forge-01` or `maps-01`.
