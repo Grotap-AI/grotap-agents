@@ -1,10 +1,16 @@
 #!/usr/bin/env bash
 # Review gate — runs Claude unattended against the change_review backlog.
 #
-# Installed on agent-06 as systemd review-gate.timer -> review-gate.service,
+# Installed on agent-06-claude as systemd review-gate.timer -> review-gate.service,
 # every 15 min (empty queue exits in <5s, so the only real cost is when there
 # is actually something to review). The name still says "cron" for continuity
 # with every log line and hold that references it.
+#
+# Canonical host is agent-06-claude (agents/SERVERS.md; Linux hostname
+# `agent-06-claude`, not the SSH alias `agent-06`). This script exits immediately
+# on any other host. A byte-identical timer on agent-01-claude drained the same
+# queue on 2026-09-24. This repo ships no review-gate unit or installer; do not
+# add one for agent-01-claude.
 #
 # NOT a crontab entry any more (CASE-20260729-5E756A). Under cron this script's
 # claude run lived in cron.service's own cgroup, unbounded: on 2026-07-29 two of
@@ -18,6 +24,22 @@
 #
 # Manual run: bash /home/agent/grotap-agents/agents/scripts/review-gate-cron.sh
 set -uo pipefail
+
+# Host guard. Runs before the log redirect, the lock, and any git/DB work, so a
+# copy started on the wrong box cannot claim or merge. Comparison is
+# `hostname -s` against the Linux hostname in agents/SERVERS.md. The SSH alias
+# `agent-06` is not a hostname and does not pass.
+review_gate_assert_canonical_host() {
+  local host canonical
+  host="$(hostname -s 2>/dev/null || true)"
+  canonical="agent-06-claude"
+  if [ "$host" != "$canonical" ]; then
+    echo "FATAL: review-gate refuses to run on host '${host}'. Canonical host is '${canonical}' (agents/SERVERS.md). review-gate.timer runs only on agent-06-claude; do not install it on agent-01-claude." >&2
+    return 1
+  fi
+  return 0
+}
+review_gate_assert_canonical_host || exit 1
 
 AGENT_HOME="/home/agent"
 AGENTS_REPO="${AGENTS_REPO:-$AGENT_HOME/grotap-agents}"
@@ -268,8 +290,58 @@ sync_with_retry "$PLATFORM_REPO" "grotap-platform" || exit 1
 # Claude run costing a full model invocation, and that run correctly does nothing.
 # On 2026-09-16 that happened 10 times on agent-06 in 52 runs. The predicate must
 # stay byte-equivalent to the one in review-gate-task.md §0 or the two disagree.
+#
+# MERGE-HOLD (2026-09-24): a pending Approve-merge hold is not part of the queue.
+# The RG_MERGE_HOLD_WHERE blocks are the same text as review-gate-task.md §0
+# (both UNION arms) and §3 (the backstop). agents/tests/test_review_gate_merge_hold.sh
+# fails if they diverge. Columns are the live human_holds shape: task_id, status,
+# created_by, category, task_title, description. status='pending' is the open
+# value the board already queries. created_by='agent-progress' is the
+# agent-progress webhook. category='approval' is the approval category. The
+# title/description arms match task_title 'Approve merge' and the titles the
+# HI board treats as a merge decision ('Approve merge of …', 'Awaiting human
+# approval — branch …' on description).
 QUEUE=$(cd "$PLATFORM_REPO" && doppler run --project grotap --config prd -- \
-  python3 scripts/db.py "SELECT count(*) FROM (SELECT case_id FROM pipeline_cases WHERE status='change_review' AND (claimed_by IS NULL OR claimed_at IS NULL OR claimed_at < NOW() - INTERVAL '${CLAIM_TTL_MINUTES} minutes') UNION SELECT c.case_id FROM pipeline_cases c WHERE c.status='awaiting_human' AND (c.claimed_by IS NULL OR c.claimed_at IS NULL OR c.claimed_at < NOW() - INTERVAL '${CLAIM_TTL_MINUTES} minutes') AND EXISTS (SELECT 1 FROM pipeline_dispatch_log dl WHERE dl.case_id=c.case_id AND dl.status='awaiting_review')) q" \
+  python3 scripts/db.py "SELECT count(*) FROM (
+    SELECT case_id FROM pipeline_cases
+    WHERE status='change_review'
+      AND (claimed_by IS NULL OR claimed_at IS NULL OR claimed_at < NOW() - INTERVAL '${CLAIM_TTL_MINUTES} minutes')
+      AND NOT EXISTS (
+        SELECT 1 FROM human_holds h
+        WHERE /*RG_MERGE_HOLD_WHERE case_id*/
+          h.task_id = case_id
+          AND h.status = 'pending'
+          AND h.created_by = 'agent-progress'
+          AND h.category = 'approval'
+          AND (
+            h.task_title = 'Approve merge'
+            OR h.task_title LIKE 'Approve merge %'
+            OR h.description LIKE 'Approve merge of %'
+            OR h.description LIKE 'Awaiting human approval — branch %'
+          )
+        /*RG_MERGE_HOLD_WHERE_END*/
+      )
+    UNION
+    SELECT c.case_id FROM pipeline_cases c
+    WHERE c.status='awaiting_human'
+      AND (c.claimed_by IS NULL OR c.claimed_at IS NULL OR c.claimed_at < NOW() - INTERVAL '${CLAIM_TTL_MINUTES} minutes')
+      AND EXISTS (SELECT 1 FROM pipeline_dispatch_log dl WHERE dl.case_id=c.case_id AND dl.status='awaiting_review')
+      AND NOT EXISTS (
+        SELECT 1 FROM human_holds h
+        WHERE /*RG_MERGE_HOLD_WHERE c.case_id*/
+          h.task_id = c.case_id
+          AND h.status = 'pending'
+          AND h.created_by = 'agent-progress'
+          AND h.category = 'approval'
+          AND (
+            h.task_title = 'Approve merge'
+            OR h.task_title LIKE 'Approve merge %'
+            OR h.description LIKE 'Approve merge of %'
+            OR h.description LIKE 'Awaiting human approval — branch %'
+          )
+        /*RG_MERGE_HOLD_WHERE_END*/
+      )
+  ) q" \
   2>/dev/null | tail -1 || echo "?")
 echo "queue: $QUEUE reviewable cases (change_review + parked awaiting_review)"
 [[ "$QUEUE" =~ ^[0-9]+$ ]] || { echo "FATAL: QUEUE is non-numeric ('$QUEUE') — accessor broken"; exit 1; }
