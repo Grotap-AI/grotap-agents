@@ -32,7 +32,6 @@ prolonged undetected downtime in the past.
 | agent-02-claude | 5.161.81.193 | SSH port 22 open |
 | agent-03-claude | 178.156.222.220 | SSH port 22 open |
 | agent-04-claude | 5.161.73.195 | SSH port 22 open. Running |
-| agent-05-claude | 5.78.178.81 | Hillsboro. OFF |
 | agent-06-claude | 5.161.53.103 | Ashburn. Linux hostname `agent-06-claude`. Live ops host |
 
 ### DNS Resolution Checks
@@ -59,7 +58,6 @@ Agents:
 - agent-02-claude (5.161.81.193): REACHABLE | UNREACHABLE
 - agent-03-claude (178.156.222.220): REACHABLE | UNREACHABLE
 - agent-04-claude (5.161.73.195): REACHABLE | UNREACHABLE
-- agent-05-claude (5.78.178.81): REACHABLE | UNREACHABLE
 - agent-06-claude (5.161.53.103): REACHABLE | UNREACHABLE
 
 DNS:

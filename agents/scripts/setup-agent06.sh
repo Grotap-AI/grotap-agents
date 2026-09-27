@@ -1,7 +1,7 @@
 #!/bin/bash
 # setup-agent06.sh — Deploy ops scripts + cron to agent-06-claude.
 # Cloud name is agent-06-claude (5.161.53.103, Ashburn). Linux hostname is agent-06-claude.
-# agent-05-claude (5.78.178.81, Hillsboro) is OFF and is not the ops host.
+# agent-05-claude (Hillsboro) was deleted 2026-09-26 and is not the ops host.
 # Usage: bash agents/scripts/setup-agent06.sh
 set -euo pipefail
 

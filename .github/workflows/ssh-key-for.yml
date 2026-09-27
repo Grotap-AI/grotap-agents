@@ -1,0 +1,33 @@
+name: ssh-key-for
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: ssh-key-for tests
+        run: bash agents/scripts/ssh-key-for.test.sh
+
+      - name: health-monitor key fail-closed
+        run: bash agents/scripts/health-monitor.test.sh
+
+      - name: Twin drift guard
+        run: |
+          # These sums match grotap-platform 887e8fd1 (PR #198).
+          # Bump each expected sum in the same change that updates that
+          # file, and update the platform copy together.
+          check() {
+            local path="$1" expected="$2" actual
+            actual="$(sha256sum "$path" | awk '{print $1}')"
+            echo "$path $actual"
+            test "$actual" = "$expected"
+          }
+          check agents/scripts/ssh-key-for.sh f6b978210940712fec12e914f72223198a9b134caf4423b62a5175278a4a5c68
+          check agents/scripts/ssh-key-for.test.sh 796c9bd695839d9bc15be4337a86ac8b04f573285bfe8c79de50fc48dd8d2373
+          check agents/fleet-aliases.json da64a218e08c29956fc8de359b0f88309627f678abdfccb6aba0555fee70ed30

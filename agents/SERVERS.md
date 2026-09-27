@@ -37,7 +37,7 @@ reason here, so the next reader can tell an exception from a mistake.
 
 ## Locked live map (Shadow metal PASS, 2026-09-24)
 
-`prompt-01-claude` (`178.156.209.112`, from `claudecode-01` / `claude-code-01`) was **deleted 2026-09-26**. Hetzner has no server by that name. `prompt-01-astra` at `5.161.243.18` is a separate host and is still running. Short aliases `agent-01` … `agent-06` are the same IPv4 as `agent-01-claude` … `agent-06-claude`. `agent-04-claude` is running. `agent-05-claude` is the Hillsboro box that is off. `agent-team-01-astra` is `5.161.80.75`.
+`prompt-01-claude` (`178.156.209.112`, from `claudecode-01` / `claude-code-01`) was **deleted 2026-09-26**. Hetzner has no server by that name. `agent-05-claude` (Hillsboro) was **deleted the same day**; do not put its former address back on a monitor or roster list. `prompt-01-astra` at `5.161.243.18` is a separate host and is still running. Short aliases `agent-01` … `agent-04` and `agent-06` are the same IPv4 as `agent-01-claude` … `agent-04-claude` and `agent-06-claude`. `agent-04-claude` is running. `agent-team-01-astra` is `5.161.80.75`.
 
 | Cloud name | IPv4 | Status |
 |---|---|---|
@@ -47,7 +47,6 @@ reason here, so the next reader can tell an exception from a mistake.
 | agent-02-claude | 5.161.81.193 | running |
 | agent-03-claude | 178.156.222.220 | running |
 | agent-04-claude | 5.161.73.195 | running |
-| agent-05-claude | 5.78.178.81 | OFF Hillsboro |
 | agent-06-claude | 5.161.53.103 | running |
 | agent-10-codex | 87.99.148.22 | Cloud OK |
 | monitor-01-deepseek | 178.156.219.232 | Cloud OK |
@@ -64,17 +63,16 @@ Roles stay on the IP in the locked map. SSH alias is not a Hetzner name.
 | agent-02-claude | 5.161.81.193 | agent-02-claude | `agent-02` | cpx21, Ashburn. **Running** | Planner, Fix/Logic/Policy/Perf Reviewer | 3 |
 | agent-03-claude | 178.156.222.220 | agent-03-claude | `agent-03` | cpx21, Ashburn. **Running**. Console was **"03-Agent"** (ID 122714167). OOM-froze 7/5 (hard reset); keep swap enabled | Execute, Change Reviewer, Rule Enforcer, Build Validator | 3 |
 | agent-04-claude | 5.161.73.195 | agent-04-claude | `agent-04` | cpx21, Ashburn. **Running** | Pipeline Detail, Audit Filters, Mobile Approvals, Marketing (consolidated from agent-11 4/29: grotap.com site, Meta/Instagram/Facebook, YouTube, TikTok APIs) | 3 |
-| agent-05-claude | 5.78.178.81 | (off; Hillsboro) | `agent-05` | Hillsboro. **OFF**. | Do not dispatch while it is off. Ops is on `agent-06-claude` | 2 |
 | agent-06-claude | 5.161.53.103 | agent-06-claude | `agent-06` | Ashburn. **Running** | Team Claude worker and live ops host (was `agent-06-ash`). `grotap-status`, `cloudflared`, `review-gate.timer` active | 2 |
 
 Routing between roles follows the pipeline graph in `registry.md`; triggers/load-order per role live in each ROLE.md.
-**forgejo-runner v13.1.0** (systemd unit `forgejo-runner.service`, installed 2026-09-15) is on the five pre-rename worker IPs, now `agent-01-claude` through `agent-05-claude`. `agent-05-claude` is off, so that runner is down with the box. HOST execution mode: CI jobs run natively as the unprivileged `forge-runner` user in a systemd jail (`ProtectSystem=strict`, `ProtectHome=tmpfs`, `NoNewPrivileges`, empty `CapabilityBoundingSet`), no Docker. Labels `ubuntu-latest:host` and `ubuntu-24.04:host`, capacity 2 per box, registered org-wide to `Grotap-AI` on forge-01. It is independent of the agent tmux sessions and of `dispatch.sh`.
+**forgejo-runner v13.1.0** (systemd unit `forgejo-runner.service`, installed 2026-09-15) is on `agent-01-claude` through `agent-04-claude` and `agent-06-claude`. `agent-05-claude` was deleted 2026-09-26, so that runner is gone with the box. HOST execution mode: CI jobs run natively as the unprivileged `forge-runner` user in a systemd jail (`ProtectSystem=strict`, `ProtectHome=tmpfs`, `NoNewPrivileges`, empty `CapabilityBoundingSet`), no Docker. Labels `ubuntu-latest:host` and `ubuntu-24.04:host`, capacity 2 per box, registered org-wide to `Grotap-AI` on forge-01. It is independent of the agent tmux sessions and of `dispatch.sh`.
 
 Dispatch assignment is owned by the backend 3-min loop + LangGraph orchestrator on Railway (which SSHes to the fleet). Live ops is on `agent-06-claude` (`5.161.53.103`): `grotap-status`, `cloudflared`, and `review-gate.timer` are active there, with the deploy-ops crons below.
 
 **SSH key retirement (started 2026-09-16, in progress).** The shared fleet key `grotap_agents` is being
 replaced by per-host keys, host by host — it is NOT removed yet and every fleet script still falls back
-to it. Phase 1 (2026-09-16 04:01Z): the Hillsboro box (now `agent-05-claude`, off) got per-target keys for both `root` and `agent`
+to it. Phase 1 (2026-09-16 04:01Z): the Hillsboro box (`agent-05-claude`, deleted 2026-09-26) got per-target keys for both `root` and `agent`
 (`~/.ssh/grotap_from06_agent-0{1,2,3,4,5}`). Short alias `agent-01` is `agent-01-claude` at `5.161.74.39`. It is not `agent-02`.
 `ssh-key-for.sh` resolves `agent-0N` to `agent-0N-claude` on that same IP.
 Phase 2b (same day): every fleet
@@ -85,7 +83,7 @@ GEX131, maps-01, forge-01 and every other special host below included. Do not re
 from any box or from `~/.ssh/config` until a later phase says so explicitly.
 
 ## agent-06-claude detail (Ashburn ops host — `5.161.53.103`; Linux hostname `agent-06-claude`)
-`agent-05-claude` (`5.78.178.81`) is OFF in Hillsboro and is not the ops host.
+`agent-05-claude` was deleted 2026-09-26 and is not the ops host.
 - Live units: `grotap-status`, `cloudflared`, `review-gate.timer`.
 - root cron: `health-monitor.sh` 5m · `deploy-verify.sh` 15m · `dns-watchdog.sh` + `env-validator.sh` daily · Wasabi DR backup (daily Neon dump 00:00 + weekly full Sun 02:00, object-lock-safe dated heartbeats) · `reconcile_dispatch.py` **10m** (flock; runs the git-pulled repo copy `grotap-platform/scripts/` with `--max 6 --days 14 --stale-min 10` — consolidated 2026-07-14, the old frozen `/home/agent/` copy + duplicate agent-cron entry are RETIRED) · fleet CLI update daily · release notes 13:00 · systemd `grotap-status` (status server).
 - agent cron: `pipeline_failure_monitor.py` 10m · `deploy_freshness_watchdog.py` 5m · **review gate every 15 min** (`review-gate-cron.sh`; empty queue exits <5s). `review-gate.timer` is active on this host.
@@ -191,7 +189,8 @@ One active account (**K0281854926**, console.hetzner.cloud). Verified via API 7/
 
 ## Retired / cancelled — never dispatch, never re-add
 - **prompt-01-claude** (`178.156.209.112`, Hetzner server ID 149250118, Hetzner project `ClaudeCode`, was `claudecode-01` / `claude-code-01`, DNS `claudecode.grotap.com`). **Deleted 2026-09-26.** Hetzner has no server by that name. Not `prompt-01-astra`.
-- **Deleted agent-01** (5.161.189.143, deleted 6/29 — IP recycled to openreplay-01, former cobrowse-01). That address is not `agent-01-claude`. Live `agent-01-claude` is `5.161.74.39`. · **agent-07** (89.167.66.105, gone with cancelled account) · **agent-08** (77.42.42.213, deleted; old dispatch box). The Hillsboro box is `agent-05-claude` and is OFF. Live ops is `agent-06-claude`.
+- **Deleted agent-01** (5.161.189.143, deleted 6/29 — IP recycled to openreplay-01, former cobrowse-01). That address is not `agent-01-claude`. Live `agent-01-claude` is `5.161.74.39`. · **agent-07** (89.167.66.105, gone with cancelled account) · **agent-08** (77.42.42.213, deleted; old dispatch box). Live ops is `agent-06-claude`.
+- **agent-05-claude** (former Hillsboro address `5.78.178.81`). **Deleted 2026-09-26.** Hetzner can reassign that address. Do not put it on a health, monitor, or fleet roster.
 - **`agent-11-codex`** — reserved name only. Do not provision.
 - **agent-09/10/11** (46.62.184.50/.52/.51, Robot EX44s) — cancelled in Hetzner **Robot** 6/29 (separate from cloud console); they answer ping until their termination date, then get wiped. Verify each shows a cancellation date in Robot.
 

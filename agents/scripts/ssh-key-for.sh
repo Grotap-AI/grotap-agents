@@ -24,20 +24,37 @@
 #
 # Resolution order:
 #   1. A per-host key at $HOME/.ssh/grotap_from<N>_<canonical-target>, where
-#      <N> is derived from the CURRENT host's own short name (agent-06 ->
-#      "06") and <canonical-target> is the resolved target (agent-02..05
-#      today). $HOME reflects whichever OS user actually runs this — /root
-#      under a root crontab, /home/agent under `sudo -u agent` — so root and
-#      agent get the correct key from the exact same call, no extra flag.
+#      <N> is derived from the CURRENT host's own short name (agent-06-claude
+#      -> "06") and <canonical-target> is the Hetzner Cloud name
+#      (agent-01-claude, and so on). Desktop keys are grotap_<hetzner-name>.
+#      Files minted under the old slot stem (grotap_from06_agent-04, grotap_agent-01)
+#      are tried second. Those filenames do not expire with the alias map.
+#      TODO: drop key_file_stems only after the files on the hosts are renamed.
+#      Do not rename key files during the freeze.
+#      Aliases and key_file_stems are read from agents/fleet-aliases.json by
+#      python3. When that file is present, python3 must be on PATH. A missing
+#      interpreter exits 1:
+#        ssh-key-for: python3 is required to load fleet aliases and key_file_stems
+#      The message names the JSON path. Nothing is printed on stdout.
+#      There is no offset. For a host key, $HOME reflects whichever OS user
+#      actually runs this — /root under a root crontab, /home/agent under
+#      `sudo -u agent` — so root and agent get the correct host key from the
+#      exact same call, no extra flag. Phase 1 minted those host keys for
+#      both source users.
+#      A dedicated seat user (<user>@<host>, not root@ or agent@) does not
+#      use $HOME. grotap-status.service runs dispatch as root, and each seat
+#      authorizes only the one key under /home/agent/.ssh. Those keys resolve
+#      from GROTAP_SEAT_KEY_DIR (default /home/agent/.ssh) for every uid.
+#      A missing seat-key filename is skipped and the next name is tried. A
+#      candidate that exists but is not a readable file fails closed.
 #   2. Otherwise a workstation-style per-host key at
 #      $HOME/.ssh/grotap_<canonical-target> -- the naming the owner
 #      workstation uses. Fleet boxes have none of these and fall past it.
-#   3. Otherwise, the shared fleet key: $HOME/.ssh/grotap_agents. This
-#      fallback is what makes it safe to roll the resolver out before every
-#      per-host key pair exists, and to keep relying on it afterwards: any
-#      target with no key yet (a jumpbox, a host this resolver doesn't run
-#      on, maps-01/forge-01/GEX131 today) just keeps working off the shared
-#      key until it, too, gets a per-host pair.
+#   3. Otherwise, the shared fleet key: $HOME/.ssh/grotap_agents, but only
+#      when that file exists and is readable. A missing or unreadable key
+#      (including this fallback) exits 1 and names the path on stderr.
+#      Nothing is printed on stdout. Callers must not substitute
+#      grotap_agents when this script fails.
 #
 # Target/host-name table: an explicit table below, NOT a parse of
 # agents/SERVERS.md. SERVERS.md is prose documentation (free-text rows, IPs
@@ -54,11 +71,24 @@
 #   KEY="$(bash agents/scripts/ssh-key-for.sh <target-ip-or-host>)"
 #   ssh -i "$KEY" root@<target> ...
 #
-# Exit status: 0 whenever a target argument was given — there is always a
-# printable answer (the shared-key path, even if that file itself happens
-# not to exist on disk; callers that care can stat it themselves). This
-# keeps the resolver safe to call from `set -e` scripts via command
-# substitution. Exit 2 only on a missing argument (misuse).
+# Exit status: 0 when a readable key path is printed. A dedicated team user
+# (<user>@<host>, not agent@ or root@) fails closed: exit 2 when the user
+# is not ^[a-z_][a-z0-9_-]*$, exit 1 when no key file for that user exists
+# in GROTAP_SEAT_KEY_DIR, and exit 1 when a candidate exists but is not a
+# readable regular file (the next filename is not tried). Nothing is
+# printed on those failures, and the shared fleet key is not a substitute.
+# A host-key lookup prints a path only when that file exists and is
+# readable. A missing or unreadable file, including the shared-key
+# fallback and a per-host path that is not minted yet, exits 1 and names
+# the path on stderr. Nothing is printed on stdout. A candidate that
+# exists but is not a readable regular file fails closed; the next stem
+# is not tried. A host-key lookup also exits 1 when fleet-aliases.json is
+# present and python3 is missing or cannot read it. Exit 2 on a missing
+# argument.
+# fleet-aliases.json is loaded from the directory of this script's real
+# path (readlink -f, then pwd -P), so a symlink such as
+# /home/agent/scripts/ssh-key-for.sh still finds agents/fleet-aliases.json
+# beside the file the link points at.
 set -u
 
 TARGET="${1:-}"
@@ -69,67 +99,78 @@ fi
 
 SHARED_KEY="$HOME/.ssh/grotap_agents"
 
-# --- IP -> canonical fleet host name (see header comment) -------------------
-# Canonical names are Hetzner Cloud names in agents/SERVERS.md.
-# Short aliases agent-01..agent-06 are the SAME IP as agent-01-claude..agent-06-claude.
-# Do not map agent-02 onto agent-01-claude.
-# prompt-01-claude (178.156.209.112, former claudecode-01 / claude-code-01)
-# was deleted 2026-09-26. Hetzner has no server by that name. Do not map it.
-# 5.78.178.81 is agent-05-claude (off).
-# 5.161.243.18 is prompt-01-astra. Do not add agent-11-codex.
-# Deleted and unmapped: prompt-01-claude (178.156.209.112, deleted 2026-09-26),
-# agent-31/41, agent-30 (167.233.59.142),
-# llm-gpu-02 (178.63.124.99).
+# --- IP -> Hetzner Cloud name (see header comment) --------------------------
+# The key stem is the Hetzner Cloud name. Old slot names (agent-01, agent-20,
+# cobrowse-01, runner-01, agent-06-ash) are NOT in this table. They resolve
+# through agents/fleet-aliases.json until 2026-10-03. Do not map agent-01-claude
+# onto a grotap_agent-02 file. Every TEAM_POOL host has a row. Astra and Team
+# Grok do not fall through to the shared farm key.
+# agent-21 / agent-31 / agent-41 were deleted 2026-09-16. agent-30
+# (167.233.59.142) and llm-gpu-02 (178.63.124.99) were deleted 2026-09-20.
+# Deleted 2026-09-26 and not mapped (Hetzner recycles the addresses):
+#   agent-05-claude 5.78.178.81
+#   prompt-01-claude / claude-code-01 / claudecode-01 178.156.209.112
+#   agent-12-codex 178.156.203.132
+# The name agent-14-monitor was deleted the same day. 178.156.215.173 is
+# now agent-22-shared (Hetzner id 167604967) and is mapped below.
+# forge-01 (178.156.246.81) stays on this row.
 declare -A _SSH_KEY_FOR_HOST_BY_IP=(
   ["5.161.74.39"]="agent-01-claude"
   ["5.161.81.193"]="agent-02-claude"
   ["178.156.222.220"]="agent-03-claude"
   ["5.161.73.195"]="agent-04-claude"
-  ["5.78.178.81"]="agent-05-claude"
   ["5.161.53.103"]="agent-06-claude"
-  ["5.161.243.18"]="prompt-01-astra"
-  ["5.161.80.75"]="agent-team-01-astra"
+  ["agent-01-claude"]="agent-01-claude"
+  ["agent-02-claude"]="agent-02-claude"
+  ["agent-03-claude"]="agent-03-claude"
+  ["agent-04-claude"]="agent-04-claude"
+  ["agent-06-claude"]="agent-06-claude"
   ["87.99.148.22"]="agent-10-codex"
   ["178.156.219.232"]="monitor-01-deepseek"
+  ["5.161.243.18"]="prompt-01-astra"
+  ["prompt-01-astra"]="prompt-01-astra"
+  ["5.161.80.75"]="agent-team-01-astra"
+  ["agent-team-01-astra"]="agent-team-01-astra"
+  # Shared host. The team5 astra seat dials as the astra user. A bare
+  # name or IP must not fall through to the shared farm key.
+  ["5.161.119.92"]="agent-21-shared"
+  ["agent-21-shared"]="agent-21-shared"
+  # Shared host for codex, grok, and monitor. A bare name or IP must not
+  # fall through to the shared farm key. Seats dial as their own users.
+  ["178.156.215.173"]="agent-22-shared"
+  ["agent-22-shared"]="agent-22-shared"
+  # Team Grok. Cloud name = Linux hostname = SSH alias = key stem. No offset.
+  # agent-06 file: $HOME/.ssh/grotap_from06_<name>. Not the shared farm key.
+  # Display names are AgentGrok01 and AgentGrok02. agent-30 stays unmapped.
+  ["5.161.83.78"]="agent-01-grok"
+  ["agent-01-grok"]="agent-01-grok"
+  ["5.161.82.78"]="agent-02-grok"
+  ["agent-02-grok"]="agent-02-grok"
+  ["agent-10-codex"]="agent-10-codex"
+  ["monitor-01-deepseek"]="monitor-01-deepseek"
+  # Live boxes that were missing from this table, so a name lookup fell
+  # through to grotap_agents. The key stem is the host name.
+  ["agent-11-codex"]="agent-11-codex"
+  ["agent-13-monitor"]="agent-13-monitor"
+  # agent-21/31/41 REMOVED 2026-09-16, agent-30 (167.233.59.142) and
+  # llm-gpu-02 (178.63.124.99) REMOVED 2026-09-20: those Hetzner servers were
+  # deleted or cancelled and their IPs released. Hetzner recycles released IPs,
+  # so mapping one to a fleet host name would offer a fleet key to a stranger.
+  # agent-05-claude (5.78.178.81) and prompt-01-claude (178.156.209.112)
+  # were deleted 2026-09-26. Hetzner recycles released addresses, so do not
+  # put those two back in this map. forge-01 was restored the same day.
   ["5.161.107.80"]="maps-01"
+  # forge-01's address (restored in #175) and its name. Both stay. A
+  # missing per-host key falls through to the shared fleet key — see the
+  # header: maps-01/forge-01/GEX131 keep working off grotap_agents until
+  # a per-host pair exists. No grotap_forge-01 key is deployed.
   ["178.156.246.81"]="forge-01"
+  ["forge-01"]="forge-01"
   ["5.161.189.143"]="openreplay-01"
   ["supportagents.grotap.com"]="openreplay-01"
+  ["openreplay-01"]="openreplay-01"
   ["178.156.199.83"]="openreplay-ai-support"
-)
-
-# Old bootstrap aliases → canonical Cloud name. Applied to a hostname lookup
-# and also to a name that arrived via the IP table (the table is already
-# canonical, so this is a no-op for those).
-declare -A _SSH_KEY_FOR_ALIAS=(
-  ["agent-01"]="agent-01-claude"
-  ["agent-02"]="agent-02-claude"
-  ["agent-03"]="agent-03-claude"
-  ["agent-04"]="agent-04-claude"
-  ["agent-05"]="agent-05-claude"
-  ["agent-06"]="agent-06-claude"
-  ["agent-06-ash"]="agent-06-claude"
-  ["grotap-agent-06-ash"]="agent-06-claude"
-  ["agent-20"]="agent-10-codex"
-  ["agent-40"]="monitor-01-deepseek"
-  ["cobrowse-01"]="openreplay-01"
-  ["grotap-cobrowse-01"]="openreplay-01"
-  ["runner-01"]="openreplay-ai-support"
-  ["grotap-runner-01"]="openreplay-ai-support"
-)
-
-# Canonical name → basename of the key file minted before the rename.
-declare -A _SSH_KEY_FOR_LEGACY=(
-  ["agent-01-claude"]="agent-01"
-  ["agent-02-claude"]="agent-02"
-  ["agent-03-claude"]="agent-03"
-  ["agent-04-claude"]="agent-04"
-  ["agent-05-claude"]="agent-05"
-  ["agent-06-claude"]="agent-06"
-  ["agent-10-codex"]="agent-20"
-  ["monitor-01-deepseek"]="agent-40"
-  ["openreplay-01"]="cobrowse-01"
-  ["openreplay-ai-support"]="runner-01"
+  ["openreplay-ai-support"]="openreplay-ai-support"
 )
 
 # --- Canonicalize the target BEFORE the lookup -------------------------------
@@ -149,6 +190,12 @@ declare -A _SSH_KEY_FOR_LEGACY=(
 # key -- the same silent downgrade the rest of this block prevents.
 lookup="${TARGET#"${TARGET%%[![:space:]]*}"}"
 lookup="${lookup%"${lookup##*[![:space:]]}"}"
+# Capture a dedicated team user before the host-key path strips user@.
+# agent@ and root@ stay on that path (single-team boxes).
+_team_user_raw=""
+if [[ "$lookup" == *@* ]]; then
+  _team_user_raw="${lookup%%@*}"
+fi
 lookup="${lookup##*@}"
 lookup="${lookup#[}"
 lookup="${lookup%%]*}"
@@ -157,15 +204,134 @@ case "$lookup" in
   *:*) lookup="${lookup%%:*}" ;;
 esac
 lookup="${lookup,,}"
+_team_user_raw="${_team_user_raw,,}"
+
+# Dedicated team user on a shared host: <user>@<host>. agent@ and root@ are
+# the historical single-team destinations and keep the host-key path below.
+# A team user's key is only that user's file, in one directory, for every
+# caller uid. Never $HOME, never the shared fleet key, and never a file
+# named for a different user. An empty GROTAP_SEAT_KEY_DIR uses the default.
+team_user="$_team_user_raw"
+if [[ -n "$team_user" && "$team_user" != "root" && "$team_user" != "agent" ]]; then
+  # claude@ with no host is not a seat. A present key file must not exit 0.
+  if [[ -z "$lookup" ]]; then
+    echo "ssh-key-for: refusing empty host" >&2
+    exit 2
+  fi
+  # Fail closed. A user of "../" or "claude;rm" must not become a path,
+  # and a missing file must not exit 0 (ssh would then try other identities).
+  if [[ ! "$team_user" =~ ^[a-z_][a-z0-9_-]*$ ]]; then
+    echo "ssh-key-for: refusing user name" >&2
+    exit 2
+  fi
+  _SEAT_KEY_DIR="${GROTAP_SEAT_KEY_DIR:-/home/agent/.ssh}"
+  _seat_try() {
+    local cand="$1"
+    if [[ -e "$cand" ]]; then
+      if [[ ! -f "$cand" || ! -r "$cand" ]]; then
+        echo "ssh-key-for: key file is not readable: ${cand}" >&2
+        exit 1
+      fi
+      printf '%s\n' "$cand"
+      exit 0
+    fi
+  }
+  _local_for_team="$(hostname -s 2>/dev/null || hostname 2>/dev/null || true)"
+  _team_from=""
+  case "$_local_for_team" in
+    agent-06|*agent-06*) _team_from="06" ;;
+  esac
+  if [[ -n "$_team_from" ]]; then
+    _seat_try "$_SEAT_KEY_DIR/grotap_from${_team_from}_${team_user}"
+  fi
+  _seat_try "$_SEAT_KEY_DIR/${team_user}_ed25519"
+  _seat_try "$_SEAT_KEY_DIR/grotap_${team_user}"
+  echo "ssh-key-for: no key file for user ${team_user} in ${_SEAT_KEY_DIR}" >&2
+  exit 1
+fi
+
+# TODO(2026-10-03): delete the alias load. Old slot names are not key stems.
+# key_file_stems is separate and does not expire: the files on disk keep the
+# pre-rename names (grotap_from06_agent-04, and so on) until they are renamed.
+# python3 is required to read this JSON. A missing interpreter exits 1
+# before any key path is printed, so key_file_stems either load or the
+# call fails.
+# Resolve this file, not the symlink that invoked it. Root cron on
+# agent-06 runs /home/agent/scripts/ssh-key-for.sh, which is a link to
+# this copy. dirname of the link looks for fleet-aliases.json under
+# /home/agent, where it is not installed, and then the key stem stays
+# agent-0N-claude instead of the on-disk grotap_from06_agent-0N.
+_ssh_key_for_src="${BASH_SOURCE[0]}"
+_ssh_key_for_real=""
+if command -v readlink >/dev/null 2>&1; then
+  _ssh_key_for_real="$(readlink -f -- "$_ssh_key_for_src" 2>/dev/null || true)"
+fi
+if [[ -z "$_ssh_key_for_real" ]]; then
+  _ssh_key_for_real="$_ssh_key_for_src"
+  while [[ -L "$_ssh_key_for_real" ]]; do
+    _ssh_key_for_dir="$(cd "$(dirname "$_ssh_key_for_real")" && pwd -P)"
+    _ssh_key_for_target="$(readlink "$_ssh_key_for_real")"
+    if [[ "$_ssh_key_for_target" != /* ]]; then
+      _ssh_key_for_real="$_ssh_key_for_dir/$_ssh_key_for_target"
+    else
+      _ssh_key_for_real="$_ssh_key_for_target"
+    fi
+  done
+fi
+_ssh_key_for_dir="$(cd "$(dirname "$_ssh_key_for_real")" && pwd -P)"
+_FLEET_ALIAS_JSON="$(cd "$_ssh_key_for_dir/.." && pwd -P)/fleet-aliases.json"
+declare -A _FLEET_ALIASES=()
+declare -A _SSH_KEY_LEGACY_STEMS=()
+if [[ -n "${FLEET_ALIAS_TODAY:-}" ]]; then
+  _fleet_alias_today="$FLEET_ALIAS_TODAY"
+else
+  _fleet_alias_today="$(TZ=America/Los_Angeles date +%Y-%m-%d)"
+fi
+if [[ -f "$_FLEET_ALIAS_JSON" ]]; then
+  if ! command -v python3 >/dev/null 2>&1; then
+    echo "ssh-key-for: python3 is required to load fleet aliases and key_file_stems from ${_FLEET_ALIAS_JSON}" >&2
+    exit 1
+  fi
+  _alias_rows="$(python3 -c '
+import json, sys
+doc = json.load(open(sys.argv[1], encoding="utf-8"))
+today = sys.argv[2]
+deadline = str(doc.get("remove_after") or "")
+if deadline and today > deadline:
+    print(f"fleet aliases expired on {deadline}; ignoring alias map", file=sys.stderr)
+else:
+    for old, new in (doc.get("aliases") or {}).items():
+        print(f"alias\t{old}\t{new}")
+stems = doc.get("key_file_stems") or doc.get("legacy_key_stems") or {}
+for canon, names in stems.items():
+    for stem in names:
+        print(f"stem\t{canon}\t{stem}")
+' "$_FLEET_ALIAS_JSON" "$_fleet_alias_today")" || {
+    echo "ssh-key-for: python3 failed to read fleet aliases and key_file_stems from ${_FLEET_ALIAS_JSON}" >&2
+    exit 1
+  }
+  while IFS=$'\t' read -r _kind _old _new; do
+    [[ -z "${_old:-}" || -z "${_new:-}" ]] && continue
+    case "$_kind" in
+      alias) _FLEET_ALIASES["$_old"]="$_new" ;;
+      stem)
+        if [[ -n "${_SSH_KEY_LEGACY_STEMS[$_old]:-}" ]]; then
+          _SSH_KEY_LEGACY_STEMS["$_old"]+=" $_new"
+        else
+          _SSH_KEY_LEGACY_STEMS["$_old"]="$_new"
+        fi
+        ;;
+    esac
+  done <<< "$_alias_rows"
+fi
+if [[ -n "${_FLEET_ALIASES[$lookup]:-}" ]]; then
+  lookup="${_FLEET_ALIASES[$lookup]}"
+fi
 
 canon="$lookup"
 if [[ -n "${_SSH_KEY_FOR_HOST_BY_IP[$lookup]:-}" ]]; then
   canon="${_SSH_KEY_FOR_HOST_BY_IP[$lookup]}"
 fi
-if [[ -n "${_SSH_KEY_FOR_ALIAS[$canon]:-}" ]]; then
-  canon="${_SSH_KEY_FOR_ALIAS[$canon]}"
-fi
-legacy="${_SSH_KEY_FOR_LEGACY[$canon]:-}"
 
 # --- Which host is THIS resolver running on? ---------------------------------
 # Only agent-06 has per-host keys as of phase 2a/2b (grotap_from06_*). Any
@@ -174,26 +340,50 @@ legacy="${_SSH_KEY_FOR_LEGACY[$canon]:-}"
 _local_host="$(hostname -s 2>/dev/null || hostname 2>/dev/null || true)"
 from_suffix=""
 case "$_local_host" in
-  agent-06|*agent-06*) from_suffix="06" ;;
+  agent-06-claude|agent-06|*agent-06*) from_suffix="06" ;;
 esac
 
-# Prints the path and exits the script when the file exists.
-_ssh_key_for_use() {
-  local path="$1"
-  if [[ -n "$path" && -f "$path" ]]; then
-    printf '%s\n' "$path"
+# Stems to try: the canonical name, then any pre-rename filename.
+_key_stems=("$canon")
+if [[ -n "${_SSH_KEY_LEGACY_STEMS[$canon]:-}" ]]; then
+  # shellcheck disable=SC2206
+  _key_stems+=(${_SSH_KEY_LEGACY_STEMS[$canon]})
+fi
+
+# A present file that is not a readable regular file fails closed. A
+# missing file returns so the next stem can be tried. The path that would
+# be printed (including the shared key) is checked the same way: missing
+# or unreadable exits 1 and prints nothing on stdout.
+_try_key_file() {
+  local cand="$1"
+  if [[ ! -e "$cand" ]]; then
+    return 1
+  fi
+  if [[ -f "$cand" && -r "$cand" ]]; then
+    printf '%s\n' "$cand"
     exit 0
   fi
+  echo "ssh-key-for: key file is not readable: ${cand}" >&2
+  exit 1
+}
+_require_key_file() {
+  local cand="$1"
+  if [[ -f "$cand" && -r "$cand" ]]; then
+    printf '%s\n' "$cand"
+    exit 0
+  fi
+  if [[ -e "$cand" ]]; then
+    echo "ssh-key-for: key file is not readable: ${cand}" >&2
+  else
+    echo "ssh-key-for: key file does not exist: ${cand}" >&2
+  fi
+  exit 1
 }
 
 if [[ -n "$from_suffix" ]]; then
-  _ssh_key_for_use "$HOME/.ssh/grotap_from${from_suffix}_${canon}"
-  if [[ -n "$legacy" ]]; then
-    _ssh_key_for_use "$HOME/.ssh/grotap_from${from_suffix}_${legacy}"
-  fi
-  if [[ "$canon" == "agent-06-claude" ]]; then
-    _ssh_key_for_use "$HOME/.ssh/grotap_from${from_suffix}_grotap-agent-06-ash"
-  fi
+  for _stem in "${_key_stems[@]}"; do
+    _try_key_file "$HOME/.ssh/grotap_from${from_suffix}_${_stem}" || true
+  done
 fi
 
 # --- 2. Workstation-style per-host key -------------------------------------
@@ -203,17 +393,27 @@ fi
 # source host, so the "from" half would carry no information. Without this
 # branch the resolver handed back the SHARED key for every workstation call
 # even though a per-host key was sitting right next to it -- exactly the
-# dependency phase 2b exists to remove.
+# dependency phase 2b exists to remove. A renamed host tries the new stem
+# first, then the file that was minted under the old name.
 #
 # A literal target of "agents" resolves to grotap_agents here, i.e. the
 # shared key: the same answer the fallback gives, so it needs no guard.
-_ssh_key_for_use "$HOME/.ssh/grotap_${canon}"
-if [[ -n "$legacy" ]]; then
-  _ssh_key_for_use "$HOME/.ssh/grotap_${legacy}"
-fi
-if [[ "$canon" == "agent-06-claude" ]]; then
-  _ssh_key_for_use "$HOME/.ssh/grotap_grotap-agent-06-ash"
-fi
+for _stem in "${_key_stems[@]}"; do
+  _try_key_file "$HOME/.ssh/grotap_${_stem}" || true
+done
 
-printf '%s\n' "$SHARED_KEY"
-exit 0
+# Astra is per-host only. A missing file must not offer the shared farm key.
+# forge-01 and agent-06 have no own key deployed (no grotap_forge-01,
+# no grotap_from06_agent-06). They stay off this list and fall through
+# to grotap_agents, matching the header note on maps-01/forge-01/GEX131.
+case "$canon" in
+  prompt-01-astra|agent-team-01-astra|agent-21-shared|agent-22-shared|agent-01-grok|agent-02-grok|agent-11-codex|agent-13-monitor)
+    if [[ -n "$from_suffix" ]]; then
+      _require_key_file "$HOME/.ssh/grotap_from${from_suffix}_${canon}"
+    else
+      _require_key_file "$HOME/.ssh/grotap_${canon}"
+    fi
+    ;;
+esac
+
+_require_key_file "$SHARED_KEY"
