@@ -1,0 +1,29 @@
+name: ssh-key-for
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: ssh-key-for tests
+        run: bash agents/scripts/ssh-key-for.test.sh
+
+      - name: health-monitor key fail-closed
+        run: bash agents/scripts/health-monitor.test.sh
+
+      - name: Twin drift guard
+        run: |
+          # sha256 of agents/scripts/ssh-key-for.sh must match the
+          # grotap-platform copy (master c4d7a5ff at the time this guard
+          # was added). Bump this expected sum in the same change that
+          # updates the twin, and update the platform copy together.
+          expected=0e4a5939f29dc47cb81e99671ca59e1f329a88b96f91183bb1f1110e6fea50b1
+          actual="$(sha256sum agents/scripts/ssh-key-for.sh | awk '{print $1}')"
+          echo "actual=$actual"
+          test "$actual" = "$expected"
