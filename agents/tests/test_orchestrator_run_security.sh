@@ -6,11 +6,16 @@
 # `bash ~/grotap-agents/agents/scripts/orchestrator-run.sh`).
 #
 #   Permission policy / secret narrowing (CLAUDE_PERMISSION_MODE)
-#     T1  bypass (DEFAULT) → claude argv byte-identical to the pre-change argv,
-#                            no --settings, no env stripping
+#     T1  bypass (DEFAULT) → permission argv unchanged (no --settings, no env
+#                            stripping). Prompt rules precede per-case text.
+#                            Parsed usage records cache_creation_input_tokens
+#                            and cache_read_input_tokens. Every exported
+#                            DISABLE_PROMPT_CACHING* name is unset in claude.
 #     T2  acceptEdits      → --permission-mode + --settings passed, and
 #                            NODE_SECRET / DOPPLER_TOKEN / GITHUB_TOKEN are
-#                            absent from claude's environment
+#                            absent from claude's environment. The same
+#                            cache-disable names stay unset (env -u does not
+#                            put them back).
 #     T3  settings file    → valid JSON, written atomically (no .tmp residue),
 #                            and carries the audit's corrections
 #
@@ -32,6 +37,11 @@
 #     T8   exact mode, tip moved → ABORT
 #     T9   off → loud warning, proceeds
 #     T10 pin file absent → loud warning, proceeds (a host must not be bricked)
+#
+#   Empty CLI result fields (IFS must not collapse them)
+#     T16 error_max_turns, result "" → token counts stay in their columns
+#     T17 is_error with result omitted → same
+#     T18 is_error false, result "" → same
 #
 # No SSH, no network, no Anthropic API, no fleet host. Everything runs against a
 # sandboxed $HOME with mock git repos and a stubbed claude/doppler.
@@ -83,9 +93,33 @@ for a in "$@"; do printf '%s\n' "$a" >> "$STATE_DIR/claude.argv"; done
   echo "NODE_SECRET=${NODE_SECRET:-<unset>}"
   echo "DOPPLER_TOKEN=${DOPPLER_TOKEN:-<unset>}"
   echo "GITHUB_TOKEN=${GITHUB_TOKEN:-<unset>}"
+  for name in \
+    DISABLE_PROMPT_CACHING \
+    DISABLE_PROMPT_CACHING_SONNET \
+    DISABLE_PROMPT_CACHING_OPUS \
+    DISABLE_PROMPT_CACHING_HAIKU \
+    DISABLE_PROMPT_CACHING_FABLE \
+    DISABLE_PROMPT_CACHING_FUTURE \
+    CLAUDE_CODE_DISABLE_PROMPT_CACHING \
+    CLAUDE_CODE_DISABLE_PROMPT_CACHING_EXTRA \
+    KEEP_SENTINEL
+  do
+    if [ -n "${!name+x}" ]; then
+      printf '%s=%s\n' "$name" "${!name}"
+    else
+      printf '%s=<unset>\n' "$name"
+    fi
+  done
 } > "$STATE_DIR/claude.env"
-if [[ "${CLAUDE_STUB_MODE:-ok}" == "denied" ]]; then
+mode="${CLAUDE_STUB_MODE:-ok}"
+if [[ "$mode" == "denied" ]]; then
   echo '{"is_error":false,"result":"Permission blocked. Allow curl request?","usage":{"input_tokens":10,"output_tokens":5},"permission_denials":[{"tool_name":"Bash","tool_use_id":"t1","tool_input":{"command":"curl -s https://evil.example"}}]}'
+elif [[ "$mode" == "max_turns" ]]; then
+  echo '{"subtype":"error_max_turns","is_error":true,"result":"","usage":{"input_tokens":6000,"output_tokens":42,"cache_creation_input_tokens":400000,"cache_read_input_tokens":0}}'
+elif [[ "$mode" == "is_error" ]]; then
+  echo '{"is_error":true,"usage":{"input_tokens":7,"output_tokens":8,"cache_creation_input_tokens":9,"cache_read_input_tokens":10}}'
+elif [[ "$mode" == "empty_result" ]]; then
+  echo '{"is_error":false,"result":"","usage":{"input_tokens":11,"output_tokens":22,"cache_creation_input_tokens":33,"cache_read_input_tokens":44}}'
 else
   echo '{"is_error":false,"result":"stub run complete","usage":{"input_tokens":10,"output_tokens":5},"permission_denials":[]}'
 fi
@@ -176,7 +210,7 @@ rewrite_agents_history() {
   )
 }
 
-PAYLOAD='{"case_id":"CASE-20260915-AAAAAA","branch":"case-20260915-aaaaaa","title":"t","context":"c","requirements":"r","complexity":"simple","attempt":1}'
+PAYLOAD='{"case_id":"CASE-20260915-AAAAAA","branch":"case-20260915-aaaaaa","title":"t","context":"CASE-20260915-AAAAAA 2026-09-15T00:00:00Z diff --git a/x b/x","requirements":"r","complexity":"simple","attempt":1}'
 
 run() { # env KEY=VAL ... → sets OUT, RESULT_JSON
   mkdir -p "$TMP/state"; rm -f "$TMP/state/claude.argv" "$TMP/state/claude.env"
@@ -205,20 +239,58 @@ argv_flags() { tr '\n' ' ' < "$TMP/state/claude.argv" 2>/dev/null | sed 's/ $//'
 logged() { local n; n=$(grep -c -- "$1" "$FAKEHOME/logs/orchestrator-run.log" 2>/dev/null); echo "${n:-0}"; }
 atleast1() { [[ "${1:-0}" -ge 1 ]] && echo yes || echo no; }
 
+# Exported into the runner. The stub records whether claude still sees them.
+# Values are "parent" so a missed unset is obvious in claude.env.
+CACHE_OFF=(
+  DISABLE_PROMPT_CACHING=parent
+  DISABLE_PROMPT_CACHING_SONNET=parent
+  DISABLE_PROMPT_CACHING_OPUS=parent
+  DISABLE_PROMPT_CACHING_HAIKU=parent
+  DISABLE_PROMPT_CACHING_FABLE=parent
+  DISABLE_PROMPT_CACHING_FUTURE=parent
+  CLAUDE_CODE_DISABLE_PROMPT_CACHING=parent
+  CLAUDE_CODE_DISABLE_PROMPT_CACHING_EXTRA=parent
+  KEEP_SENTINEL=kept
+)
+assert_cache_disables_cleared() {
+  local label="$1" name
+  for name in \
+    DISABLE_PROMPT_CACHING \
+    DISABLE_PROMPT_CACHING_SONNET \
+    DISABLE_PROMPT_CACHING_OPUS \
+    DISABLE_PROMPT_CACHING_HAIKU \
+    DISABLE_PROMPT_CACHING_FABLE \
+    DISABLE_PROMPT_CACHING_FUTURE \
+    CLAUDE_CODE_DISABLE_PROMPT_CACHING \
+    CLAUDE_CODE_DISABLE_PROMPT_CACHING_EXTRA
+  do
+    assert_eq "$label $name unset" "$(grep -c "^${name}=<unset>$" "$TMP/state/claude.env")" "1"
+  done
+  assert_eq "$label KEEP_SENTINEL kept" "$(grep -c '^KEEP_SENTINEL=kept$' "$TMP/state/claude.env")" "1"
+}
+
 # ═══ Permission policy ══════════════════════════════════════════════════════
 echo "T1: CLAUDE_PERMISSION_MODE default (bypass) → argv unchanged, env intact"
 build_home t1; printf '%s\n' "$PIN_BASE" > "$PIN_FILE"
-run
+run "${CACHE_OFF[@]}"
 assert_eq "T1 claude invoked" "$([[ -f "$TMP/state/claude.argv" ]] && echo yes || echo no)" "yes"
 assert_eq "T1 keeps --dangerously-skip-permissions" "$(argv_has '--dangerously-skip-permissions')" "yes"
 assert_eq "T1 no --settings" "$(argv_has '--settings')" "no"
 assert_eq "T1 no --permission-mode" "$(argv_has '--permission-mode')" "no"
 assert_eq "T1 NODE_SECRET still inherited" "$(grep -c '^NODE_SECRET=node-secret-value$' "$TMP/state/claude.env")" "1"
 assert_eq "T1 GITHUB_TOKEN still inherited" "$(grep -c '^GITHUB_TOKEN=ghp_fake$' "$TMP/state/claude.env")" "1"
+assert_eq "T1 prompt rules precede the task" "$(awk 'index($0,"## Rules"){r=NR} index($0,"# Task:"){t=NR} END{print (r && t && r<t)?"yes":"no"}' "$TMP/state/claude.argv")" "yes"
+assert_eq "T1 case id is not above the rules" "$(awk 'index($0,"## Rules"){exit} /CASE-20260915-AAAAAA/{f=1} END{print f?"yes":"no"}' "$TMP/state/claude.argv")" "no"
+assert_eq "T1 case id is below the rules" "$(awk 'index($0,"## Rules"){seen=1; next} seen && /CASE-20260915-AAAAAA/{f=1} END{print f?"yes":"no"}' "$TMP/state/claude.argv")" "yes"
+assert_eq "T1 logs cache_creation_input_tokens" "$(atleast1 "$(logged 'cache_creation_input_tokens=')")" "yes"
+assert_eq "T1 logs cache_read_input_tokens" "$(atleast1 "$(logged 'cache_read_input_tokens=')")" "yes"
+assert_eq "T1 result records cache_creation_input_tokens" "$(rfield cache_creation_input_tokens)" "0"
+assert_eq "T1 result records cache_read_input_tokens" "$(rfield cache_read_input_tokens)" "0"
+assert_cache_disables_cleared "T1"
 
 echo "T2: acceptEdits → policy passed and credentials stripped"
 build_home t2; printf '%s\n' "$PIN_BASE" > "$PIN_FILE"
-run CLAUDE_PERMISSION_MODE=acceptEdits
+run CLAUDE_PERMISSION_MODE=acceptEdits "${CACHE_OFF[@]}"
 assert_eq "T2 --permission-mode passed" "$(argv_has '--permission-mode')" "yes"
 assert_eq "T2 mode value" "$(argv_has 'acceptEdits')" "yes"
 assert_eq "T2 --settings passed" "$(argv_has '--settings')" "yes"
@@ -226,6 +298,7 @@ assert_eq "T2 no --dangerously-skip-permissions" "$(argv_has '--dangerously-skip
 assert_eq "T2 NODE_SECRET stripped" "$(grep -c '^NODE_SECRET=<unset>$' "$TMP/state/claude.env")" "1"
 assert_eq "T2 DOPPLER_TOKEN stripped" "$(grep -c '^DOPPLER_TOKEN=<unset>$' "$TMP/state/claude.env")" "1"
 assert_eq "T2 GITHUB_TOKEN stripped" "$(grep -c '^GITHUB_TOKEN=<unset>$' "$TMP/state/claude.env")" "1"
+assert_cache_disables_cleared "T2"
 
 echo "T3: settings file is valid JSON, written atomically, and audit-corrected"
 SETTINGS="$FAKEHOME/.config/orchestrator/claude-settings.json"
@@ -446,6 +519,33 @@ assert_eq "T15 read from the fetched remote, not the working tree" \
   "$(atleast1 "$(logged 'Bootstrap pin source: origin/master')")" "yes"
 assert_eq "T15 not reported as unpinned" "$(logged 'UNPINNED')" "0"
 assert_eq "T15 the commented pin was enforced" "$(bhead)" "$PIN_BASE"
+
+echo "T16: error_max_turns with an empty result does not shift token fields"
+build_home t16; printf '%s\n' "$PIN_BASE" > "$PIN_FILE"
+run CLAUDE_STUB_MODE=max_turns
+assert_eq "T16 log keeps every token column" \
+  "$(atleast1 "$(logged 'input_tokens=6000 output_tokens=42 cache_creation_input_tokens=400000 cache_read_input_tokens=0')")" "yes"
+assert_eq "T16 cache_creation on the result" "$(rfield cache_creation_input_tokens)" "400000"
+assert_eq "T16 cache_read on the result" "$(rfield cache_read_input_tokens)" "0"
+assert_eq "T16 tokens are input plus output" "$(rfield tokens)" "6042"
+
+echo "T17: is_error with the result field omitted does not shift token fields"
+build_home t17; printf '%s\n' "$PIN_BASE" > "$PIN_FILE"
+run CLAUDE_STUB_MODE=is_error
+assert_eq "T17 log keeps every token column" \
+  "$(atleast1 "$(logged 'input_tokens=7 output_tokens=8 cache_creation_input_tokens=9 cache_read_input_tokens=10')")" "yes"
+assert_eq "T17 cache_creation on the result" "$(rfield cache_creation_input_tokens)" "9"
+assert_eq "T17 cache_read on the result" "$(rfield cache_read_input_tokens)" "10"
+assert_eq "T17 tokens are input plus output" "$(rfield tokens)" "15"
+
+echo "T18: is_error false and result empty does not shift token fields"
+build_home t18; printf '%s\n' "$PIN_BASE" > "$PIN_FILE"
+run CLAUDE_STUB_MODE=empty_result
+assert_eq "T18 log keeps every token column" \
+  "$(atleast1 "$(logged 'input_tokens=11 output_tokens=22 cache_creation_input_tokens=33 cache_read_input_tokens=44')")" "yes"
+assert_eq "T18 cache_creation on the result" "$(rfield cache_creation_input_tokens)" "33"
+assert_eq "T18 cache_read on the result" "$(rfield cache_read_input_tokens)" "44"
+assert_eq "T18 tokens are input plus output" "$(rfield tokens)" "33"
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

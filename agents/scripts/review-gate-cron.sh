@@ -282,7 +282,12 @@ cd "$PLATFORM_REPO"
 # them. Set BEFORE the invocation, not after: the timeout SIGKILL is exactly the
 # path that needs the release, and it never returns to the next line.
 CLAUDE_LAUNCHED=1
+# review-gate-task.md is byte-stable. Doppler injects prd into the child it
+# starts, which is after any unset in this shell, so the helper has to run
+# inside that child and exec claude itself. A parent unset does not stick.
+_CACHE_SH="$(cd "$(dirname "$0")" && pwd)/claude-prompt-cache.sh"
 timeout "$TIMEOUT_SECS" doppler run --project grotap --config prd -- \
+  bash "$_CACHE_SH" \
   claude -p "$(cat "$TASK")" \
     --permission-mode bypassPermissions \
     --model "${REVIEW_GATE_MODEL:-claude-sonnet-4-6}" \
