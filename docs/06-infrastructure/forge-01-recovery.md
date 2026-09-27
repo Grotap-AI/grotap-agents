@@ -6,7 +6,7 @@ API, the Cloudflare API or Doppler, not copied from a design document.
 
 ## Protected infrastructure
 
-**forge-01** (Forgejo at `forge.grotap.com`, Ashburn cpx21) is protected infrastructure. Protected by owner order 2026-09-26 after accidental deletion. Restore is in progress from Hetzner snapshot `436438026`. The documented address stays as written until a replacement IP is known.
+**forge-01** (Forgejo at `forge.grotap.com`, Ashburn `cpx21`, IPv4 `178.156.246.81`) is protected infrastructure and is **restored and running**. Protected by owner order 2026-09-26 after accidental deletion. Hetzner server ID `167546044` (previous ID `166078095` is gone), type `cpx21`, created 2026-09-26 10:49 AM PT from snapshot `436438026`. IPv4 `178.156.246.81` is the same address as before the deletion.
 
 It matters because:
 
@@ -36,8 +36,8 @@ forge can always re-create the four mirrors from GitHub and re-register the runn
 
 | Item | Value |
 |---|---|
-| Server | Hetzner Cloud `forge-01`, ID `166078095`, type `cpx21`, image `ubuntu-24.04`, Ashburn |
-| Address | `178.156.246.81`, IPv6 `2a01:4ff:f0:efa6::/64` |
+| Server | Hetzner Cloud `forge-01`, ID `167546044` (previous ID `166078095` is gone), type `cpx21`, image `ubuntu-24.04`, Ashburn. **Restored and running.** Created 2026-09-26 10:49 AM PT from snapshot `436438026`. |
+| Address | `178.156.246.81` (same IPv4 as before the 2026-09-26 deletion), IPv6 `2a01:4ff:f0:efa6::/64` |
 | Cost | EUR 37.49/mo gross |
 | Stack | `docker compose` in `/opt/forge` — `forgejo` (`codeberg.org/forgejo/forgejo:13`, currently 13.0.5) and `caddy` (`caddy:2`) |
 | Database | sqlite3 at `/opt/forge/forgejo/gitea/gitea.db` (~2.5 MB), config `/opt/forge/forgejo/gitea/conf/app.ini` |
