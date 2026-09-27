@@ -220,6 +220,88 @@ for pair in \
   esac
 done
 
+echo "== post-cutover shared hosts are on the health roster =="
+# Default AGENTS array only. HEALTH_MONITOR_AGENTS is a test override and
+# is not the roster. forge-01, maps-01, and deleted agent-05 stay off it.
+health_roster="$(roster_block "$MONITOR" "AGENTS=(")"
+for need in \
+  "agent-01-claude:5.161.74.39" \
+  "agent-02-claude:5.161.81.193" \
+  "agent-03-claude:178.156.222.220" \
+  "agent-04-claude:5.161.73.195" \
+  "agent-06-claude:5.161.53.103" \
+  "agent-21-shared:5.161.119.92" \
+  "agent-22-shared:178.156.215.173"
+ do
+  case "$health_roster" in
+    *"$need"*)
+      check "$need is on the health roster" true
+      ;;
+    *)
+      check "$need is on the health roster (saw: $health_roster)" false
+      ;;
+  esac
+done
+for banned in forge-01 maps-01 agent-05 178.156.246.81 5.161.107.80 5.78.178.81; do
+  case "$health_roster" in
+    *"$banned"*)
+      check "$banned is absent from the health roster (saw: $health_roster)" false
+      ;;
+    *)
+      check "$banned is absent from the health roster" true
+      ;;
+  esac
+done
+
+echo "== shared-host roster names resolve to the agent-06 root host key =="
+# hostname agent-06, caller home standing in for root. The cloud name must
+# print grotap_from06_<cloud-name>. claude@agent-21-shared prints the seat
+# key and is the form the roster does not use. fleet-aliases.json is the
+# repo file; this test does not add a stem.
+ROOTISH="$(mktemp -d)"
+HOSTBIN="$(mktemp -d)"
+SEATDIR="$(mktemp -d)"
+mkdir -p "$ROOTISH/.ssh"
+printf 'host-21\n' > "$ROOTISH/.ssh/grotap_from06_agent-21-shared"
+printf 'host-22\n' > "$ROOTISH/.ssh/grotap_from06_agent-22-shared"
+printf 'shared\n' > "$ROOTISH/.ssh/grotap_agents"
+printf 'seat-claude\n' > "$SEATDIR/grotap_from06_claude"
+cat > "$HOSTBIN/hostname" <<'EOF'
+#!/bin/sh
+echo agent-06
+EOF
+chmod +x "$HOSTBIN/hostname"
+for pair in \
+  "agent-21-shared:grotap_from06_agent-21-shared" \
+  "agent-22-shared:grotap_from06_agent-22-shared"
+ do
+  name="${pair%%:*}"
+  want="${pair#*:}"
+  rc=0
+  got="$(PATH="$HOSTBIN:$PATH" HOME="$ROOTISH" bash "$SCRIPT_DIR/ssh-key-for.sh" "$name" 2>"$TMP/key-err")" || rc=$?
+  if [ "$rc" -eq 0 ] && [ "$got" = "$ROOTISH/.ssh/$want" ]; then
+    check "$name resolves to $want" true
+  else
+    check "$name resolves to $want (rc=$rc got=$got err=$(cat "$TMP/key-err"))" false
+  fi
+done
+rc=0
+got="$(PATH="$HOSTBIN:$PATH" HOME="$ROOTISH" GROTAP_SEAT_KEY_DIR="$SEATDIR" bash "$SCRIPT_DIR/ssh-key-for.sh" "claude@agent-21-shared" 2>"$TMP/key-err")" || rc=$?
+if [ "$rc" -eq 0 ] && [ "$got" = "$SEATDIR/grotap_from06_claude" ]; then
+  check "seat form resolves to the seat key, not the host key" true
+else
+  check "seat form resolves to the seat key, not the host key (rc=$rc got=$got)" false
+fi
+case "$health_roster" in
+  *claude@*|*astra@*|*codex@*|*grok@*|*monitor@*)
+    check "health roster does not use a seat user" false
+    ;;
+  *)
+    check "health roster does not use a seat user" true
+    ;;
+esac
+rm -rf "$ROOTISH" "$HOSTBIN" "$SEATDIR"
+
 echo
 printf 'passed=%d failed=%d\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
