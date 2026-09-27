@@ -42,7 +42,7 @@ Number bands for agents:
 | `mdm-01` | **mdm-01** | MDM - manage/support customer tablets & hardware (monthly fee) | Quiet CPU (~1%) | **Critical pool** - keep 24/7 even when quiet. Name already matches convention. |
 | `grotap-cobrowse-01` | **openreplay-01** | Self-hosted OpenReplay (k3s, ClickHouse, Assist, coturn) at supportagents.grotap.com | Heavy (~50% 24h) | Misnamed "cobrowse". Load is OpenReplay stack, not Cobrowse.io. Keep; kill leftover cobrowse-runner service. |
 | `grotap-runner-01` | **openreplay-ai-support** | OpenReplay AI assist session runner (Playwright) | Near idle (~0.7%); claim API failing | **Strongest retire candidate** after Assist works on openreplay-01 alone |
-| `claudecode-01` | **prompt-01-claude** | Claude Code jumpbox / tooling at `178.156.209.112` | Regular (~9%) | Keep. Aaron override: jumpbox rename is ON. Was `claude-code-01`. DNS `claudecode.grotap.com` unchanged. Separate from `prompt-01-astra` `5.161.243.18`. |
+| `claudecode-01` | **prompt-01-claude** | Claude Code jumpbox / tooling at `178.156.209.112` | — | Deleted 2026-09-26. Hetzner has no server by that name. Was `claude-code-01`. DNS `claudecode.grotap.com` was unchanged. Separate from `prompt-01-astra` `5.161.243.18`. |
 | `forge-01` | **forge-01** | Build / forge | Light with spikes (~5%) | Keep - name already close |
 | `maps-01` | **maps-01** | Maps service | Light steady (~3%) | Keep |
 | `scan-01` | **scan-01** | ClamAV / malware scan | Quiet between scans (~1%) | Keep |
@@ -59,7 +59,7 @@ Number bands for agents:
 | Cobrowse.io dependency / any cobrowse app paths | Already policy: never restore | Ongoing | Replaced by OpenReplay Assist + MDM remote for tablets |
 | Old missing boxes (agent-21/41, GPU/Team3, Lane C) | Already gone - do not recreate under old names | - | Leaner fleet is intentional |
 
-**Do not retire:** mdm-01, openreplay-01 (after rename), Claude agents 01-04/06, agent-10-codex, monitor-01-deepseek, prompt-01-claude (was claude-code-01), forge/maps/scan.
+**Do not retire:** mdm-01, openreplay-01 (after rename), Claude agents 01-04/06, agent-10-codex, monitor-01-deepseek, forge/maps/scan. `prompt-01-claude` (was claude-code-01, `178.156.209.112`) was deleted 2026-09-26.
 
 ---
 
@@ -74,7 +74,6 @@ agent-05-claude
 agent-06-claude
 agent-10-codex
 agent-11-codex          (future only)
-prompt-01-claude
 forge-01
 maps-01
 mdm-01
@@ -116,7 +115,7 @@ Naming stays type-first · lowercase · hyphens. Cloud name = Linux hostname.
 |--------|------|------|
 | **Live** | `prompt-01-astra` `5.161.243.18` | Prompt Option — GPT-6 Astra (`gpt-6-astra`), cpx31 Ashburn, id 167204705. Running |
 | **Live** | `agent-team-01-astra` `5.161.80.75` | Agent Team — GPT-6 Astra, cpx31 Ashburn, id 167204706. Running |
-| **Rename ON** | `prompt-01-claude` `178.156.209.112` | Jumpbox. Aaron override: rename from `claudecode-01` / `claude-code-01` is ON. DNS `claudecode.grotap.com` unchanged. Running. Not `prompt-01-astra`. |
+| **Deleted 2026-09-26** | `prompt-01-claude` `178.156.209.112` | Was the jumpbox (`claudecode-01` / `claude-code-01`). DNS `claudecode.grotap.com` was unchanged. Hetzner has no server by that name. Not `prompt-01-astra`. |
 
 Constraints:
 - Do not put Astra boxes in the Team Claude `agent-0N-claude` pool.
@@ -128,11 +127,10 @@ Why multiple Claude workers exist: parallel **throughput** (concurrent sessions)
 
 ## 2026-09-24 — locked live map (Shadow metal PASS)
 
-This table is the IP authority. SSH alias `agent-01` is `agent-01-claude` at `5.161.74.39`. `agent-02` is `agent-02-claude` at `5.161.81.193`. Same number, same IP. `prompt-01-claude` is the current jumpbox name. `agent-04-claude` is running.
+This table is the IP authority. SSH alias `agent-01` is `agent-01-claude` at `5.161.74.39`. `agent-02` is `agent-02-claude` at `5.161.81.193`. Same number, same IP. `prompt-01-claude` (`178.156.209.112`) was deleted 2026-09-26. `agent-04-claude` is running.
 
 | Cloud name | IPv4 | Status |
 |---|---|---|
-| prompt-01-claude | 178.156.209.112 | running (was claude-code-01; DNS claudecode.grotap.com unchanged) |
 | prompt-01-astra | 5.161.243.18 | running (cpx31 Ashburn, id 167204705) |
 | agent-team-01-astra | 5.161.80.75 | running (cpx31 Ashburn, id 167204706) |
 | agent-01-claude | 5.161.74.39 | running |

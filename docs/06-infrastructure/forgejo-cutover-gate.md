@@ -633,6 +633,11 @@ Retiring the key without minting keys for these nine removes all SSH access to t
 > released addresses — never SSH them and never mint a key for them. Five hosts remain
 > in scope for the key work: `agent-20`, `agent-40`, `GEX131`/`llm-gpu-02`, `maps-01`,
 > `claudecode-01`.
+>
+> **Correction 2026-09-26.** `claudecode-01` / `prompt-01-claude` at `178.156.209.112`
+> was deleted from Hetzner on 2026-09-26. Hetzner has no server by that name. It is no
+> longer in scope for the key work. Do not SSH that address. The other four hosts named
+> in the 2026-09-20 correction stay as written.
 
 **Thirteen workstation scripts each duplicate the same fallback line** — `agents/dispatch.sh:30`
 plus `install-dispatcher.sh:22`, `config.sh:6`, `watchdog.sh:19`, `monitor.sh:3`,
@@ -727,7 +732,7 @@ Of the seven, exactly **one** needed a key and got one. The rest should not be t
 
 | Host | Finding |
 |---|---|
-| `claudecode` (`claudecode.grotap.com`, user `user1`) | **Legitimate — key minted and proven.** Same physical box as `claudecode-01` (178.156.209.112), already covered under `root`; this is a second account on it, so it genuinely needed its own key. |
+| `claudecode` (`claudecode.grotap.com`, user `user1`) | **Legitimate — key minted and proven** on 2026-09-16. Same physical box as `claudecode-01` / `prompt-01-claude` (178.156.209.112), already covered under `root`; this is a second account on it, so it genuinely needed its own key. **Deleted 2026-09-26.** Hetzner has no server by that name. Do not SSH `178.156.209.112`. |
 | `agent-01` (5.161.189.143) | **Not an agent box.** `agent` has no `.ssh` directory at all; the shared key logs in as `root`; the host identifies itself as **`grotap-cobrowse-01`** — the Cobrowse server, which the owner ordered ripped out on 2026-08-30. A leftover alias, not a fleet member. Decide decommission vs. re-purpose; do not quietly dress it up as fleet. |
 | `agent-08` (77.42.42.213) | **Dead.** TCP connect to port 22 times out, confirmed twice including a raw `/dev/tcp` probe. |
 | `agent-07` (89.167.66.105), `agent-09` (46.62.184.50), `agent-10` (46.62.184.52), `agent-11` (46.62.184.51) | **HOST KEY CHANGED.** `known_hosts` holds prior ed25519 and rsa records; each server now presents a different, unmatched ed25519 key. No login was attempted past the warning and nothing was appended. Consistent with these being rebuilt or reassigned — `agent-07` appears only in a stale `orchestrator/DEPLOY.md:166` list and not in live `FLEET_HOSTS`. |
@@ -746,7 +751,8 @@ independently of the key retirement.
 `agent-01` (5.161.189.143), `agent-07` (89.167.66.105), `agent-08` (77.42.42.213),
 `agent-09` (46.62.184.50), `agent-10` (46.62.184.52), `agent-11` (46.62.184.51), and
 `claudecode` (`claudecode.grotap.com`, user `user1`). Whether each is live must be established before
-deletion, not assumed from its absence in `SERVERS.md`.
+deletion, not assumed from its absence in `SERVERS.md`. `prompt-01-claude` / `claudecode-01`
+(`178.156.209.112`) was deleted 2026-09-26; Hetzner has no server by that name.
 
 **3. Two catch-all IP-glob blocks in the workstation `~/.ssh/config` route bare-IP connections to the
 shared key**, both with `StrictHostKeyChecking no`:
