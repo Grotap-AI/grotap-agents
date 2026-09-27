@@ -302,6 +302,155 @@ case "$health_roster" in
 esac
 rm -rf "$ROOTISH" "$HOSTBIN" "$SEATDIR"
 
+echo "== ggshield fail-opens in the last hour alert per seat =="
+# Local log root: the hour window is applied here, not over ssh.
+# Two recent codex lines count. An old codex line and a junk line do not.
+# grok has only an old line. monitor has no file. astra is not on this host.
+FAILOPEN_ROOT="$(mktemp -d)"
+mkdir -p "$FAILOPEN_ROOT/agent-22-shared/codex" "$FAILOPEN_ROOT/agent-22-shared/grok"
+recent="$(date -u -d '10 minutes ago' +%Y-%m-%dT%H:%M:%SZ)"
+also_recent="$(date -u -d '20 minutes ago' +%Y-%m-%dT%H:%M:%SZ)"
+old="$(date -u -d '3 hours ago' +%Y-%m-%dT%H:%M:%SZ)"
+cat > "$FAILOPEN_ROOT/agent-22-shared/codex/ggshield-failopen.log" <<EOF
+${old} user=codex reason=doppler-error ggshield_exit=- repo=/tmp/old
+not a fail-open line
+${recent} user=codex reason=scan-error ggshield_exit=4 repo=/tmp/recent
+${also_recent} user=codex reason=timeout ggshield_exit=124 repo=/tmp/timeout
+EOF
+printf '%s\n' "${old} user=grok reason=empty-key ggshield_exit=- repo=/tmp/old" \
+  > "$FAILOPEN_ROOT/agent-22-shared/grok/ggshield-failopen.log"
+rm -rf "$TMP/state" "$TMP/logs"
+mkdir -p "$TMP/state" "$TMP/logs"
+: > "$TMP/ssh-invocations"
+HEALTH_MONITOR_LOG="$TMP/logs/health-monitor.log" \
+HEALTH_MONITOR_STATE_DIR="$TMP/state" \
+HEALTH_MONITOR_ALERT_LOG="$TMP/logs/alerts.log" \
+HEALTH_MONITOR_SKIP_HTTP=1 \
+HEALTH_MONITOR_AGENTS="agent-22-shared:203.0.113.22" \
+HEALTH_MONITOR_SSH_KEY_FOR="$TMP/ssh-key-for-ok.sh" \
+HEALTH_MONITOR_SSH="$TMP/ssh" \
+HEALTH_MONITOR_GGSHIELD_LOG_ROOT="$FAILOPEN_ROOT" \
+SSH_INVOCATIONS="$TMP/ssh-invocations" \
+STUB_KEY_PATH="$TMP/seat-key" \
+  bash "$MONITOR"
+alerts="$(cat "$TMP/logs/alerts.log")"
+health="$(cat "$TMP/logs/health-monitor.log")"
+invocations="$(cat "$TMP/ssh-invocations")"
+case "$alerts" in
+  *"GGSHIELD FAILOPEN: codex@agent-22-shared — 2 in the last hour"*)
+    check "codex fail-opens in the last hour are alerted" true
+    ;;
+  *)
+    check "codex fail-opens in the last hour are alerted (saw: $alerts)" false
+    ;;
+esac
+case "$alerts" in
+  *grok@*|*monitor@*|*astra@*|*claude@*)
+    check "seats with no recent fail-open are not alerted" false
+    ;;
+  *)
+    check "seats with no recent fail-open are not alerted" true
+    ;;
+esac
+case "$alerts" in
+  *"/tmp/recent"*|*ggshield_exit*|*"scan-error"*)
+    check "the alert does not copy the log line" false
+    ;;
+  *)
+    check "the alert does not copy the log line" true
+    ;;
+esac
+case "$health" in
+  *"Status: DEGRADED"*)
+    check "a fail-open count above 0 marks the sweep DEGRADED" true
+    ;;
+  *)
+    check "a fail-open count above 0 marks the sweep DEGRADED (saw: $health)" false
+    ;;
+esac
+case "$invocations" in
+  *ggshield-failopen.log*)
+    check "a local log root does not ssh for the log" false
+    ;;
+  *)
+    check "a local log root does not ssh for the log" true
+    ;;
+esac
+rm -rf "$FAILOPEN_ROOT"
+
+echo "== ssh reads each seat log and alerts only when the count is above 0 =="
+FAILOPEN_FILE="$(mktemp)"
+recent="$(date -u -d '5 minutes ago' +%Y-%m-%dT%H:%M:%SZ)"
+printf '%s\n' "${recent} user=codex reason=doppler-error ggshield_exit=- repo=/home/codex/grotap-platform" \
+  > "$FAILOPEN_FILE"
+cat > "$TMP/ssh-failopen" <<'EOF'
+#!/bin/bash
+printf '%s\n' "$*" >> "$SSH_INVOCATIONS"
+if [[ "$*" == *ggshield-failopen.log* ]]; then
+  case "$*" in
+    */home/codex/*)
+      if [ -n "${STUB_FAILOPEN_LOG:-}" ] && [ -f "$STUB_FAILOPEN_LOG" ]; then
+        cat "$STUB_FAILOPEN_LOG"
+      fi
+      ;;
+  esac
+  exit 0
+fi
+exit 0
+EOF
+chmod +x "$TMP/ssh-failopen"
+rm -rf "$TMP/state" "$TMP/logs"
+mkdir -p "$TMP/state" "$TMP/logs"
+: > "$TMP/ssh-invocations"
+HEALTH_MONITOR_LOG="$TMP/logs/health-monitor.log" \
+HEALTH_MONITOR_STATE_DIR="$TMP/state" \
+HEALTH_MONITOR_ALERT_LOG="$TMP/logs/alerts.log" \
+HEALTH_MONITOR_SKIP_HTTP=1 \
+HEALTH_MONITOR_AGENTS="agent-22-shared:203.0.113.22" \
+HEALTH_MONITOR_SSH_KEY_FOR="$TMP/ssh-key-for-ok.sh" \
+HEALTH_MONITOR_SSH="$TMP/ssh-failopen" \
+SSH_INVOCATIONS="$TMP/ssh-invocations" \
+STUB_KEY_PATH="$TMP/seat-key" \
+STUB_FAILOPEN_LOG="$FAILOPEN_FILE" \
+  bash "$MONITOR"
+alerts="$(cat "$TMP/logs/alerts.log")"
+invocations="$(cat "$TMP/ssh-invocations")"
+case "$alerts" in
+  *"GGSHIELD FAILOPEN: codex@agent-22-shared — 1 in the last hour"*)
+    check "ssh path alerts the codex seat" true
+    ;;
+  *)
+    check "ssh path alerts the codex seat (saw: $alerts)" false
+    ;;
+esac
+case "$invocations" in
+  *"/home/codex/.local/state/grotap/ggshield-failopen.log"*)
+    check "ssh reads the codex fail-open log" true
+    ;;
+  *)
+    check "ssh reads the codex fail-open log (saw: $invocations)" false
+    ;;
+esac
+for seat in grok monitor; do
+  case "$invocations" in
+    *"/home/${seat}/.local/state/grotap/ggshield-failopen.log"*)
+      check "ssh reads the ${seat} fail-open log" true
+      ;;
+    *)
+      check "ssh reads the ${seat} fail-open log (saw: $invocations)" false
+      ;;
+  esac
+  case "$alerts" in
+    *"GGSHIELD FAILOPEN: ${seat}@agent-22-shared"*)
+      check "${seat} with an empty log is not alerted" false
+      ;;
+    *)
+      check "${seat} with an empty log is not alerted" true
+      ;;
+  esac
+done
+rm -f "$FAILOPEN_FILE"
+
 echo
 printf 'passed=%d failed=%d\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

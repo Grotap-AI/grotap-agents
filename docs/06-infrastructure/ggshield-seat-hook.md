@@ -29,10 +29,15 @@ Linux hostname on both boxes is the cloud name (`agent-21-shared`, `agent-22-sha
   If `core.hooksPath` is already set to a different directory, the installer stops
   and leaves it alone.
 - Writes `~/.config/grotap/ggshield-hook.mode` with `off` or `on`. That file is
-  not a secret.
+  not a secret. A third value, `strict`, is recognized and is not written by
+  install or by `--canary`.
 
-`core.hooksPath` replaces `.git/hooks` for every repo. These seats do not ship
-other git hooks. A later hook has to live in the same directory.
+`core.hooksPath` replaces `.git/hooks` for every repo. After this hook allows
+a commit, it execs `$(git rev-parse --git-dir)/hooks/pre-commit` when that
+file exists and is executable. That is the hook `pre-commit install` writes
+for a repo such as grotap-platform. A detected secret, or a scan error in
+`strict` mode, does not run it. The API key is unset before the repo hook
+starts.
 
 ## API key
 
@@ -50,13 +55,68 @@ That is the same Doppler CLI the seat already uses for fleet secrets
 environment for `ggshield` and is not written to disk, not passed on a
 command line, and not logged.
 
-When the mode is off, the hook does not call Doppler.
+When the mode is off, the hook does not call Doppler. It still execs the
+repo hook when that file is executable, so `pre-commit install` keeps working
+while the seat hook is off.
 
-A missing key, a Doppler error, or a ggshield status other than "secrets
-found" (exit 1) logs a warning and **allows** the commit. Exit 1 **blocks**
-the commit. Server and network failures use ggshield's own exit codes
-(including 3, 4, and 128, and timeout exit 124) and fail open. The scan is
-limited to 45 seconds.
+## Fail-open log
+
+Mode `on` **allows** the commit when the scan cannot produce a verdict, and
+appends one line to `~/.local/state/grotap/ggshield-failopen.log`. The file
+is mode `0600`. The line is:
+
+```text
+2026-09-27T14:45:00Z user=codex reason=doppler-error ggshield_exit=- repo=/home/codex/grotap-platform
+```
+
+Fields are the UTC timestamp, the seat user, the reason, the ggshield exit
+(`-` when ggshield did not run), and the repo path. The API key is not a
+field and is not copied from the environment, from Doppler's stderr, or from
+the scan output.
+
+| reason | when | ggshield exit |
+|---|---|---|
+| `ggshield-missing` | no ggshield binary | `-` |
+| `doppler-missing` | `doppler` is not on `PATH` | `-` |
+| `doppler-error` | Doppler exits non-zero | `-` |
+| `empty-key` | Doppler returns an empty value | `-` |
+| `timeout` | the 45s scan limit (exit 124) | `124` |
+| `scan-error` | any other status except 0 and 1 | that status |
+
+Exit 1 still **blocks** the commit and does not append a line. Exit 0 allows
+the commit and does not append a line.
+
+`agents/scripts/health-monitor.sh` (agent-06 cron) reads that log for each
+seat over SSH after the host answers:
+
+| Host | Seats |
+|---|---|
+| `agent-21-shared` | `claude`, `astra` |
+| `agent-22-shared` | `codex`, `grok`, `monitor` |
+
+It counts lines whose timestamp is within the last hour. A count above 0
+appends `GGSHIELD FAILOPEN: <user>@<host> — <count> in the last hour` to the
+existing alert log (`/home/agent/logs/deploy-alerts.log` on the ops host) and
+marks the sweep degraded. A missing log is a count of 0. The alert is the
+count, not the log line.
+
+## Strict mode
+
+`strict` sits beside `on` and `off`. On a scan error (the reasons in the
+table above) it **blocks** the commit and does not write the fail-open log,
+so the health monitor does not alert. A detected secret still blocks. A
+clean scan still allows the commit and still chains to the repo hook.
+
+Nothing enables `strict` by default. Install writes `off`. `--canary` writes
+`on`. To turn it on for one seat, write the word as that user:
+
+```bash
+sudo -u codex -H -- bash -c 'printf "%s\n" strict > "$HOME/.config/grotap/ggshield-hook.mode"'
+```
+
+`GROTAP_GGSHIELD_HOOK=strict` overrides the file for the current process the
+same way `on` and `off` do. Do not export it from `.profile`. An unrecognized
+word in the file, including `strictly`, is `off`.
 
 ## Commands on agent-22-shared
 
@@ -95,11 +155,12 @@ sudo -u astra -H -- bash /home/astra/grotap-agents/agents/scripts/install-ggshie
 
 ## Flip the flag
 
-The durable flag is one word in `~/.config/grotap/ggshield-hook.mode`: `off` or `on`.
-`GROTAP_GGSHIELD_HOOK` overrides that file for the current process when it is
-set. `GROTAP_GGSHIELD_HOOK=off` forces the no-op line `ggshield hook disabled`
-even if the file says `on`. Do not export that variable from `.profile`; git
-does not need it, and an exported `off` would hide a mode file of `on`.
+The durable flag is one word in `~/.config/grotap/ggshield-hook.mode`: `off`,
+`on`, or `strict`. `GROTAP_GGSHIELD_HOOK` overrides that file for the current
+process when it is set. `GROTAP_GGSHIELD_HOOK=off` forces the no-op line
+`ggshield hook disabled` even if the file says `on`. Do not export that
+variable from `.profile`; git does not need it, and an exported `off` would
+hide a mode file of `on`. `strict` is described above and is not the canary.
 
 Turn the canary seat off:
 

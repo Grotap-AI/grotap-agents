@@ -10,7 +10,7 @@ and route it to the right server and role.
 | Condition | Route to |
 |---|---|
 | `flags` contains `security` | agent-02 / security-reviewer |
-| `type == 'audit'` or `type == 'filter-review'` | agent-05 / audit-filters |
+| `type == 'audit'` or `type == 'filter-review'` | agent-04 / audit-filters |
 | `type == 'policy-review'` | agent-03 / policy-reviewer |
 | `type == 'build'` | agent-04 / build-validator |
 | Default (feature/fix, no flags) | agent-03 / planner |
