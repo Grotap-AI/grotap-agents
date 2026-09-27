@@ -35,7 +35,7 @@ Documented failure patterns that prompted this module:
 
 ## Server Assignment
 All deployment-ops roles run on `agent-06-claude` (Ashburn, `5.161.53.103`).
-`agent-06-claude` is the ops/monitoring server. `agent-05-claude` (Hillsboro, `5.78.178.81`) is OFF and is not the ops host.
+`agent-06-claude` is the ops/monitoring server. `agent-05-claude` was deleted 2026-09-26 and is not on the health roster.
 
 ## Railway Service IDs (canonical copy — ROLE files reference this table)
 | Service | ID |

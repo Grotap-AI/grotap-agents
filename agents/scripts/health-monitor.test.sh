@@ -125,6 +125,14 @@ case "$invocations" in
     check "ssh -i uses the resolver path (saw: $invocations)" false
     ;;
 esac
+case " $invocations" in
+  *" -n "*)
+    check "ssh is passed -n so it does not read stdin" true
+    ;;
+  *)
+    check "ssh is passed -n so it does not read stdin (saw: $invocations)" false
+    ;;
+esac
 case "$invocations" in
   *grotap_agents*)
     check "success path does not pass the shared key" false
@@ -179,6 +187,38 @@ if [ "$status" = "key-missing" ]; then
 else
   check "missing shared key marks the host key-missing (saw: $status)" false
 fi
+
+echo "== deleted agent-05 is not on a monitor or fleet roster =="
+# The default arrays, not HEALTH_MONITOR_AGENTS. A recycled 5.78.178.81
+# must not be probed.
+roster_block() {
+  local file="$1" start="$2"
+  awk -v start="$start" '
+    index($0, start) == 1 { grab=1 }
+    grab { print }
+    grab && $0 ~ /^\)/ { exit }
+  ' "$file"
+}
+for pair in \
+  "$MONITOR|AGENTS=(" \
+  "$SCRIPT_DIR/fleet-load.sh|HOSTS=(" \
+  "$SCRIPT_DIR/sync-all-agents.sh|AGENTS=("
+ do
+  file="${pair%%|*}"
+  start="${pair#*|}"
+  block="$(roster_block "$file" "$start")"
+  case "$block" in
+    *agent-05*|*5.78.178.81*)
+      check "no agent-05 in $file roster (saw: $block)" false
+      ;;
+    *agent-06-claude*)
+      check "no agent-05 in $file roster" true
+      ;;
+    *)
+      check "no agent-05 in $file roster (block missing agent-06: $block)" false
+      ;;
+  esac
+done
 
 echo
 printf 'passed=%d failed=%d\n' "$PASS" "$FAIL"

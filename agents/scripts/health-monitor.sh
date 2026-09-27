@@ -47,17 +47,15 @@ done
 fi
 
 # ── Agent server SSH checks ──────────────────────────────────────────────────
-# Roster of record is SERVERS.md — keep this list equal to the agent-0N rows there.
-# It was wrong in both directions until 2026-09-15: it probed agent-01, deleted
-# 2026-06-29 with its IP recycled to supportagents (so the check passed while
-# testing a different machine entirely), and it omitted agent-06 — the box whose
-# crons must always run, and the box this script itself runs on.
+# Roster of record is the live agent-0N rows in SERVERS.md.
+# agent-05-claude (former 5.78.178.81) was deleted 2026-09-26. Hetzner can
+# reassign that address, so it is not probed. The deployed copy does not
+# have it; leaving it here alerts DEGRADED every 5 minutes.
 AGENTS=(
   "agent-01-claude:5.161.74.39"
   "agent-02-claude:5.161.81.193"
   "agent-03-claude:178.156.222.220"
   "agent-04-claude:5.161.73.195"
-  "agent-05-claude:5.78.178.81"
   "agent-06-claude:5.161.53.103"
 )
 
@@ -97,7 +95,9 @@ for ENTRY in "${AGENTS[@]}"; do
   fi
   rm -f "$key_err"
 
-  if "$SSH_BIN" -i "$SSH_KEY_FOR_TARGET" -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o BatchMode=yes "root@$IP" "echo ok" >/dev/null 2>&1; then
+  # -n: do not read stdin. A piped run of this script otherwise lets ssh
+  # consume the pipe and the rest of the sweep never sees it.
+  if "$SSH_BIN" -n -i "$SSH_KEY_FOR_TARGET" -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o BatchMode=yes "root@$IP" "echo ok" >/dev/null 2>&1; then
     echo "0" > "$FAIL_FILE"
   else
     PREV=$(cat "$FAIL_FILE" 2>/dev/null || echo "0")

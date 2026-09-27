@@ -28,7 +28,6 @@ AGENTS=(
   "agent-02-claude:5.161.81.193"
   "agent-03-claude:178.156.222.220"
   "agent-04-claude:5.161.73.195"
-  "agent-05-claude:5.78.178.81"
   "agent-06-claude:5.161.53.103"
   "agent-07:89.167.66.105"
 )

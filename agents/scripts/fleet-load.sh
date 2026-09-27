@@ -1,5 +1,6 @@
 #!/bin/bash
-# fleet-load.sh — Read-only CPU / memory / disk sampler for the worker boxes (agent-01-claude…agent-06-claude).
+# fleet-load.sh — Read-only CPU / memory / disk sampler for the worker boxes
+# (agent-01-claude through agent-04-claude, and agent-06-claude).
 #
 # Why this exists: since 2026-09-15 every worker box runs TWO daemons — the agent tmux
 # session used by dispatch.sh, and forgejo-runner (v13.1.0, HOST execution mode, capacity 2,
@@ -28,7 +29,6 @@ HOSTS=(
   "agent-02-claude:5.161.81.193"
   "agent-03-claude:178.156.222.220"
   "agent-04-claude:5.161.73.195"
-  "agent-05-claude:5.78.178.81"
   "agent-06-claude:5.161.53.103"
 )
 
@@ -125,7 +125,6 @@ key_for() {
     agent-02-claude) legacy=agent-02 ;;
     agent-03-claude) legacy=agent-03 ;;
     agent-04-claude) legacy=agent-04 ;;
-    agent-05-claude) legacy=agent-05 ;;
     agent-06-claude) legacy=agent-06 ;;
   esac
   if [ -f "$SSH_KEY_DIR/grotap_$name" ]; then
