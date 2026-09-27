@@ -72,11 +72,13 @@ SHARED_KEY="$HOME/.ssh/grotap_agents"
 # --- IP -> canonical fleet host name (see header comment) -------------------
 # Canonical names are Hetzner Cloud names in agents/SERVERS.md.
 # Short aliases agent-01..agent-06 are the SAME IP as agent-01-claude..agent-06-claude.
-# Do not map agent-02 onto agent-01-claude. Jumpbox is prompt-01-claude
-# at 178.156.209.112 (former claudecode-01 / claude-code-01).
+# Do not map agent-02 onto agent-01-claude.
+# prompt-01-claude (178.156.209.112, former claudecode-01 / claude-code-01)
+# was deleted 2026-09-26. Hetzner has no server by that name. Do not map it.
 # 5.78.178.81 is agent-05-claude (off).
 # 5.161.243.18 is prompt-01-astra. Do not add agent-11-codex.
-# Deleted and unmapped: agent-31/41, agent-30 (167.233.59.142),
+# Deleted and unmapped: prompt-01-claude (178.156.209.112, deleted 2026-09-26),
+# agent-31/41, agent-30 (167.233.59.142),
 # llm-gpu-02 (178.63.124.99).
 declare -A _SSH_KEY_FOR_HOST_BY_IP=(
   ["5.161.74.39"]="agent-01-claude"
@@ -91,8 +93,6 @@ declare -A _SSH_KEY_FOR_HOST_BY_IP=(
   ["178.156.219.232"]="monitor-01-deepseek"
   ["5.161.107.80"]="maps-01"
   ["178.156.246.81"]="forge-01"
-  ["178.156.209.112"]="prompt-01-claude"
-  ["claudecode.grotap.com"]="prompt-01-claude"
   ["5.161.189.143"]="openreplay-01"
   ["supportagents.grotap.com"]="openreplay-01"
   ["178.156.199.83"]="openreplay-ai-support"
@@ -112,8 +112,6 @@ declare -A _SSH_KEY_FOR_ALIAS=(
   ["grotap-agent-06-ash"]="agent-06-claude"
   ["agent-20"]="agent-10-codex"
   ["agent-40"]="monitor-01-deepseek"
-  ["claudecode-01"]="prompt-01-claude"
-  ["claude-code-01"]="prompt-01-claude"
   ["cobrowse-01"]="openreplay-01"
   ["grotap-cobrowse-01"]="openreplay-01"
   ["runner-01"]="openreplay-ai-support"
@@ -130,7 +128,6 @@ declare -A _SSH_KEY_FOR_LEGACY=(
   ["agent-06-claude"]="agent-06"
   ["agent-10-codex"]="agent-20"
   ["monitor-01-deepseek"]="agent-40"
-  ["prompt-01-claude"]="claudecode-01"
   ["openreplay-01"]="cobrowse-01"
   ["openreplay-ai-support"]="runner-01"
 )
@@ -194,10 +191,6 @@ if [[ -n "$from_suffix" ]]; then
   if [[ -n "$legacy" ]]; then
     _ssh_key_for_use "$HOME/.ssh/grotap_from${from_suffix}_${legacy}"
   fi
-  if [[ "$canon" == "prompt-01-claude" ]]; then
-    _ssh_key_for_use "$HOME/.ssh/grotap_from${from_suffix}_claude-code-01"
-    _ssh_key_for_use "$HOME/.ssh/grotap_from${from_suffix}_claudecode-01"
-  fi
   if [[ "$canon" == "agent-06-claude" ]]; then
     _ssh_key_for_use "$HOME/.ssh/grotap_from${from_suffix}_grotap-agent-06-ash"
   fi
@@ -217,10 +210,6 @@ fi
 _ssh_key_for_use "$HOME/.ssh/grotap_${canon}"
 if [[ -n "$legacy" ]]; then
   _ssh_key_for_use "$HOME/.ssh/grotap_${legacy}"
-fi
-if [[ "$canon" == "prompt-01-claude" ]]; then
-  _ssh_key_for_use "$HOME/.ssh/grotap_claude-code-01"
-  _ssh_key_for_use "$HOME/.ssh/grotap_claudecode-01"
 fi
 if [[ "$canon" == "agent-06-claude" ]]; then
   _ssh_key_for_use "$HOME/.ssh/grotap_grotap-agent-06-ash"

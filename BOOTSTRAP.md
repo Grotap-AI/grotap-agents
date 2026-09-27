@@ -24,7 +24,7 @@ The continuous dispatcher (backend loop, with live ops on `agent-06-claude` at `
 `bash agents/server-status.sh` then `bash agents/dispatch-execute.sh <task.md> <session>` (platform repo root).
 
 ## Never Do
-- SSH by raw IP — use the Cloud name in `agents/SERVERS.md` (`ssh agent-01-claude`, `ssh agent-10-codex`, `ssh monitor-01-deepseek`, `ssh prompt-01-claude`). Short alias `ssh agent-01` is `agent-01-claude` at `5.161.74.39`; `ssh agent-02` is `agent-02-claude`. Jumpbox is `prompt-01-claude` at `178.156.209.112`. Key: `~/.ssh/grotap_agents`
+- SSH by raw IP — use the Cloud name in `agents/SERVERS.md` (`ssh agent-01-claude`, `ssh agent-10-codex`, `ssh monitor-01-deepseek`). Short alias `ssh agent-01` is `agent-01-claude` at `5.161.74.39`; `ssh agent-02` is `agent-02-claude`. `prompt-01-claude` at `178.156.209.112` was deleted 2026-09-26. Key: `~/.ssh/grotap_agents`
 - `git add -A` or `git add .`
 - Leave agents idle or skip bootstrap
 - Load `docs/CLAUDE.md` as agent context — use `agents/GLOBAL.md`

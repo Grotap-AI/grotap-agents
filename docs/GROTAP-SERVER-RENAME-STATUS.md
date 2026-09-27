@@ -15,7 +15,7 @@ Updated: 2026-09-21 evening PT (box clock ~ Sep 22 02:18 UTC)
 | agent-40 | monitor-01-deepseek | running |
 | grotap-cobrowse-01 | openreplay-01 | running |
 | grotap-runner-01 | openreplay-ai-support | running |
-| claudecode-01 | prompt-01-claude | running. Aaron override: jumpbox rename is ON (was `claude-code-01`). DNS `claudecode.grotap.com` unchanged. `178.156.209.112` |
+| claudecode-01 | prompt-01-claude | deleted 2026-09-26. Was `178.156.209.112` (was `claude-code-01`). DNS `claudecode.grotap.com` was unchanged. Hetzner has no server by that name. |
 | mdm-01 / forge-01 / maps-01 / scan-01 | unchanged (already correct) | running |
 
 Linux hostname set on: openreplay-ai-support, openreplay-01, agent-01..04-claude, and `agent-06-claude` (Linux hostname `agent-06-claude`).
@@ -50,11 +50,10 @@ openreplay-ai-support is the Strong Feature host — keep it.
 
 ## 2026-09-24 — locked live map (Shadow metal PASS)
 
-Aaron override: jumpbox rename is ON. `prompt-01-claude` at `178.156.209.112` is the current Cloud name (from `claudecode-01` / `claude-code-01`). `prompt-01-astra` at `5.161.243.18` is a separate host. Short alias `agent-0N` is the same IPv4 as `agent-0N-claude`. `agent-04-claude` is running. `agent-05-claude` is OFF in Hillsboro. `agent-team-01-astra` is `5.161.80.75`.
+`prompt-01-claude` at `178.156.209.112` (from `claudecode-01` / `claude-code-01`) was **deleted 2026-09-26**. Hetzner has no server by that name. `prompt-01-astra` at `5.161.243.18` is a separate host and is still running. Short alias `agent-0N` is the same IPv4 as `agent-0N-claude`. `agent-04-claude` is running. `agent-05-claude` is OFF in Hillsboro. `agent-team-01-astra` is `5.161.80.75`.
 
 | Cloud name | IPv4 | Status |
 |---|---|---|
-| prompt-01-claude | 178.156.209.112 | running (was claude-code-01; DNS claudecode.grotap.com unchanged) |
 | prompt-01-astra | 5.161.243.18 | running (cpx31 Ashburn, Hetzner id 167204705) |
 | agent-team-01-astra | 5.161.80.75 | running (cpx31 Ashburn, Hetzner id 167204706) |
 | agent-01-claude | 5.161.74.39 | running |

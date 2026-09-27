@@ -28,7 +28,6 @@ ssh agent-05-claude        # 5.78.178.81     (User: root)  SSH alias agent-05; O
 ssh agent-06-claude        # 5.161.53.103    (User: root)  SSH alias agent-06; hostname agent-06-claude; live ops
 ssh agent-10-codex         # 87.99.148.22    (User: root)  was agent-20
 ssh monitor-01-deepseek    # 178.156.219.232 (User: root)  was agent-40
-ssh prompt-01-claude       # 178.156.209.112 (User: root)  jumpbox; was claudecode-01 / claude-code-01; DNS claudecode.grotap.com
 ssh prompt-01-astra        # 5.161.243.18    (User: root)  id 167204705; was released agent-21 IP
 ssh agent-team-01-astra    # 5.161.80.75     (User: root)  id 167204706
 ssh openreplay-01          # 5.161.189.143   (User: root)  was grotap-cobrowse-01
@@ -55,6 +54,6 @@ Do not create `agent-11-codex`. Retired boxes `agent-07` and `agent-08` are not 
 | agent-06-claude | root only | OK | Ashburn live ops. Hostname `agent-06-claude`. SSH alias `agent-06` |
 | agent-10-codex | root only | OK | Team Builder |
 | monitor-01-deepseek | root only | OK | Team Monitor |
-| prompt-01-claude | root only | OK | Jump seat at `178.156.209.112`. Was `claudecode-01` / `claude-code-01` |
+| prompt-01-claude | — | — | Deleted 2026-09-26. Was `178.156.209.112` (`claudecode-01` / `claude-code-01`). Do not SSH. |
 | prompt-01-astra | root only | OK | `5.161.243.18`, id 167204705 |
 | agent-team-01-astra | root only | OK | `5.161.80.75`, id 167204706 |
