@@ -47,16 +47,33 @@ done
 fi
 
 # ── Agent server SSH checks ──────────────────────────────────────────────────
-# Roster of record is the live agent-0N rows in SERVERS.md.
+# Roster of record is the live agent-0N rows in SERVERS.md, plus the
+# post-cutover shared hosts named in agents/fleet-aliases.json hetzner_names.
+# The agent-0N-claude rows stay until a later delete step.
 # agent-05-claude (former 5.78.178.81) was deleted 2026-09-26. Hetzner can
 # reassign that address, so it is not probed. The deployed copy does not
-# have it; leaving it here alerts DEGRADED every 5 minutes.
+# have it; leaving it here alerts DEGRADED every 5 minutes. forge-01 and
+# maps-01 are not liveness targets and are not on this list.
+# agent-21-shared (5.161.119.92) holds the Team Claude and Team Astra seats.
+# agent-22-shared (178.156.215.173) holds the Team Codex, Grok, and Monitor
+# seats. fleet-aliases.json lists those two cloud names and has no aliases
+# entry and no key_file_stems entry for either, so the name is not rewritten
+# to a seat user. Checked with ssh-key-for.sh as root on a host named
+# agent-06 (hostname prints agent-06, HOME is root's home, aliases file is
+# the repo copy): agent-21-shared prints
+# /root/.ssh/grotap_from06_agent-21-shared and agent-22-shared prints
+# /root/.ssh/grotap_from06_agent-22-shared when those files exist. A seat
+# token such as claude@agent-21-shared prints
+# /home/agent/.ssh/grotap_from06_claude instead, which is the seat key, so
+# the roster uses the cloud name.
 AGENTS=(
   "agent-01-claude:5.161.74.39"
   "agent-02-claude:5.161.81.193"
   "agent-03-claude:178.156.222.220"
   "agent-04-claude:5.161.73.195"
   "agent-06-claude:5.161.53.103"
+  "agent-21-shared:5.161.119.92"
+  "agent-22-shared:178.156.215.173"
 )
 
 if [ -n "${HEALTH_MONITOR_AGENTS:-}" ]; then
