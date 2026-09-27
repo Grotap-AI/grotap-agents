@@ -11,58 +11,15 @@
 # Run: bash agents/scripts/ssh-key-for.test.sh
 # The file under test is a TWIN kept byte-identical in grotap-platform and
 # grotap-agents; run this after changing either copy.
-# This grotap-agents copy stages fleet-aliases.json under a tmpdir. The
-# platform test reads the committed agents/fleet-aliases.json instead.
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# The twin is byte-identical to grotap-platform and looks for
-# <parent-of-script>/fleet-aliases.json only when that file exists.
-# grotap-agents does not ship that platform file. Stage a byte copy of the
-# in-repo twin plus a fixture so these assertions do not depend on it and
-# the twin itself stays unmodified.
-_STAGE="$(mktemp -d)"
-mkdir -p "$_STAGE/scripts"
-cp "$SCRIPT_DIR/ssh-key-for.sh" "$_STAGE/scripts/ssh-key-for.sh"
-cat > "$_STAGE/fleet-aliases.json" <<'EOF'
-{
-  "remove_after": "2026-10-03",
-  "aliases": {
-    "agent-01": "agent-01-claude",
-    "agent-02": "agent-02-claude",
-    "agent-03": "agent-03-claude",
-    "agent-04": "agent-04-claude",
-    "agent-05": "agent-05-claude",
-    "agent-06": "agent-06-claude",
-    "agent-06-ash": "agent-06-claude",
-    "grotap-agent-06-ash": "agent-06-claude",
-    "agent-20": "agent-10-codex",
-    "agent-40": "monitor-01-deepseek",
-    "cobrowse-01": "openreplay-01",
-    "grotap-cobrowse-01": "openreplay-01",
-    "runner-01": "openreplay-ai-support",
-    "grotap-runner-01": "openreplay-ai-support"
-  },
-  "key_file_stems": {
-    "agent-01-claude": ["agent-01"],
-    "agent-02-claude": ["agent-02"],
-    "agent-03-claude": ["agent-03"],
-    "agent-04-claude": ["agent-04"],
-    "agent-05-claude": ["agent-05"],
-    "agent-06-claude": ["agent-06"],
-    "agent-10-codex": ["agent-20"],
-    "monitor-01-deepseek": ["agent-40"],
-    "openreplay-01": ["cobrowse-01"],
-    "openreplay-ai-support": ["runner-01"]
-  }
-}
-EOF
-RESOLVER="$_STAGE/scripts/ssh-key-for.sh"
+RESOLVER="$SCRIPT_DIR/ssh-key-for.sh"
 
 # Resolve against a scratch HOME so the result depends on the resolver's table,
 # not on which keys this particular machine happens to have on disk.
 FAKE_HOME="$(mktemp -d)"
-trap 'rm -rf "$FAKE_HOME" "$_STAGE"' EXIT
+trap 'rm -rf "$FAKE_HOME"' EXIT
 mkdir -p "$FAKE_HOME/.ssh"
 for k in grotap_agents grotap_agent-01 grotap_agent-02 grotap_agent-03 grotap_agent-04 grotap_agent-05 grotap_claudecode-01 grotap_prompt-01-claude grotap_cobrowse-01 grotap_maps-01 grotap_forge-01; do
   : > "$FAKE_HOME/.ssh/$k"
@@ -116,8 +73,34 @@ expect " agent-03 "                    grotap_agent-03      "padded name"
 expect "  178.156.222.220"             grotap_agent-03      "leading space on an IP"
 expect "root@supportagents.grotap.com " grotap_cobrowse-01  "trailing space on a destination"
 
-echo "== Astra is per-host even when the key file is not minted yet =="
-# FAKE_HOME has grotap_agents and not the Astra files. These must not pick it.
+echo "== Astra is per-host and does not offer the shared key when unminted =="
+# FAKE_HOME has grotap_agents and not the Astra files. A missing per-host
+# key exits non-zero and prints nothing. It must not print grotap_agents.
+expect_missing() {
+  local target="$1" want_base="$2" desc="$3" got rc=0 errf err
+  errf="$(mktemp)"
+  got="$(HOME="$FAKE_HOME" GROTAP_SEAT_KEY_DIR="$FAKE_HOME/.ssh" bash "$RESOLVER" "$target" 2>"$errf")" || rc=$?
+  err="$(cat "$errf")"
+  rm -f "$errf"
+  if [[ -z "$got" && "$rc" -ne 0 && "$err" == *"does not exist"* && "$err" == *"$want_base"* && "$got" != *grotap_agents* && "$err" != *grotap_agents* ]]; then
+    PASS=$((PASS + 1))
+    printf '  ok   %-34s -> exit %s (missing %s)\n' "$target" "$rc" "$want_base"
+  else
+    FAIL=$((FAIL + 1))
+    printf '  FAIL %-34s -> [%s] rc=%s stderr=%s (%s)\n' "$target" "$got" "$rc" "$err" "$desc"
+  fi
+}
+expect_missing "5.161.243.18"        grotap_prompt-01-astra       "astra prompt IP missing"
+expect_missing "prompt-01-astra"     grotap_prompt-01-astra       "astra prompt name missing"
+expect_missing "5.161.80.75"         grotap_agent-team-01-astra   "astra agent IP missing"
+expect_missing "agent-team-01-astra" grotap_agent-team-01-astra   "astra agent name missing"
+expect_missing "5.161.119.92"        grotap_agent-21-shared       "shared host IP missing"
+expect_missing "agent-21-shared"     grotap_agent-21-shared       "shared host name missing"
+expect_missing "178.156.215.173"     grotap_agent-22-shared       "agent-22-shared IP missing"
+expect_missing "agent-22-shared"     grotap_agent-22-shared       "agent-22-shared name missing"
+for _mint in grotap_prompt-01-astra grotap_agent-team-01-astra grotap_agent-21-shared grotap_agent-22-shared; do
+  : > "$FAKE_HOME/.ssh/$_mint"
+done
 expect "5.161.243.18"                 grotap_prompt-01-astra       "astra prompt IP"
 expect "prompt-01-astra"              grotap_prompt-01-astra       "astra prompt name"
 expect "5.161.80.75"                  grotap_agent-team-01-astra   "astra agent IP"
@@ -127,8 +110,14 @@ expect "agent-21-shared"              grotap_agent-21-shared       "shared host 
 expect "178.156.215.173"              grotap_agent-22-shared       "agent-22-shared IP"
 expect "agent-22-shared"              grotap_agent-22-shared       "agent-22-shared name"
 
-echo "== Team Grok is per-host even when the key file is not minted yet =="
-# Same rule as Astra. FAKE_HOME has grotap_agents and not the Grok files.
+echo "== Team Grok is per-host and does not offer the shared key when unminted =="
+expect_missing "5.161.83.78"         grotap_agent-01-grok         "grok 01 IP missing"
+expect_missing "agent-01-grok"       grotap_agent-01-grok         "grok 01 name missing"
+expect_missing "5.161.82.78"         grotap_agent-02-grok         "grok 02 IP missing"
+expect_missing "agent-02-grok"       grotap_agent-02-grok         "grok 02 name missing"
+for _mint in grotap_agent-01-grok grotap_agent-02-grok; do
+  : > "$FAKE_HOME/.ssh/$_mint"
+done
 expect "5.161.83.78"                  grotap_agent-01-grok         "grok 01 IP"
 expect "agent-01-grok"                grotap_agent-01-grok         "grok 01 name"
 expect "5.161.82.78"                  grotap_agent-02-grok         "grok 02 IP"
@@ -192,16 +181,92 @@ expect "claude@10.0.0.21"              claude_ed25519       "user@ip"
 expect "Claude@Agent-21-Shared"        claude_ed25519       "mixed case is lowercased"
 expect "agent@agent-01"                grotap_agent-01      "agent@ stays on the host key"
 expect "root@5.161.74.39"              grotap_agent-01      "root@ stays on the host key"
+expect_missing "agent-11-codex"      grotap_agent-11-codex   "codex box missing key does not take the shared key"
+expect_missing "agent-13-monitor"   grotap_agent-13-monitor "monitor box missing key does not take the shared key"
+: > "$FAKE_HOME/.ssh/grotap_agent-11-codex"
+: > "$FAKE_HOME/.ssh/grotap_agent-13-monitor"
 expect "agent-11-codex"                grotap_agent-11-codex "codex box does not take the shared key"
 expect "agent-13-monitor"              grotap_agent-13-monitor "monitor box does not take the shared key"
 expect "forge-01"                      grotap_forge-01      "forge name uses the workstation file when that file exists"
 expect "5.78.178.81"                   grotap_agents        "released agent-05 address is not mapped"
 expect "178.156.209.112"               grotap_agents        "released prompt-01-claude address is not mapped"
 
-echo "== genuinely unknown targets still fall back (deliberate) =="
+echo "== genuinely unknown targets still fall back when the shared key exists =="
 expect "not-a-host-we-own"             grotap_agents        "unknown name"
 expect "198.51.100.7"                  grotap_agents        "unknown IP"
 expect "2a01:4f8:2240:195b::1"         grotap_agents        "bare IPv6 literal is not split on ':'"
+
+echo "== a missing or unreadable shared key fails closed =="
+# The shared-key fallback is only a path when that file is usable. A
+# missing file must not be printed, and the process must not exit 0.
+MISS_HOME="$(mktemp -d)"
+mkdir -p "$MISS_HOME/.ssh"
+_miss_err="$(mktemp)"
+_miss_rc=0
+_miss_got="$(HOME="$MISS_HOME" bash "$RESOLVER" "not-a-host-we-own" 2>"$_miss_err")" || _miss_rc=$?
+if [[ -z "$_miss_got" && "$_miss_rc" -ne 0 && "$(cat "$_miss_err")" == *"does not exist"* && "$(cat "$_miss_err")" == *"grotap_agents"* ]]; then
+  PASS=$((PASS + 1))
+  printf '  ok   missing shared key exits non-zero\n'
+else
+  FAIL=$((FAIL + 1))
+  printf '  FAIL missing shared key got=[%s] rc=%s stderr=%s\n' "$_miss_got" "$_miss_rc" "$(cat "$_miss_err")"
+fi
+: > "$MISS_HOME/.ssh/grotap_agents"
+if [[ "$(id -u)" -eq 0 ]]; then
+  rm -f "$MISS_HOME/.ssh/grotap_agents"
+  mkdir "$MISS_HOME/.ssh/grotap_agents"
+else
+  chmod 000 "$MISS_HOME/.ssh/grotap_agents"
+fi
+_miss_rc=0
+_miss_got="$(HOME="$MISS_HOME" bash "$RESOLVER" "not-a-host-we-own" 2>"$_miss_err")" || _miss_rc=$?
+if [[ -z "$_miss_got" && "$_miss_rc" -ne 0 && "$(cat "$_miss_err")" == *"not readable"* && "$(cat "$_miss_err")" == *"grotap_agents"* ]]; then
+  PASS=$((PASS + 1))
+  printf '  ok   unreadable shared key exits non-zero\n'
+else
+  FAIL=$((FAIL + 1))
+  printf '  FAIL unreadable shared key got=[%s] rc=%s stderr=%s\n' "$_miss_got" "$_miss_rc" "$(cat "$_miss_err")"
+fi
+rm -f "$_miss_err"
+chmod -R u+rwx "$MISS_HOME" 2>/dev/null || true
+rm -rf "$MISS_HOME"
+
+echo "== a symlink in another directory still loads fleet-aliases.json =="
+# Root cron invokes /home/agent/scripts/ssh-key-for.sh, a link to this
+# file. The aliases document lives next to the real file, not next to the
+# link. A decoy next to the link must not win: without the real stems the
+# resolver would print grotap_agents instead of grotap_from06_agent-01.
+LINK_ROOT="$(mktemp -d)"
+mkdir -p "$LINK_ROOT/scripts"
+ln -s "$RESOLVER" "$LINK_ROOT/scripts/ssh-key-for.sh"
+cat > "$LINK_ROOT/fleet-aliases.json" <<'EOF'
+{
+  "remove_after": "2099-01-01",
+  "aliases": {"agent-01": "agent-01-claude"},
+  "key_file_stems": {"agent-01-claude": ["decoy-stem"]}
+}
+EOF
+SYM_HOME="$(mktemp -d)"
+mkdir -p "$SYM_HOME/.ssh"
+: > "$SYM_HOME/.ssh/grotap_agents"
+: > "$SYM_HOME/.ssh/grotap_from06_agent-01"
+SYM_HOSTBIN="$(mktemp -d)"
+cat > "$SYM_HOSTBIN/hostname" <<'EOF'
+#!/bin/sh
+echo agent-06
+EOF
+chmod +x "$SYM_HOSTBIN/hostname"
+_sym_rc=0
+_sym_got="$(PATH="$SYM_HOSTBIN:$PATH" HOME="$SYM_HOME" FLEET_ALIAS_TODAY=2026-09-27 bash "$LINK_ROOT/scripts/ssh-key-for.sh" "agent-01-claude" 2>"$LINK_ROOT/err")" || _sym_rc=$?
+_sym_base="${_sym_got##*/}"
+if [[ "$_sym_rc" -eq 0 && "$_sym_base" == "grotap_from06_agent-01" ]]; then
+  PASS=$((PASS + 1))
+  printf '  ok   symlink invocation -> %s\n' "$_sym_base"
+else
+  FAIL=$((FAIL + 1))
+  printf '  FAIL symlink invocation rc=%s got=%s stderr=%s\n' "$_sym_rc" "$_sym_got" "$(cat "$LINK_ROOT/err")"
+fi
+rm -rf "$LINK_ROOT" "$SYM_HOME" "$SYM_HOSTBIN"
 
 echo "== forge-01 has no own key deployed, so it stays on the shared key =="
 # The rows above see grotap_forge-01 because this fixture mints it. Nothing
@@ -261,9 +326,8 @@ done
 rm -rf "$KEY_HOME" "$HOSTBIN"
 
 echo "== python3 is required to load key_file_stems =="
-# The staged fleet-aliases.json sits next to the resolver copy. Without
-# python3 the stem table cannot be built; the call must fail and print no
-# key path.
+# agents/fleet-aliases.json sits next to the resolver. Without python3 the
+# stem table cannot be built; the call must fail and print no key path.
 # PATH keeps the rest of the OS tools and omits every python interpreter.
 nopy="$(mktemp -d)"
 for dir in /usr/bin /bin; do
@@ -296,7 +360,7 @@ SEAT_CANON="$(mktemp -d)"
 SEAT_ROOTISH="$(mktemp -d)"
 SEAT_AGENTISH="$(mktemp -d)"
 SEAT_HOSTBIN="$(mktemp -d)"
-trap 'rm -rf "$FAKE_HOME" "$_STAGE" "$SEAT_CANON" "$SEAT_ROOTISH" "$SEAT_AGENTISH" "$SEAT_HOSTBIN"' EXIT
+trap 'rm -rf "$FAKE_HOME" "$SEAT_CANON" "$SEAT_ROOTISH" "$SEAT_AGENTISH" "$SEAT_HOSTBIN"' EXIT
 mkdir -p "$SEAT_ROOTISH/.ssh" "$SEAT_AGENTISH/.ssh"
 printf 'decoy-root\n' > "$SEAT_ROOTISH/.ssh/grotap_from06_claude"
 printf 'decoy-root\n' > "$SEAT_ROOTISH/.ssh/claude_ed25519"
@@ -352,7 +416,7 @@ else
   printf '  FAIL default dir got=[%s] rc=%s stderr=%s\n' "$_seat_got" "$_seat_rc" "$(cat "$_seat_err")"
 fi
 _seat_rc=0
-_seat_got="$(HOME="$SEAT_AGENTISH" GROTAP_SEAT_KEY_DIR='' PATH="$SEAT_HOSTBIN:$PATH" bash "$RESOLVER" "seatprobe@agent-21-shared" 2>"$_seat_err")" || _seat_rc=$?
+_seat_got="$(HOME="$SEAT_AGENTISH" GROTAP_SEAT_KEY_DIR= PATH="$SEAT_HOSTBIN:$PATH" bash "$RESOLVER" "seatprobe@agent-21-shared" 2>"$_seat_err")" || _seat_rc=$?
 if [[ -z "$_seat_got" && "$_seat_rc" -ne 0 && "$(cat "$_seat_err")" == *"/home/agent/.ssh"* && "$(cat "$_seat_err")" != *"$SEAT_AGENTISH"* ]]; then
   PASS=$((PASS + 1))
   printf '  ok   empty GROTAP_SEAT_KEY_DIR names /home/agent/.ssh\n'

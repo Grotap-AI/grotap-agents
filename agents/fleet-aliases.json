@@ -1,0 +1,53 @@
+{
+  "remove_after": "2026-10-03",
+  "note": "TODO(2026-10-03): delete the aliases object and every caller that rewrites a slot name. After that date the only live server name is the Hetzner Cloud name, which equals the OS hostname. key_file_stems do not expire: the private-key files on agent-06 are still named grotap_from06_<old stem> and must keep resolving until those files are renamed. Do not rename key files during the freeze. This file must ship in three places: the status-server install FILES list (agents/install-status-server.sh copies it next to status-server.js), the orchestrator image at dist/data/fleet-aliases.json, and the backend image at app/data/fleet-aliases.json. CI guards enforce all three: scripts/check_status_server_shipped_files.py, orchestrator npm run test:shipped-json, and backend/scripts/check_fleet_aliases_image.py.",
+  "hetzner_names": [
+    "agent-01-claude",
+    "agent-02-claude",
+    "agent-03-claude",
+    "agent-04-claude",
+    "agent-06-claude",
+    "agent-10-codex",
+    "agent-11-codex",
+    "agent-13-monitor",
+    "agent-01-grok",
+    "agent-02-grok",
+    "agent-21-shared",
+    "agent-22-shared",
+    "monitor-01-deepseek",
+    "prompt-01-astra",
+    "agent-team-01-astra",
+    "maps-01",
+    "mdm-01",
+    "scan-01",
+    "forge-01",
+    "openreplay-ai-support",
+    "openreplay-01"
+  ],
+  "aliases": {
+    "agent-01": "agent-01-claude",
+    "agent-02": "agent-02-claude",
+    "agent-03": "agent-03-claude",
+    "agent-04": "agent-04-claude",
+    "agent-06": "agent-06-claude",
+    "agent-06-ash": "agent-06-claude",
+    "grotap-agent-06-ash": "agent-06-claude",
+    "agent-20": "agent-10-codex",
+    "agent-40": "monitor-01-deepseek",
+    "cobrowse-01": "openreplay-01",
+    "grotap-cobrowse-01": "openreplay-01",
+    "runner-01": "openreplay-ai-support",
+    "grotap-runner-01": "openreplay-ai-support"
+  },
+  "key_file_stems": {
+    "agent-01-claude": ["agent-01"],
+    "agent-02-claude": ["agent-02"],
+    "agent-03-claude": ["agent-03"],
+    "agent-04-claude": ["agent-04"],
+    "agent-06-claude": ["agent-06"],
+    "agent-10-codex": ["agent-20"],
+    "monitor-01-deepseek": ["agent-40"],
+    "openreplay-01": ["cobrowse-01"],
+    "openreplay-ai-support": ["runner-01"]
+  }
+}

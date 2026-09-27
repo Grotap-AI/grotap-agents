@@ -50,12 +50,11 @@
 #   2. Otherwise a workstation-style per-host key at
 #      $HOME/.ssh/grotap_<canonical-target> -- the naming the owner
 #      workstation uses. Fleet boxes have none of these and fall past it.
-#   3. Otherwise, the shared fleet key: $HOME/.ssh/grotap_agents. This
-#      fallback is what makes it safe to roll the resolver out before every
-#      per-host key pair exists, and to keep relying on it afterwards: any
-#      target with no key yet (a jumpbox, a host this resolver doesn't run
-#      on, maps-01/forge-01/GEX131 today) just keeps working off the shared
-#      key until it, too, gets a per-host pair.
+#   3. Otherwise, the shared fleet key: $HOME/.ssh/grotap_agents, but only
+#      when that file exists and is readable. A missing or unreadable key
+#      (including this fallback) exits 1 and names the path on stderr.
+#      Nothing is printed on stdout. Callers must not substitute
+#      grotap_agents when this script fails.
 #
 # Target/host-name table: an explicit table below, NOT a parse of
 # agents/SERVERS.md. SERVERS.md is prose documentation (free-text rows, IPs
@@ -72,16 +71,24 @@
 #   KEY="$(bash agents/scripts/ssh-key-for.sh <target-ip-or-host>)"
 #   ssh -i "$KEY" root@<target> ...
 #
-# Exit status: 0 when a path is printed. A dedicated team user
+# Exit status: 0 when a readable key path is printed. A dedicated team user
 # (<user>@<host>, not agent@ or root@) fails closed: exit 2 when the user
 # is not ^[a-z_][a-z0-9_-]*$, exit 1 when no key file for that user exists
 # in GROTAP_SEAT_KEY_DIR, and exit 1 when a candidate exists but is not a
 # readable regular file (the next filename is not tried). Nothing is
 # printed on those failures, and the shared fleet key is not a substitute.
-# Host-key targets still print a path and exit 0, including a per-host path
-# whose file is not minted yet. A host-key lookup exits 1 when
-# fleet-aliases.json is present and python3 is missing or cannot read it.
-# Nothing is printed on stdout in that case. Exit 2 on a missing argument.
+# A host-key lookup prints a path only when that file exists and is
+# readable. A missing or unreadable file, including the shared-key
+# fallback and a per-host path that is not minted yet, exits 1 and names
+# the path on stderr. Nothing is printed on stdout. A candidate that
+# exists but is not a readable regular file fails closed; the next stem
+# is not tried. A host-key lookup also exits 1 when fleet-aliases.json is
+# present and python3 is missing or cannot read it. Exit 2 on a missing
+# argument.
+# fleet-aliases.json is loaded from the directory of this script's real
+# path (readlink -f, then pwd -P), so a symlink such as
+# /home/agent/scripts/ssh-key-for.sh still finds agents/fleet-aliases.json
+# beside the file the link points at.
 set -u
 
 TARGET="${1:-}"
@@ -249,7 +256,30 @@ fi
 # python3 is required to read this JSON. A missing interpreter exits 1
 # before any key path is printed, so key_file_stems either load or the
 # call fails.
-_FLEET_ALIAS_JSON="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/fleet-aliases.json"
+# Resolve this file, not the symlink that invoked it. Root cron on
+# agent-06 runs /home/agent/scripts/ssh-key-for.sh, which is a link to
+# this copy. dirname of the link looks for fleet-aliases.json under
+# /home/agent, where it is not installed, and then the key stem stays
+# agent-0N-claude instead of the on-disk grotap_from06_agent-0N.
+_ssh_key_for_src="${BASH_SOURCE[0]}"
+_ssh_key_for_real=""
+if command -v readlink >/dev/null 2>&1; then
+  _ssh_key_for_real="$(readlink -f -- "$_ssh_key_for_src" 2>/dev/null || true)"
+fi
+if [[ -z "$_ssh_key_for_real" ]]; then
+  _ssh_key_for_real="$_ssh_key_for_src"
+  while [[ -L "$_ssh_key_for_real" ]]; do
+    _ssh_key_for_dir="$(cd "$(dirname "$_ssh_key_for_real")" && pwd -P)"
+    _ssh_key_for_target="$(readlink "$_ssh_key_for_real")"
+    if [[ "$_ssh_key_for_target" != /* ]]; then
+      _ssh_key_for_real="$_ssh_key_for_dir/$_ssh_key_for_target"
+    else
+      _ssh_key_for_real="$_ssh_key_for_target"
+    fi
+  done
+fi
+_ssh_key_for_dir="$(cd "$(dirname "$_ssh_key_for_real")" && pwd -P)"
+_FLEET_ALIAS_JSON="$(cd "$_ssh_key_for_dir/.." && pwd -P)/fleet-aliases.json"
 declare -A _FLEET_ALIASES=()
 declare -A _SSH_KEY_LEGACY_STEMS=()
 if [[ -n "${FLEET_ALIAS_TODAY:-}" ]]; then
@@ -320,13 +350,39 @@ if [[ -n "${_SSH_KEY_LEGACY_STEMS[$canon]:-}" ]]; then
   _key_stems+=(${_SSH_KEY_LEGACY_STEMS[$canon]})
 fi
 
+# A present file that is not a readable regular file fails closed. A
+# missing file returns so the next stem can be tried. The path that would
+# be printed (including the shared key) is checked the same way: missing
+# or unreadable exits 1 and prints nothing on stdout.
+_try_key_file() {
+  local cand="$1"
+  if [[ ! -e "$cand" ]]; then
+    return 1
+  fi
+  if [[ -f "$cand" && -r "$cand" ]]; then
+    printf '%s\n' "$cand"
+    exit 0
+  fi
+  echo "ssh-key-for: key file is not readable: ${cand}" >&2
+  exit 1
+}
+_require_key_file() {
+  local cand="$1"
+  if [[ -f "$cand" && -r "$cand" ]]; then
+    printf '%s\n' "$cand"
+    exit 0
+  fi
+  if [[ -e "$cand" ]]; then
+    echo "ssh-key-for: key file is not readable: ${cand}" >&2
+  else
+    echo "ssh-key-for: key file does not exist: ${cand}" >&2
+  fi
+  exit 1
+}
+
 if [[ -n "$from_suffix" ]]; then
   for _stem in "${_key_stems[@]}"; do
-    candidate="$HOME/.ssh/grotap_from${from_suffix}_${_stem}"
-    if [[ -f "$candidate" ]]; then
-      printf '%s\n' "$candidate"
-      exit 0
-    fi
+    _try_key_file "$HOME/.ssh/grotap_from${from_suffix}_${_stem}" || true
   done
 fi
 
@@ -343,11 +399,7 @@ fi
 # A literal target of "agents" resolves to grotap_agents here, i.e. the
 # shared key: the same answer the fallback gives, so it needs no guard.
 for _stem in "${_key_stems[@]}"; do
-  ws_candidate="$HOME/.ssh/grotap_${_stem}"
-  if [[ -f "$ws_candidate" ]]; then
-    printf '%s\n' "$ws_candidate"
-    exit 0
-  fi
+  _try_key_file "$HOME/.ssh/grotap_${_stem}" || true
 done
 
 # Astra is per-host only. A missing file must not offer the shared farm key.
@@ -357,13 +409,11 @@ done
 case "$canon" in
   prompt-01-astra|agent-team-01-astra|agent-21-shared|agent-22-shared|agent-01-grok|agent-02-grok|agent-11-codex|agent-13-monitor)
     if [[ -n "$from_suffix" ]]; then
-      printf '%s\n' "$HOME/.ssh/grotap_from${from_suffix}_${canon}"
+      _require_key_file "$HOME/.ssh/grotap_from${from_suffix}_${canon}"
     else
-      printf '%s\n' "$HOME/.ssh/grotap_${canon}"
+      _require_key_file "$HOME/.ssh/grotap_${canon}"
     fi
-    exit 0
     ;;
 esac
 
-printf '%s\n' "$SHARED_KEY"
-exit 0
+_require_key_file "$SHARED_KEY"

@@ -139,6 +139,47 @@ else
   check "reachable host resets the fail count" false
 fi
 
+echo "== missing shared key from the real resolver marks the host key-missing =="
+# No per-host file and no grotap_agents. The resolver exits 1 and names
+# the missing shared key. health-monitor must skip the host.
+EMPTY_HOME="$(mktemp -d)"
+mkdir -p "$EMPTY_HOME/.ssh"
+rm -rf "$TMP/state" "$TMP/logs"
+mkdir -p "$TMP/state" "$TMP/logs"
+: > "$TMP/ssh-invocations"
+HOME="$EMPTY_HOME" \
+HEALTH_MONITOR_LOG="$TMP/logs/health-monitor.log" \
+HEALTH_MONITOR_STATE_DIR="$TMP/state" \
+HEALTH_MONITOR_ALERT_LOG="$TMP/logs/alerts.log" \
+HEALTH_MONITOR_SKIP_HTTP=1 \
+HEALTH_MONITOR_AGENTS="agent-04-claude:203.0.113.10" \
+HEALTH_MONITOR_SSH_KEY_FOR="$SCRIPT_DIR/ssh-key-for.sh" \
+HEALTH_MONITOR_SSH="$TMP/ssh" \
+SSH_INVOCATIONS="$TMP/ssh-invocations" \
+  bash "$MONITOR"
+rm -rf "$EMPTY_HOME"
+alerts="$(cat "$TMP/logs/alerts.log")"
+invocations="$(cat "$TMP/ssh-invocations")"
+status="$(cat "$TMP/state/key_status_agent-04-claude" 2>/dev/null || true)"
+if [ ! -s "$TMP/ssh-invocations" ]; then
+  check "missing shared key does not invoke ssh" true
+else
+  check "missing shared key does not invoke ssh (saw: $invocations)" false
+fi
+case "$alerts" in
+  *"AGENT KEY-MISSING: agent-04-claude (203.0.113.10)"*"exited 1"*"does not exist"*"grotap_agents"*)
+    check "missing shared key is logged as key-missing" true
+    ;;
+  *)
+    check "missing shared key is logged as key-missing (saw: $alerts)" false
+    ;;
+esac
+if [ "$status" = "key-missing" ]; then
+  check "missing shared key marks the host key-missing" true
+else
+  check "missing shared key marks the host key-missing (saw: $status)" false
+fi
+
 echo
 printf 'passed=%d failed=%d\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

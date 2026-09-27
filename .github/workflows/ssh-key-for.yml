@@ -19,11 +19,15 @@ jobs:
 
       - name: Twin drift guard
         run: |
-          # sha256 of agents/scripts/ssh-key-for.sh must match the
-          # grotap-platform copy (master c4d7a5ff at the time this guard
-          # was added). Bump this expected sum in the same change that
-          # updates the twin, and update the platform copy together.
-          expected=0e4a5939f29dc47cb81e99671ca59e1f329a88b96f91183bb1f1110e6fea50b1
-          actual="$(sha256sum agents/scripts/ssh-key-for.sh | awk '{print $1}')"
-          echo "actual=$actual"
-          test "$actual" = "$expected"
+          # These sums match grotap-platform 887e8fd1 (PR #198).
+          # Bump each expected sum in the same change that updates that
+          # file, and update the platform copy together.
+          check() {
+            local path="$1" expected="$2" actual
+            actual="$(sha256sum "$path" | awk '{print $1}')"
+            echo "$path $actual"
+            test "$actual" = "$expected"
+          }
+          check agents/scripts/ssh-key-for.sh f6b978210940712fec12e914f72223198a9b134caf4423b62a5175278a4a5c68
+          check agents/scripts/ssh-key-for.test.sh 796c9bd695839d9bc15be4337a86ac8b04f573285bfe8c79de50fc48dd8d2373
+          check agents/fleet-aliases.json da64a218e08c29956fc8de359b0f88309627f678abdfccb6aba0555fee70ed30

@@ -76,10 +76,9 @@ for ENTRY in "${AGENTS[@]}"; do
   FAIL_FILE="$STATE_DIR/fail_count_$NAME"
 
   # Host-name targets stay on the resolver's $HOME/.ssh host-key path.
-  # A non-zero exit is fail-closed (missing or unreadable seat key, or
-  # fleet-aliases.json present but unreadable). Do not substitute
-  # $HOME/.ssh/grotap_agents — that shared key is what this check used to
-  # swallow the failure with.
+  # ssh-key-for.sh exits 1 when the key it would print is missing or
+  # unreadable, including the shared-key fallback. Do not substitute
+  # $HOME/.ssh/grotap_agents — that is what this check used to swallow.
   key_rc=0
   key_err="$(mktemp)"
   SSH_KEY_FOR_TARGET="$(bash "$KEY_FOR" "$NAME" 2>"$key_err")" || key_rc=$?
