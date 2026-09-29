@@ -246,4 +246,27 @@
 #   Per step 5 this rotation commit is itself unblessed. Hosts run
 #   4d0be2d, which contains the GLOBAL rules. That is the known steady
 #   state, not a fault to chase.
-4d0be2d4db6947d64c26a6d8c9c0b3b5f8e17000
+#
+#   Rotated 2026-09-28 (owner-directed) from
+#   4d0be2d4db6947d64c26a6d8c9c0b3b5f8e17000 to
+#   d67721677fad5afe00decec987aeb89555f319b0, the live master tip resolved
+#   from the REMOTE with git ls-remote, a strict descendant of the outgoing
+#   pin (git merge-base --is-ancestor, exit 0). 242 commits in range.
+#   Reviewed before blessing:
+#     agents/GLOBAL.md UNTOUCHED in the range.
+#     BOOTSTRAP.md: fleet naming pointers and ops-host renames only
+#       (agent-06-claude 5.161.53.103, agent-05 OFF, Cloud-name SSH aliases).
+#     agents/scripts/orchestrator-run.sh (9214b64, #12): prompt text moved
+#       into anthropic_prompt_cache.py build-orchestrator-prompt (same
+#       sections, rules first); sources claude-prompt-cache.sh to unset
+#       DISABLE_PROMPT_CACHING*; usage parse moved to parse-cli-usage with a
+#       0x1f separator; emit() adds cache_creation/cache_read token fields.
+#       Both helpers ship in agents/scripts/ at this SHA. bash -n and
+#       py_compile clean; builder and parser exercised by hand.
+#     agents/scripts/ssh-key-for.sh (#3, #13, #14): Cloud-name roster,
+#       fleet-aliases.json alias/key-stem map (aliases expire 2026-10-03,
+#       key_file_stems do not), per-seat user@host keys. Not on the runner
+#       path. ssh-key-for and ggshield CI green on the tip.
+#   Per step 5 this rotation commit is itself unblessed until a follow-up
+#   rotation pins it.
+d67721677fad5afe00decec987aeb89555f319b0
