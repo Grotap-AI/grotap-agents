@@ -269,4 +269,8 @@
 #       path. ssh-key-for and ggshield CI green on the tip.
 #   Per step 5 this rotation commit is itself unblessed until a follow-up
 #   rotation pins it.
-d67721677fad5afe00decec987aeb89555f319b0
+#
+#   Rotated 2026-09-28 (follow-up, step 5) from d6772167 to
+#   5106dd71a7f35fc1639cbeb2b846b82ebc1669ff, the rotation commit above.
+#   Range d6772167..5106dd71 touches only agents/BOOTSTRAP_SHA.
+5106dd71a7f35fc1639cbeb2b846b82ebc1669ff
