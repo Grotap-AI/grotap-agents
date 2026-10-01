@@ -6,18 +6,18 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'bash \"${CLAUDE_PROJECT_DIR:-.}/scripts/claudecode/session-start-hook.sh\"'"
+            "command": "bash scripts/claudecode/session-start-hook.sh"
           }
         ]
       }
     ],
     "PreToolUse": [
       {
-        "matcher": "Write|Edit|Bash",
+        "matcher": "Write|Edit|Bash|write",
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'F=\"${CLAUDE_PROJECT_DIR:-.}/scripts/claudecode/competitor-name-guard.py\"; [ -f \"$F\" ] || exit 0; P=$(command -v python 2>/dev/null || command -v python3 2>/dev/null) || exit 0; exec \"$P\" \"$F\"'",
+            "command": "bash scripts/claudecode/run-python-hook.sh competitor-name-guard.py",
             "timeout": 15,
             "statusMessage": "competitor-name guard"
           }
@@ -28,7 +28,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'F=\"${CLAUDE_PROJECT_DIR:-.}/scripts/claudecode/stale-evidence-guard.py\"; [ -f \"$F\" ] || exit 0; P=$(command -v python 2>/dev/null || command -v python3 2>/dev/null) || exit 0; exec \"$P\" \"$F\"'",
+            "command": "bash scripts/claudecode/run-python-hook.sh stale-evidence-guard.py",
             "timeout": 10,
             "statusMessage": "stale-evidence guard"
           }
