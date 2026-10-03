@@ -1,5 +1,33 @@
 # agents/SERVERS.md — Fleet roster (single source of truth; loaded at bootstrap after GLOBAL.md)
 
+## Fleet rename 2026-10-02 PT (owner order) — transitional state
+
+Hetzner Cloud names changed on 2026-10-02 PT. IPs, server ids, protection, firewalls and labels did not change.
+Until the code accepts the new names, **the old names remain the live dispatch / pool / alias keys**
+(`agents/config.sh`, `agents/fleet-aliases.json`, `team_pools.json`, `FLEET_HOSTS`, key files `grotap_from06_<old>`).
+
+| IP | Hetzner id | New Hetzner name | Old name (still the pool key; kept as SSH alias and /etc/hosts alias) | OS hostname |
+|---|---|---|---|---|
+| `178.156.199.83` | 149246895 | `openreplay-ai-support-01` | `openreplay-ai-support` (`runner-01`) | `openreplay-ai-support-01` (renamed). `RUNNER_ID=openreplay-ai-support` unchanged. |
+| `5.161.80.75` | 167204706 | `team-astra-01` | `agent-team-01-astra` | still `agent-team-01-astra` (pending code fix) |
+| `178.156.215.173` | 167604967 | `team-codex-grok-monitor-01` | `agent-22-shared` | still `agent-22-shared` (pending code fix) |
+| `5.161.119.92` | 167539331 | `team-claude-01` | `agent-21-shared` | still `agent-21-shared` (pending code fix) |
+| `5.161.53.103` | 166626264 | `ops-01` | `agent-06-claude` (`agent-06`, `agent-06-ash`) | still `agent-06-claude` (pending code fix) |
+
+Unchanged: `openreplay-01`, `maps-01`, `forge-01`, `mdm-01`, `scan-01`.
+
+Why the OS hostnames wait: `agents/status-server.js` and `agents/scripts/ssh-key-for.sh` pick the
+`grotap_from06_*` keys only when the local hostname matches `agent-06`; `ggshield-lib.sh` compares
+`GGSHIELD_CANARY_HOST=agent-22-shared` with `hostname -s`; and `agents/scripts/report-progress.sh` posts
+`$(hostname)` as `agent_server`, which the backend resolves through `fleet-aliases.json` and which
+`team_dispatch_target.py` / the orchestrator slot map match against the pool host name. A new hostname
+that is not in the alias map would drop running work out of per-host load counts (over-admission).
+Each box has `/etc/cloud/cloud.cfg.d/99-grotap-rename.cfg` (`preserve_hostname: true`,
+`manage_etc_hosts: false`) so a reboot does not pull the new Hetzner name into the hostname early.
+New SSH aliases: workstation `~/.ssh/config` and agent-06 `/root/.ssh/config` (`ops-01`, `team-claude-01`,
+`team-codex-grok-monitor-01`, `team-astra-01`, `openreplay-ai-support-01`), with key symlinks
+`/root/.ssh/grotap_from06_<new> -> grotap_from06_<old>`. No Cloudflare DNS record used any old name, so none was added.
+
 Bootstrap names are the locked Cloud names, not `agent-NN`. Map, status, and the Astra GO:
 `docs/GROTAP-SERVER-RENAME-PLAN.md`, `docs/GROTAP-SERVER-RENAME-STATUS.md`,
 `docs/GROTAP-PROMPT-ASTRA-PROVISION.md`.
