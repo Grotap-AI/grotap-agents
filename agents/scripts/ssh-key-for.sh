@@ -109,14 +109,17 @@ SHARED_KEY="$HOME/.ssh/grotap_agents"
 # The ops box (owner workstation) holds the grotap_from06_* keys. It was
 # renamed agent-06 -> ops-01 on 2026-10-02; both names match. Team boxes
 # (team-claude-01, team-codex-grok-monitor-01, team-astra-01) do not.
-# GROTAP_OPS_HOST=1|0 forces the answer.
+# GROTAP_OPS_HOST=1|0 forces the answer. The match is anchored: the whole
+# short name must be one of the four below (optionally followed by .<domain>).
+# status-server.js OPS_HOST_RE is the same rule; keep the two identical.
 _ssh_key_for_is_ops_host() {
   case "${GROTAP_OPS_HOST:-}" in
     1|true|yes) return 0 ;;
     0|false|no) return 1 ;;
   esac
-  case "$1" in
-    agent-06-claude|agent-06|*agent-06*|ops-01|ops-01.*) return 0 ;;
+  case "${1,,}" in
+    agent-06|agent-06-claude|grotap-agent-06|ops-01) return 0 ;;
+    agent-06.*|agent-06-claude.*|grotap-agent-06.*|ops-01.*) return 0 ;;
   esac
   return 1
 }

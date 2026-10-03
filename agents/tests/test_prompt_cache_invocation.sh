@@ -231,6 +231,7 @@ timeout 60 env \
   CLAUDE_CODE_DISABLE_PROMPT_CACHING_EXTRA=from-parent \
   KEEP_SENTINEL=from-parent \
   DOPPLER_TOKEN=parent-token-must-not-reach-claude \
+  REVIEW_GATE_ONLY_SECRETS=ADMIN_SHOULD_NOT_PASS,ANTHROPIC_API_KEY \
   bash "$GATE"
 gate_rc=$?
 if [[ "$gate_rc" -ne 0 ]]; then
@@ -251,6 +252,8 @@ assert_eq "G1 the EXIT trap removed DOPPLER_CONFIG_DIR" "$([[ -n "$g1_cfg" && ! 
 assert_eq "G1 claude denies Bash(doppler*)" "$(grep -qxF -- 'Bash(doppler*)' "$GSTATE/claude.argv" && echo yes || echo no)" "yes"
 assert_eq "G1 claude denies Read(**/.doppler/**)" "$(grep -qxF -- 'Read(**/.doppler/**)' "$GSTATE/claude.argv" && echo yes || echo no)" "yes"
 assert_eq "G1 parent still narrows doppler run to the 4 names" "$(grep -c -- '--only-secrets ANTHROPIC_API_KEY,NODE_SECRET,DATABASE_URL,GITHUB_TOKEN' "$GSTATE/doppler.argv")" "1"
+assert_eq "G1 REVIEW_GATE_ONLY_SECRETS cannot widen the list" "$(grep -c 'ADMIN_SHOULD_NOT_PASS' "$GSTATE/doppler.argv")" "0"
+assert_eq "G1 the ignored override is logged" "$(grep -c 'REVIEW_GATE_ONLY_SECRETS is set but ignored' "$GATE_LOG")" "1"
 
 echo "W1: remote-control wrapper clears the switches before claude inherits them"
 WSTATE="$TMP/wrap-state"

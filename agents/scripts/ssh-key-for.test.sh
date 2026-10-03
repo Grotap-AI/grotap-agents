@@ -507,6 +507,13 @@ for h in ops-01 agent-06; do
 done
 # A team box is not the ops box: per-host-only targets fail closed, no from06.
 ren_expect team-claude-01 "team-codex-grok-monitor-01" ""
+# Anchored like status-server.js OPS_HOST_RE: a name that merely contains
+# agent-06 is not the ops box.
+for h in my-agent-06-test agent-060 xagent-06 ops-010; do
+  ren_expect "$h" "team-codex-grok-monitor-01" ""
+done
+ren_expect ops-01.grotap.internal "agent-10-codex" grotap_from06_agent-20
+ren_expect OPS-01 "agent-10-codex" grotap_from06_agent-20
 # Override both ways.
 ren_expect laptop "team-claude-01" grotap_from06_agent-21-shared 1
 ren_expect ops-01 "agent-10-codex" grotap_agents 0
