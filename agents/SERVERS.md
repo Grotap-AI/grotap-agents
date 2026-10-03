@@ -228,7 +228,7 @@ Not dispatch executors. Not in `config.sh` pools. `5.161.243.18` was released wi
 | agent-team-01-astra | 5.161.80.75 | Agent Team — GPT-6 Astra (`gpt-6-astra`). **retiring (pending snapshot + delete).** cpx31 Ashburn, Hetzner id 167204706. Outside the Team Claude pool. |
 
 ## Hetzner account map
-One active account (**K0281854926**, console.hetzner.cloud). Verified via API 7/4: all cloud servers are visible to the single `HETZNER_API_TOKEN`; `HETZNER_API_TOKEN_2` is DEAD. Cobrowse runners live in their own project/token (above). Account `K0390490726` CANCELLED 6/30.
+One active account (**K0281854926**, console.hetzner.cloud). Verified via API 7/4: all cloud servers are visible to the single `HETZNER_API_TOKEN`; `HETZNER_API_TOKEN_2` was DEAD (401) and was retired on 2026-10-03; nothing should read it. Cobrowse runners live in their own project/token (above). Account `K0390490726` CANCELLED 6/30.
 
 ## Retired / cancelled — never dispatch, never re-add
 - **prompt-01-claude** (`178.156.209.112`, Hetzner server ID 149250118, Hetzner project `ClaudeCode`, was `claudecode-01` / `claude-code-01`, DNS `claudecode.grotap.com`). **Deleted 2026-09-26.** Hetzner has no server by that name. Not `prompt-01-astra`.
