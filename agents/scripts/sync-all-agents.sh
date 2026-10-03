@@ -1,22 +1,15 @@
 #!/bin/bash
-# sync-all-agents.sh — Pull latest bootstrap on ALL agent servers AND ensure each
-# agent's Doppler CLI is configured with the fleet service token.
+# sync-all-agents.sh — Pull the latest grotap-agents bootstrap on ALL agent servers.
 #
-# WHY the Doppler step: the fleet's git remote is HTTPS with a credential helper
-# that shells out to `doppler secrets get GITHUB_TOKEN`. If an agent's Doppler is
-# unconfigured (fresh reprovision, wiped ~/.doppler, or a rotated token), EVERY
-# dispatched task fails at `git push` ("Authentication failed") — a silent
-# fleet-wide outage. Re-running this script restores it. See the platform memory
-# note project_fleet_dispatch_auth_fix.
+# Doppler is NOT touched here (2026-10-03). Every box now reads its own
+# read-only service token from /etc/grotap/doppler/doppler.yaml (installed by
+# grotap-platform agents/scripts/install-root-doppler.sh). This script used to
+# copy the shared FLEET_DOPPLER_TOKEN from grotap/prd into the agent user's
+# Doppler config. That shared token is being revoked, and pushing it after that
+# would plant a dead token and break the box's crons. Do not add a Doppler
+# token push back; agents/scripts/health-monitor.test.sh fails if one returns.
 #
-# Token source (first non-empty wins):
-#   1. $FLEET_DOPPLER_TOKEN env (e.g. when run via `doppler run`)
-#   2. `doppler secrets get FLEET_DOPPLER_TOKEN` from grotap/prd (canonical store;
-#      rotate by updating that one secret, then re-running this script)
-# The token is NEVER committed. To rotate: mint a new grotap/prd service token,
-# `doppler secrets set FLEET_DOPPLER_TOKEN`, re-run this script.
-#
-# Run from a machine with the grotap_agents SSH key + Doppler auth:
+# Run from a machine with the grotap_agents SSH key:
 #   bash agents/scripts/sync-all-agents.sh
 set -uo pipefail
 
@@ -26,24 +19,14 @@ SSH_KEY="$HOME/.ssh/grotap_agents"
 AGENTS=(
   # agent-01..04-claude were deleted (G6b, 2026-09-26..10-03). 5.161.74.39 is
   # openreplay-02 now and the other three addresses are released; this script
-  # pushes the fleet token, so it must never dial them. Do not re-add them.
+  # dials every row as root, so it must never dial them. Do not re-add them.
   # agent-07 went with the cancelled Helsinki account; on 2026-10-03 its old
   # address was on no server, primary IP or floating IP in any of the four
   # Hetzner projects. Do not re-add it.
   "agent-06-claude:5.161.53.103"
 )
 
-# Resolve the fleet Doppler token once (env override, else from Doppler).
-FLEET_TOKEN="${FLEET_DOPPLER_TOKEN:-}"
-if [ -z "$FLEET_TOKEN" ] && command -v doppler >/dev/null 2>&1; then
-  FLEET_TOKEN="$(doppler secrets get FLEET_DOPPLER_TOKEN --project grotap --config prd --plain 2>/dev/null || true)"
-fi
-if [ -z "$FLEET_TOKEN" ]; then
-  echo "WARNING: FLEET_DOPPLER_TOKEN not available — git-push auth bootstrap will be SKIPPED."
-  echo "         Set it via env or 'doppler secrets set FLEET_DOPPLER_TOKEN' (grotap/prd)."
-fi
-
-echo "=== Syncing all agent servers (git bootstrap + Doppler push-auth) ==="
+echo "=== Syncing all agent servers (git bootstrap) ==="
 echo ""
 
 for ENTRY in "${AGENTS[@]}"; do
@@ -55,26 +38,10 @@ for ENTRY in "${AGENTS[@]}"; do
   RESULT=$(ssh -i "$SSH_KEY" -o ConnectTimeout=5 -o StrictHostKeyChecking=no "root@$IP" \
     "cd /home/agent/grotap-agents && git pull origin master --quiet 2>&1 && git rev-parse --short HEAD" 2>&1)
   if [ $? -eq 0 ]; then
-    echo -n "✓ synced ($RESULT)"
+    echo "✓ synced ($RESULT)"
   else
     echo "✗ git sync FAILED — $RESULT"
     continue
-  fi
-
-  # 2) Ensure the `agent` user's Doppler CLI has the fleet token (push-auth).
-  if [ -n "$FLEET_TOKEN" ]; then
-    # The token goes over ssh stdin (never on a command line, local or remote),
-    # and the remote side prints only OK or FAIL: no token bytes, not even a
-    # prefix, reach this terminal or its logs.
-    DOP=$(printf '%s\n' "$FLEET_TOKEN" | ssh -i "$SSH_KEY" -o ConnectTimeout=5 -o StrictHostKeyChecking=no "root@$IP" \
-      "su - agent -c 'doppler configure set token --scope / --silent >/dev/null 2>&1; if doppler secrets get GITHUB_TOKEN --project grotap --config prd --plain 2>/dev/null | grep -q ^github_pat; then echo OK; else echo FAIL; fi'" 2>/dev/null | tail -1)
-    if [ "$DOP" = "OK" ]; then
-      echo "  ·  ✓ doppler push-auth OK"
-    else
-      echo "  ·  ✗ doppler push-auth FAILED"
-    fi
-  else
-    echo "  ·  (doppler bootstrap skipped — no token)"
   fi
 done
 
