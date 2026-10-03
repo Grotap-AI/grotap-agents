@@ -136,20 +136,21 @@ _ssh_key_for_is_ops_host() {
 # The name agent-14-monitor was deleted the same day. 178.156.215.173 is
 # now agent-22-shared (Hetzner id 167604967) and is mapped below.
 # forge-01 (178.156.246.81) stays on this row.
+# Deleted 2026-09-26..2026-10-03; address rows removed (name rows stay), so a
+# recycled address cannot select a fleet key (G6b, test_pool_ips_live.js):
+#   agent-02/03/04-claude 5.161.81.193 178.156.222.220 5.161.73.195
+#   agent-10-codex 87.99.148.22, monitor-01-deepseek 178.156.219.232
+#   prompt-01-astra 5.161.243.18, agent-01/02-grok 5.161.83.78 5.161.82.78
+#   agent-11-codex 178.156.222.217, agent-13-monitor 178.156.212.74
+#   openreplay-01 5.161.189.143 (deleted 2026-10-03)
 declare -A _SSH_KEY_FOR_HOST_BY_IP=(
   ["5.161.74.39"]="agent-01-claude"
-  ["5.161.81.193"]="agent-02-claude"
-  ["178.156.222.220"]="agent-03-claude"
-  ["5.161.73.195"]="agent-04-claude"
   ["5.161.53.103"]="agent-06-claude"
   ["agent-01-claude"]="agent-01-claude"
   ["agent-02-claude"]="agent-02-claude"
   ["agent-03-claude"]="agent-03-claude"
   ["agent-04-claude"]="agent-04-claude"
   ["agent-06-claude"]="agent-06-claude"
-  ["87.99.148.22"]="agent-10-codex"
-  ["178.156.219.232"]="monitor-01-deepseek"
-  ["5.161.243.18"]="prompt-01-astra"
   ["prompt-01-astra"]="prompt-01-astra"
   ["5.161.80.75"]="agent-team-01-astra"
   ["agent-team-01-astra"]="agent-team-01-astra"
@@ -164,18 +165,14 @@ declare -A _SSH_KEY_FOR_HOST_BY_IP=(
   # Team Grok. Cloud name = Linux hostname = SSH alias = key stem. No offset.
   # agent-06 file: $HOME/.ssh/grotap_from06_<name>. Not the shared farm key.
   # Display names are AgentGrok01 and AgentGrok02. agent-30 stays unmapped.
-  ["5.161.83.78"]="agent-01-grok"
   ["agent-01-grok"]="agent-01-grok"
-  ["5.161.82.78"]="agent-02-grok"
   ["agent-02-grok"]="agent-02-grok"
   ["agent-10-codex"]="agent-10-codex"
   ["monitor-01-deepseek"]="monitor-01-deepseek"
   # Live boxes that were missing from this table, so a name lookup fell
   # through to grotap_agents. The key stem is the host name. Both IPs
   # checked against the Hetzner API 2026-09-27 (farm project).
-  ["178.156.222.217"]="agent-11-codex"
   ["agent-11-codex"]="agent-11-codex"
-  ["178.156.212.74"]="agent-13-monitor"
   ["agent-13-monitor"]="agent-13-monitor"
   # agent-21/31/41 REMOVED 2026-09-16, agent-30 (167.233.59.142) and
   # llm-gpu-02 (178.63.124.99) REMOVED 2026-09-20: those Hetzner servers were
@@ -200,7 +197,6 @@ declare -A _SSH_KEY_FOR_HOST_BY_IP=(
   ["team-astra-01"]="agent-team-01-astra"
   ["ops-01"]="agent-06-claude"
   ["openreplay-ai-support-01"]="openreplay-ai-support"
-  ["5.161.189.143"]="openreplay-01"
   ["supportagents.grotap.com"]="openreplay-01"
   ["openreplay-01"]="openreplay-01"
   ["178.156.199.83"]="openreplay-ai-support"

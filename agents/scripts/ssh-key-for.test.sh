@@ -47,30 +47,31 @@ echo "== canonical forms =="
 expect "agent-01"                      grotap_agent-01      "alias agent-01"
 expect "5.161.74.39"                   grotap_agent-01      "agent-01 IP"
 expect "agent-02"                      grotap_agent-02      "alias agent-02"
-expect "5.161.81.193"                  grotap_agent-02      "agent-02 IP"
+expect "5.161.81.193"                  grotap_agents        "deleted agent-02-claude IP stays unmapped"
 expect "agent-03"                      grotap_agent-03      "alias agent-03"
-expect "178.156.222.220"               grotap_agent-03      "agent-03 IP"
+expect "178.156.222.220"               grotap_agents        "deleted agent-03-claude IP stays unmapped"
 expect "agent-04"                      grotap_agent-04      "alias agent-04"
-expect "5.161.73.195"                  grotap_agent-04      "agent-04 IP"
+expect "5.161.73.195"                  grotap_agents        "deleted agent-04-claude IP stays unmapped"
 expect "claudecode.grotap.com"         grotap_agents        "deleted jump seat DNS"
 expect "178.156.246.81"                grotap_forge-01      "forge-01 IP"
 expect "forge-01"                      grotap_forge-01      "forge-01 name"
 expect "5.78.178.81"                   grotap_agents        "retired agent-05 stays unmapped"
 expect "178.156.209.112"               grotap_agents        "retired prompt-01 stays unmapped"
-expect "5.161.189.143"                 grotap_cobrowse-01   "cobrowse IP"
+expect "5.161.189.143"                 grotap_agents        "deleted openreplay-01 IP stays unmapped"
+expect "5.161.107.80"                  grotap_maps-01       "maps-01 IP"
 
 echo "== non-canonical caller tokens must NOT fall back to the shared key =="
-expect "root@178.156.222.220"          grotap_agent-03      "ssh destination"
+expect "root@5.161.107.80"             grotap_maps-01       "ssh destination"
 expect "ROOT@Agent-03"                 grotap_agent-03      "destination + mixed case"
-expect "[178.156.222.220]:2222"        grotap_agent-03      "bracketed + port"
-expect "178.156.222.220:22"            grotap_agent-03      "port suffix"
+expect "[5.161.107.80]:2222"           grotap_maps-01       "bracketed + port"
+expect "5.161.107.80:22"               grotap_maps-01       "port suffix"
 expect "Claudecode.Grotap.Com"         grotap_agents        "deleted jump seat DNS mixed case"
 expect "SUPPORTAGENTS.GROTAP.COM:22"   grotap_cobrowse-01   "upper DNS + port"
 expect "root@supportagents.grotap.com" grotap_cobrowse-01   "destination + DNS"
 
 echo "== whitespace-padded tokens must NOT fall back to the shared key =="
 expect " agent-03 "                    grotap_agent-03      "padded name"
-expect "  178.156.222.220"             grotap_agent-03      "leading space on an IP"
+expect "  5.161.107.80"                grotap_maps-01       "leading space on an IP"
 expect "root@supportagents.grotap.com " grotap_cobrowse-01  "trailing space on a destination"
 
 echo "== Astra is per-host and does not offer the shared key when unminted =="
@@ -90,7 +91,6 @@ expect_missing() {
     printf '  FAIL %-34s -> [%s] rc=%s stderr=%s (%s)\n' "$target" "$got" "$rc" "$err" "$desc"
   fi
 }
-expect_missing "5.161.243.18"        grotap_prompt-01-astra       "astra prompt IP missing"
 expect_missing "prompt-01-astra"     grotap_prompt-01-astra       "astra prompt name missing"
 expect_missing "5.161.80.75"         grotap_agent-team-01-astra   "astra agent IP missing"
 expect_missing "agent-team-01-astra" grotap_agent-team-01-astra   "astra agent name missing"
@@ -101,7 +101,7 @@ expect_missing "agent-22-shared"     grotap_agent-22-shared       "agent-22-shar
 for _mint in grotap_prompt-01-astra grotap_agent-team-01-astra grotap_agent-21-shared grotap_agent-22-shared; do
   : > "$FAKE_HOME/.ssh/$_mint"
 done
-expect "5.161.243.18"                 grotap_prompt-01-astra       "astra prompt IP"
+expect "5.161.243.18"                 grotap_agents                "deleted prompt-01-astra IP stays unmapped"
 expect "prompt-01-astra"              grotap_prompt-01-astra       "astra prompt name"
 expect "5.161.80.75"                  grotap_agent-team-01-astra   "astra agent IP"
 expect "agent-team-01-astra"          grotap_agent-team-01-astra   "astra agent name"
@@ -111,16 +111,14 @@ expect "178.156.215.173"              grotap_agent-22-shared       "agent-22-sha
 expect "agent-22-shared"              grotap_agent-22-shared       "agent-22-shared name"
 
 echo "== Team Grok is per-host and does not offer the shared key when unminted =="
-expect_missing "5.161.83.78"         grotap_agent-01-grok         "grok 01 IP missing"
 expect_missing "agent-01-grok"       grotap_agent-01-grok         "grok 01 name missing"
-expect_missing "5.161.82.78"         grotap_agent-02-grok         "grok 02 IP missing"
 expect_missing "agent-02-grok"       grotap_agent-02-grok         "grok 02 name missing"
 for _mint in grotap_agent-01-grok grotap_agent-02-grok; do
   : > "$FAKE_HOME/.ssh/$_mint"
 done
-expect "5.161.83.78"                  grotap_agent-01-grok         "grok 01 IP"
+expect "5.161.83.78"                  grotap_agents                "deleted agent-01-grok IP stays unmapped"
 expect "agent-01-grok"                grotap_agent-01-grok         "grok 01 name"
-expect "5.161.82.78"                  grotap_agent-02-grok         "grok 02 IP"
+expect "5.161.82.78"                  grotap_agents                "deleted agent-02-grok IP stays unmapped"
 expect "agent-02-grok"                grotap_agent-02-grok         "grok 02 name"
 
 echo "== Hetzner stem wins when that key file exists; forge-01 is unchanged =="
@@ -187,9 +185,10 @@ expect_missing "agent-13-monitor"   grotap_agent-13-monitor "monitor box missing
 : > "$FAKE_HOME/.ssh/grotap_agent-13-monitor"
 expect "agent-11-codex"                grotap_agent-11-codex "codex box does not take the shared key"
 expect "agent-13-monitor"              grotap_agent-13-monitor "monitor box does not take the shared key"
-# The IPs used to miss the table and fall through to grotap_agents.
-expect "178.156.222.217"               grotap_agent-11-codex "codex box IP does not take the shared key"
-expect "root@178.156.212.74"           grotap_agent-13-monitor "monitor box IP does not take the shared key"
+# Both boxes were deleted (Hetzner released the IPs). The address rows are
+# gone, so a recycled address cannot pick a fleet key; the names stay mapped.
+expect "178.156.222.217"               grotap_agents         "deleted agent-11-codex IP stays unmapped"
+expect "root@178.156.212.74"           grotap_agents         "deleted agent-13-monitor IP stays unmapped"
 
 echo "== the shared-key fallthrough is loud on stderr, stdout unchanged =="
 _warn_err="$(mktemp)"
@@ -339,17 +338,12 @@ expect_same_day() {
 for day in 2026-10-03 2026-10-04; do
   expect_same_day "$day" "5.161.74.39"          grotap_from06_agent-01
   expect_same_day "$day" "agent-01-claude"      grotap_from06_agent-01
-  expect_same_day "$day" "5.161.81.193"         grotap_from06_agent-02
   expect_same_day "$day" "agent-02-claude"      grotap_from06_agent-02
-  expect_same_day "$day" "178.156.222.220"      grotap_from06_agent-03
   expect_same_day "$day" "agent-03-claude"      grotap_from06_agent-03
-  expect_same_day "$day" "5.161.73.195"         grotap_from06_agent-04
   expect_same_day "$day" "agent-04-claude"      grotap_from06_agent-04
   expect_same_day "$day" "5.161.53.103"         grotap_from06_agent-06
   expect_same_day "$day" "agent-06-claude"      grotap_from06_agent-06
-  expect_same_day "$day" "87.99.148.22"         grotap_from06_agent-20
   expect_same_day "$day" "agent-10-codex"       grotap_from06_agent-20
-  expect_same_day "$day" "178.156.219.232"      grotap_from06_agent-40
   expect_same_day "$day" "monitor-01-deepseek"  grotap_from06_agent-40
   expect_same_day "$day" "forge-01"             grotap_agents
   expect_same_day "$day" "178.156.246.81"       grotap_agents
@@ -502,7 +496,7 @@ ren_expect() {
   fi
 }
 for h in ops-01 agent-06; do
-  ren_expect "$h" "87.99.148.22"               grotap_from06_agent-20
+  ren_expect "$h" "agent-10-codex"             grotap_from06_agent-20
   ren_expect "$h" "team-claude-01"             grotap_from06_agent-21-shared
   ren_expect "$h" "agent-21-shared"            grotap_from06_agent-21-shared
   ren_expect "$h" "5.161.119.92"               grotap_from06_agent-21-shared
@@ -515,7 +509,7 @@ done
 ren_expect team-claude-01 "team-codex-grok-monitor-01" ""
 # Override both ways.
 ren_expect laptop "team-claude-01" grotap_from06_agent-21-shared 1
-ren_expect ops-01 "87.99.148.22"   grotap_agents 0
+ren_expect ops-01 "agent-10-codex" grotap_agents 0
 rm -rf "$REN_HOME" "$REN_HOSTBIN"
 
 echo
