@@ -273,4 +273,34 @@
 #   Rotated 2026-09-28 (follow-up, step 5) from d6772167 to
 #   5106dd71a7f35fc1639cbeb2b846b82ebc1669ff, the rotation commit above.
 #   Range d6772167..5106dd71 touches only agents/BOOTSTRAP_SHA.
-5106dd71a7f35fc1639cbeb2b846b82ebc1669ff
+#
+#   Rotated 2026-10-03 from 5106dd71a7f35fc1639cbeb2b846b82ebc1669ff to
+#   24dae1140b93ee0cea0ffd62094156826dbeae33, the live master tip resolved
+#   from the REMOTE with git ls-remote at 00:54 PT, a strict descendant of
+#   the outgoing pin (git merge-base --is-ancestor, exit 0). 22 commits in
+#   range: 15 dispatch/cleanup task files and a handoff note, plus #18-#21
+#   and 9e89a89.
+#   Reviewed before blessing:
+#     BOOTSTRAP.md and agents/GLOBAL.md UNTOUCHED in the range, so no model
+#       instruction changes.
+#     agents/scripts/orchestrator-run.sh (24dae11, #18): ensure_git_auth
+#       now writes a FAIL-CLOSED helper. It answers `get` only, uses
+#       $GITHUB_TOKEN and then the seat's own Doppler scope, has no
+#       grotap/prd fallback, and exits 1 printing nothing when neither
+#       resolves. Read in full; no other runner change.
+#     review-gate-cron.sh / review-gate-task.md (#18): 4-secret allowlist
+#       and Doppler containment for the gate's Claude run.
+#     sync-all-agents.sh (#19): fleet token over ssh stdin, no prefix print.
+#     ssh-key-for.sh + test, fleet-aliases.json, SERVERS.md,
+#       setup-team2-box.sh (#20, #21): Oct 2 Hetzner rename. Not on the
+#       runner path.
+#     ggshield-lib.sh / install-ggshield-hook.sh + test, .claude/settings.json,
+#       scripts/claudecode/run-python-hook.sh (9e89a89): workstation hooks.
+#   ROLLOUT PRECONDITION: on 2026-10-03 the `agent` user's own Doppler scope
+#   resolved GITHUB_TOKEN on ops-01 only (not on team-claude-01,
+#   team-codex-grok-monitor-01 or team-astra-01). Under this pin the runner's
+#   git push fails closed on those boxes until their scope carries
+#   GITHUB_TOKEN. Fix the scopes before merging.
+#   Per step 5 this rotation commit is itself unblessed until a follow-up
+#   rotation pins it.
+24dae1140b93ee0cea0ffd62094156826dbeae33
