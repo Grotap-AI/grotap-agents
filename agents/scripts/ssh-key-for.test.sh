@@ -517,6 +517,23 @@ ren_expect OPS-01 "agent-10-codex" grotap_from06_agent-20
 # Override both ways.
 ren_expect laptop "team-claude-01" grotap_from06_agent-21-shared 1
 ren_expect ops-01 "agent-10-codex" grotap_agents 0
+
+echo "== scan-01 and mdm-01 select their own ops-box key =="
+for stem in scan-01 mdm-01; do
+  : > "$REN_HOME/.ssh/grotap_from06_${stem}"
+done
+for h in ops-01 agent-06; do
+  ren_expect "$h" "scan-01"                    grotap_from06_scan-01
+  ren_expect "$h" "5.161.75.121"               grotap_from06_scan-01
+  ren_expect "$h" "root@5.161.75.121:22"       grotap_from06_scan-01
+  ren_expect "$h" "mdm-01"                     grotap_from06_mdm-01
+  ren_expect "$h" "87.99.140.189"              grotap_from06_mdm-01
+  ren_expect "$h" "ROOT@MDM-01"                grotap_from06_mdm-01
+done
+# Off the ops box there is no per-host file. Both hosts still accept the
+# shared key, so they are not per-host-only.
+ren_expect laptop "5.161.75.121"               grotap_agents
+ren_expect laptop "87.99.140.189"              grotap_agents
 rm -rf "$REN_HOME" "$REN_HOSTBIN"
 
 echo
