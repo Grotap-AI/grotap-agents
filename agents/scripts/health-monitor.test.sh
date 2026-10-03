@@ -240,6 +240,74 @@ for pair in \
   esac
 done
 
+echo "== sync-all-agents.sh never pushes a Doppler token =="
+# Every box has its own read-only token in /etc/grotap/doppler/doppler.yaml.
+# The shared FLEET_DOPPLER_TOKEN is being revoked; syncing it would plant a
+# dead token and break the box's crons.
+SYNC="$SCRIPT_DIR/sync-all-agents.sh"
+sync_code="$(grep -v '^[[:space:]]*#' "$SYNC")"
+case "$sync_code" in
+  *FLEET_DOPPLER_TOKEN*) check "sync-all-agents.sh code does not name FLEET_DOPPLER_TOKEN" false ;;
+  *) check "sync-all-agents.sh code does not name FLEET_DOPPLER_TOKEN" true ;;
+esac
+case "$sync_code" in
+  *"configure set token"*|*DOPPLER_TOKEN*|*"doppler secrets"*) check "sync-all-agents.sh has no Doppler token step" false ;;
+  *) check "sync-all-agents.sh has no Doppler token step" true ;;
+esac
+# Run it against stubs only. ssh records argv and stdin; doppler records any call.
+SYNCSTUB="$TMP/sync-bin"
+mkdir -p "$SYNCSTUB" "$TMP/sync-home/.ssh"
+: > "$TMP/sync-home/.ssh/grotap_agents"
+cat > "$SYNCSTUB/ssh" <<'EOF'
+#!/bin/bash
+{ printf 'ARGV %s\n' "$*"; printf 'STDIN '; cat; printf '\n'; } >> "$SYNC_LOG/ssh.log"
+echo abc1234
+EOF
+cat > "$SYNCSTUB/doppler" <<'EOF'
+#!/bin/bash
+printf '%s\n' "$*" >> "$SYNC_LOG/doppler.log"
+echo dp.st.sentinel-from-doppler-stub
+EOF
+chmod +x "$SYNCSTUB/ssh" "$SYNCSTUB/doppler"
+if [ "$(PATH="$SYNCSTUB:$PATH" command -v ssh)" != "$SYNCSTUB/ssh" ]; then
+  check "ssh stub is first on PATH (refusing to run sync-all-agents.sh)" false
+else
+  SYNC_LOG="$TMP/sync-log"
+  export SYNC_LOG
+  mkdir -p "$SYNC_LOG"; : > "$SYNC_LOG/ssh.log"; : > "$SYNC_LOG/doppler.log"
+  sync_out="$(PATH="$SYNCSTUB:$PATH" HOME="$TMP/sync-home" FLEET_DOPPLER_TOKEN=dp.st.sentinel-from-env \
+    bash "$SYNC" < /dev/null 2>&1)"; sync_rc=$?
+  if [ "$sync_rc" -eq 0 ]; then
+    check "sync-all-agents.sh exits 0 with a token in env" true
+  else
+    check "sync-all-agents.sh exits 0 with a token in env (rc=$sync_rc: $sync_out)" false
+  fi
+  if grep -q '^ARGV ' "$SYNC_LOG/ssh.log"; then
+    check "sync-all-agents.sh used the ssh stub" true
+  else
+    check "sync-all-agents.sh used the ssh stub" false
+  fi
+  if grep -q 'sentinel' "$SYNC_LOG/ssh.log"; then
+    check "no token reaches ssh argv or stdin" false
+  else
+    check "no token reaches ssh argv or stdin" true
+  fi
+  if grep -qi 'doppler' "$SYNC_LOG/ssh.log"; then
+    check "no doppler command over ssh" false
+  else
+    check "no doppler command over ssh" true
+  fi
+  if [ -s "$SYNC_LOG/doppler.log" ]; then
+    check "sync-all-agents.sh does not call doppler locally" false
+  else
+    check "sync-all-agents.sh does not call doppler locally" true
+  fi
+  case "$sync_out" in
+    *WARNING*|*FLEET_DOPPLER_TOKEN*|*doppler*) check "no token warning or doppler step in output ($sync_out)" false ;;
+    *) check "no token warning or doppler step in output" true ;;
+  esac
+fi
+
 echo "== post-cutover shared hosts are on the health roster =="
 # Default AGENTS array only. HEALTH_MONITOR_AGENTS is a test override and
 # is not the roster. forge-01, maps-01, and deleted agent-05 stay off it.

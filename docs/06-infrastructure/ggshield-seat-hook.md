@@ -44,7 +44,7 @@ doppler secrets get GITGUARDIAN_API_KEY --project grotap --config prd --plain
 ```
 
 That is the same Doppler CLI the seat already uses for fleet secrets
-(`doppler configure set token` from `FLEET_DOPPLER_TOKEN`, then
+(the box's own read-only service token in `/etc/grotap/doppler/doppler.yaml`, then
 `doppler secrets get … --project grotap --config prd --plain`, as in
 `git-credential-doppler`). The value is exported into the hook process
 environment for `ggshield` and is not written to disk, not passed on a
