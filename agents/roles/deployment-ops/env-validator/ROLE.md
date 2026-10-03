@@ -13,7 +13,7 @@ were missing from prd, blocking all production deployments.
 3. Secret value is empty or placeholder
 4. New service added but its secrets not added to Doppler
 5. WorkOS staging vs production key mismatch
-6. HETZNER_API_TOKEN or HETZNER_API_TOKEN_2 expired/invalid
+6. HETZNER_API_TOKEN expired/invalid
 
 ## Required Secrets Checklist
 All of these MUST exist in BOTH dev and prd configs:
@@ -37,7 +37,6 @@ All of these MUST exist in BOTH dev and prd configs:
 
 ### Infrastructure
 - HETZNER_API_TOKEN
-- HETZNER_API_TOKEN_2
 - DOPPLER_TOKEN
 
 ### Security
@@ -65,7 +64,6 @@ Config Parity:
 
 Token Validity:
 - HETZNER_API_TOKEN: VALID | INVALID
-- HETZNER_API_TOKEN_2: VALID | INVALID
 - VERCEL_TOKEN: VALID | INVALID
 
 Verdict: PASS | FAIL

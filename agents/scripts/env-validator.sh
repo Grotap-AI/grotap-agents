@@ -1,6 +1,6 @@
 #!/bin/bash
 # env-validator.sh — Runs on Agent-06 via daily cron or before deploy.
-# Checks Hetzner tokens are valid. Checks critical endpoints respond.
+# Checks the Hetzner token is valid. (HETZNER_API_TOKEN_2 was dead and is no longer checked.) Checks critical endpoints respond.
 # Usage: bash /home/agent/scripts/env-validator.sh
 set -uo pipefail
 
@@ -16,7 +16,7 @@ VERDICT="PASS"
 FAILURES=""
 
 # ── 1. Validate Hetzner Token 1 ──────────────────────────────────────────────
-echo "[1/3] Checking HETZNER_API_TOKEN..." >> "$LOG"
+echo "[1/2] Checking HETZNER_API_TOKEN..." >> "$LOG"
 if [ -f /home/agent/.env.deploy ]; then
   source /home/agent/.env.deploy
 fi
@@ -36,25 +36,8 @@ else
   FAILURES="$FAILURES\n- HETZNER_API_TOKEN not set in .env.deploy"
 fi
 
-# ── 2. Validate Hetzner Token 2 ──────────────────────────────────────────────
-echo "[2/3] Checking HETZNER_API_TOKEN_2..." >> "$LOG"
-if [ -n "${HETZNER_API_TOKEN_2:-}" ]; then
-  H2_RESP=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $HETZNER_API_TOKEN_2" "https://api.hetzner.cloud/v1/servers" 2>/dev/null || echo "000")
-  if [ "$H2_RESP" = "200" ]; then
-    echo "  HETZNER_API_TOKEN_2: VALID" >> "$LOG"
-  else
-    echo "  HETZNER_API_TOKEN_2: INVALID (HTTP $H2_RESP)" >> "$LOG"
-    VERDICT="FAIL"
-    FAILURES="$FAILURES\n- HETZNER_API_TOKEN_2 returned HTTP $H2_RESP (expected 200)"
-  fi
-else
-  echo "  HETZNER_API_TOKEN_2: NOT SET" >> "$LOG"
-  VERDICT="FAIL"
-  FAILURES="$FAILURES\n- HETZNER_API_TOKEN_2 not set in .env.deploy"
-fi
-
-# ── 3. Validate critical service endpoints respond ───────────────────────────
-echo "[3/3] Checking critical endpoints..." >> "$LOG"
+# ── 2. Validate critical service endpoints respond ───────────────────────────
+echo "[2/2] Checking critical endpoints..." >> "$LOG"
 ENDPOINTS=("https://api.grotap.com/health" "https://apps.grotap.com")
 
 for URL in "${ENDPOINTS[@]}"; do
