@@ -22,7 +22,7 @@
     "scan-01",
     "forge-01",
     "openreplay-ai-support",
-    "openreplay-01"
+    "openreplay-02"
   ],
   "aliases": {
     "agent-01": "agent-01-claude",
@@ -34,8 +34,6 @@
     "grotap-agent-06-ash": "agent-06-claude",
     "agent-20": "agent-10-codex",
     "agent-40": "monitor-01-deepseek",
-    "cobrowse-01": "openreplay-01",
-    "grotap-cobrowse-01": "openreplay-01",
     "runner-01": "openreplay-ai-support",
     "grotap-runner-01": "openreplay-ai-support",
     "ops-01": "agent-06-claude",
@@ -52,7 +50,7 @@
     "agent-06-claude": ["agent-06"],
     "agent-10-codex": ["agent-20"],
     "monitor-01-deepseek": ["agent-40"],
-    "openreplay-01": ["cobrowse-01"],
+    "openreplay-02": ["cobrowse-01"],
     "openreplay-ai-support": ["runner-01"]
   }
 }
