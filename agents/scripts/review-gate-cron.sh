@@ -135,7 +135,10 @@ release_gate_claims() {
   fi
   return 0
 }
-trap 'rm -f "$LOCK" "$STDERR_FILE"; release_gate_claims' EXIT
+# RG_DOPPLER_EMPTY is the empty Doppler config dir handed to the Claude child
+# (see the launch below). Created there; removed here on every exit path.
+RG_DOPPLER_EMPTY=""
+trap 'rm -f "$LOCK" "$STDERR_FILE"; [ -n "$RG_DOPPLER_EMPTY" ] && rm -rf "$RG_DOPPLER_EMPTY"; release_gate_claims' EXIT
 
 sync_repo() {
   # $1 = repo path. Fetch ONLY master, then hard-reset onto it.
@@ -297,11 +300,28 @@ _CACHE_SH="$(cd "$(dirname "$0")" && pwd)/claude-prompt-cache.sh"
 # command in its own `doppler run -- cmd "$VAR"`: the shell expands "$VAR"
 # before doppler starts, so a name missing here arrives as an empty string.
 # Override with REVIEW_GATE_ONLY_SECRETS (comma list).
+#
+# Doppler containment for the child. The parent's Doppler login stays usable
+# for the doppler run above; the child gets none of it:
+#   env -u DOPPLER_TOKEN       no token in its environment
+#   DOPPLER_CONFIG_DIR=<empty> a doppler CLI started by the child finds no
+#                              saved token (agent's ~/.doppler/.doppler.yaml is
+#                              scoped / and can read all of grotap/prd)
+#   --disallowedTools          Bash(doppler*) and Read(**/.doppler/**), the
+#                              orchestrator-run.sh denylist entries. Enforced
+#                              under bypassPermissions too.
+# The temp dir is removed by the EXIT trap above.
+RG_DOPPLER_EMPTY="$(mktemp -d "${TMPDIR:-/tmp}/review-gate-doppler.XXXXXX")" || {
+  echo "mktemp -d for the empty Doppler config dir failed; not starting claude" >&2
+  exit 1
+}
+chmod 700 "$RG_DOPPLER_EMPTY"
 timeout "$TIMEOUT_SECS" doppler run --project grotap --config prd \
   --only-secrets "${REVIEW_GATE_ONLY_SECRETS:-ANTHROPIC_API_KEY,NODE_SECRET,DATABASE_URL,GITHUB_TOKEN}" -- \
-  env -u DOPPLER_TOKEN bash "$_CACHE_SH" \
+  env -u DOPPLER_TOKEN DOPPLER_CONFIG_DIR="$RG_DOPPLER_EMPTY" bash "$_CACHE_SH" \
   claude -p "$(cat "$TASK")" \
     --permission-mode bypassPermissions \
+    --disallowedTools "Bash(doppler*)" "Read(**/.doppler/**)" \
     --model "${REVIEW_GATE_MODEL:-claude-sonnet-4-6}" \
     --max-turns 400
 RC=$?
