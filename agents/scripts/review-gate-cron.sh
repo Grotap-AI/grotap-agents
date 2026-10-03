@@ -286,8 +286,13 @@ CLAUDE_LAUNCHED=1
 # starts, which is after any unset in this shell, so the helper has to run
 # inside that child and exec claude itself. A parent unset does not stick.
 _CACHE_SH="$(cd "$(dirname "$0")" && pwd)/claude-prompt-cache.sh"
-timeout "$TIMEOUT_SECS" doppler run --project grotap --config prd -- \
-  bash "$_CACHE_SH" \
+# item 22: the model child gets ONLY the names it needs, not all of prd
+# (258 names incl. admin keys and other Doppler tokens). ANTHROPIC_API_KEY
+# authenticates claude; NODE_SECRET is for the report-progress.sh callbacks
+# the task makes. Override with REVIEW_GATE_ONLY_SECRETS (comma list).
+timeout "$TIMEOUT_SECS" doppler run --project grotap --config prd \
+  --only-secrets "${REVIEW_GATE_ONLY_SECRETS:-ANTHROPIC_API_KEY,NODE_SECRET}" -- \
+  env -u DOPPLER_TOKEN bash "$_CACHE_SH" \
   claude -p "$(cat "$TASK")" \
     --permission-mode bypassPermissions \
     --model "${REVIEW_GATE_MODEL:-claude-sonnet-4-6}" \

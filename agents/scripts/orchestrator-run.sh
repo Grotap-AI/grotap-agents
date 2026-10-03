@@ -89,23 +89,29 @@ PAYLOAD="$(cat)"
 # the var) but broke every OTHER push path (dispatch.sh runners) with empty-
 # password "Authentication failed" each time an orchestrator run rewrote the
 # config (2026-07-03 outage). So: persist only a SELF-SUFFICIENT helper script
-# that resolves the token per call — env GITHUB_TOKEN first (sourced from
-# ~/.env), Doppler fallback (survives rotation). Re-written on every run so it
+# that resolves the token per call — env GITHUB_TOKEN first, then this seat's
+# own Doppler scope (no grotap/prd fallback; fails closed — item 22). Re-written on every run so it
 # survives reprovision and stale copies.
 ensure_git_auth() {
   mkdir -p "$HOME/bin"
   cat > "$HOME/bin/git-credential-doppler" <<'HELPER'
 #!/bin/sh
-# git credential helper — env GITHUB_TOKEN first, then Doppler. Self-sufficient:
-# safe to persist in .gitconfig (no dependency on the caller's environment).
+# git credential helper for a fleet seat. $GITHUB_TOKEN first, then THIS
+# seat's own Doppler scope (its .doppler.yaml service token). Fails closed:
+# no --project/--config override and no grotap/prd fallback. On any failure
+# it prints nothing and exits 1, so git reports an auth error instead of
+# silently borrowing a broader credential. Safe to persist in .gitconfig.
+[ "${1:-get}" = get ] || exit 0
 tok="${GITHUB_TOKEN:-}"
-[ -z "$tok" ] && tok="$(doppler secrets get GITHUB_TOKEN --project grotap --config prd --plain 2>/dev/null)"
-echo username=x-access-token
-echo "password=$tok"
+if [ -z "$tok" ]; then
+  tok="$(doppler secrets get GITHUB_TOKEN --plain 2>/dev/null)" || tok=""
+fi
+[ -n "$tok" ] || exit 1
+printf 'username=x-access-token\npassword=%s\n' "$tok"
 HELPER
   chmod +x "$HOME/bin/git-credential-doppler"
-  if [ -z "${GITHUB_TOKEN:-}" ] && ! doppler secrets get GITHUB_TOKEN --project grotap --config prd --plain >/dev/null 2>&1; then
-    log "WARN: no GitHub token resolvable (env GITHUB_TOKEN or Doppler) — git push may fail"
+  if [ -z "${GITHUB_TOKEN:-}" ] && ! doppler secrets get GITHUB_TOKEN --plain >/dev/null 2>&1; then
+    log "WARN: no GitHub token resolvable (env GITHUB_TOKEN or this seat's Doppler scope) — git push will fail closed"
   fi
   # --replace-all: collapse any stale/duplicate helper entries (empty-string
   # resets and old inline $GH_PUSH_TOKEN helpers included). Worktrees share

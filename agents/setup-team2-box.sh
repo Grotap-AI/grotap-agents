@@ -30,12 +30,18 @@ mkdir -p /home/agent/bin /home/agent/worktrees
 # Git credential helper — Doppler-backed, never a static token (GLOBAL.md rule)
 cat > /home/agent/bin/git-credential-doppler <<'EOS'
 #!/bin/sh
-# git credential helper — env GITHUB_TOKEN first, then Doppler. Self-sufficient:
-# safe to persist in .gitconfig (no dependency on the caller's environment).
+# git credential helper for a fleet seat. $GITHUB_TOKEN first, then THIS
+# seat's own Doppler scope (its .doppler.yaml service token). Fails closed:
+# no --project/--config override and no grotap/prd fallback. On any failure
+# it prints nothing and exits 1, so git reports an auth error instead of
+# silently borrowing a broader credential. Safe to persist in .gitconfig.
+[ "${1:-get}" = get ] || exit 0
 tok="${GITHUB_TOKEN:-}"
-[ -z "$tok" ] && tok="$(doppler secrets get GITHUB_TOKEN --project grotap --config prd --plain 2>/dev/null)"
-echo username=x-access-token
-echo "password=$tok"
+if [ -z "$tok" ]; then
+  tok="$(doppler secrets get GITHUB_TOKEN --plain 2>/dev/null)" || tok=""
+fi
+[ -n "$tok" ] || exit 1
+printf 'username=x-access-token\npassword=%s\n' "$tok"
 EOS
 chmod +x /home/agent/bin/git-credential-doppler
 chown -R agent:agent /home/agent
