@@ -22,7 +22,9 @@ if [[ -n "${GROTAP_GGSHIELD_CANARY_HOST:-}" ]]; then
 else
   GGSHIELD_CANARY_HOSTS=("team-codex-grok-monitor-01" "agent-22-shared")
 fi
-# Display name for messages (first entry).
+# Display name for messages (first entry). Used by install-ggshield-hook.sh
+# and ggshield-canary.sh.
+# shellcheck disable=SC2034
 GGSHIELD_CANARY_HOST="${GGSHIELD_CANARY_HOSTS[0]}"
 
 ggshield_mode_file() {
