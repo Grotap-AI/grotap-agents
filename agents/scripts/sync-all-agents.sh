@@ -27,8 +27,10 @@ AGENTS=(
   # agent-01..04-claude were deleted (G6b, 2026-09-26..10-03). 5.161.74.39 is
   # openreplay-02 now and the other three addresses are released; this script
   # pushes the fleet token, so it must never dial them. Do not re-add them.
+  # agent-07 went with the cancelled Helsinki account; on 2026-10-03 its old
+  # address was on no server, primary IP or floating IP in any of the four
+  # Hetzner projects. Do not re-add it.
   "agent-06-claude:5.161.53.103"
-  "agent-07:89.167.66.105"
 )
 
 # Resolve the fleet Doppler token once (env override, else from Doppler).

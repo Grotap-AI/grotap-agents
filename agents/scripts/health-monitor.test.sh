@@ -220,6 +220,26 @@ for pair in \
   esac
 done
 
+echo "== agent-07 is off every fleet roster =="
+# agent-07 went with the cancelled account; its address is released.
+for pair in \
+  "$MONITOR|AGENTS=(" \
+  "$SCRIPT_DIR/fleet-load.sh|HOSTS=(" \
+  "$SCRIPT_DIR/sync-all-agents.sh|AGENTS=("
+ do
+  file="${pair%%|*}"
+  start="${pair#*|}"
+  block="$(roster_block "$file" "$start" | grep -v '^[[:space:]]*#')"
+  case "$block" in
+    *agent-07*)
+      check "no agent-07 in $file roster (saw: $block)" false
+      ;;
+    *)
+      check "no agent-07 in $file roster" true
+      ;;
+  esac
+done
+
 echo "== post-cutover shared hosts are on the health roster =="
 # Default AGENTS array only. HEALTH_MONITOR_AGENTS is a test override and
 # is not the roster. forge-01, maps-01, and deleted agent-05 stay off it.
