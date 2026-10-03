@@ -453,6 +453,48 @@ else
   check "canary FAILs when the hook is off (rc=${rc} out=${out})" false
 fi
 
+echo "== canary host rename (agent-22-shared -> team-codex-grok-monitor-01) =="
+new_home renamed-canary
+export STUB_ID_USER="codex"
+export STUB_HOSTNAME="team-codex-grok-monitor-01"
+rc=0
+install_ok --canary || rc=$?
+if [[ "$rc" -eq 0 && "$(tr -d '[:space:]' <"${HOME}/.config/grotap/ggshield-hook.mode" 2>/dev/null)" == "on" ]]; then
+  check "--canary accepted for codex@team-codex-grok-monitor-01" true
+else
+  check "--canary accepted for codex@team-codex-grok-monitor-01 (rc=${rc})" false
+fi
+
+new_home renamed-wrong-host
+export STUB_ID_USER="codex"
+export STUB_HOSTNAME="team-claude-01"
+rc=0
+install_ok --canary || rc=$?
+if [[ "$rc" -ne 0 && ! -f "${HOME}/.config/grotap/ggshield-hook.mode" ]]; then
+  check "canary refused on team-claude-01" true
+else
+  check "canary refused on team-claude-01 (rc=${rc})" false
+fi
+
+new_home canary-override
+export STUB_ID_USER="codex"
+export STUB_HOSTNAME="agent-22-shared"
+rc=0
+GROTAP_GGSHIELD_CANARY_HOST="some-future-name" install_ok --canary || rc=$?
+if [[ "$rc" -ne 0 && ! -f "${HOME}/.config/grotap/ggshield-hook.mode" ]]; then
+  check "GROTAP_GGSHIELD_CANARY_HOST replaces the host list" true
+else
+  check "GROTAP_GGSHIELD_CANARY_HOST replaces the host list (rc=${rc})" false
+fi
+export STUB_HOSTNAME="some-future-name"
+rc=0
+GROTAP_GGSHIELD_CANARY_HOST="some-future-name" install_ok --canary || rc=$?
+if [[ "$rc" -eq 0 ]]; then
+  check "GROTAP_GGSHIELD_CANARY_HOST host is accepted" true
+else
+  check "GROTAP_GGSHIELD_CANARY_HOST host is accepted (rc=${rc})" false
+fi
+
 echo
 printf 'passed=%s failed=%s\n' "$PASS" "$FAIL"
 if [[ "$FAIL" -ne 0 ]]; then

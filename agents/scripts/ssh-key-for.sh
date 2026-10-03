@@ -9,7 +9,12 @@
 # grotap-agents — two separate repos, both checked out on agent-06. Rather
 # than have grotap-platform scripts reach across repos on a guessed checkout
 # path, this file is kept byte-identical in both repos at
-# agents/scripts/ssh-key-for.sh. Change one, copy to the other.
+# agents/scripts/ssh-key-for.sh. Change one, copy to the other, then run
+#   bash agents/scripts/ssh-key-for.twin-check.sh
+# which diffs the two checkouts against EACH OTHER and fails on drift. A host
+# missing from one copy does not raise: it falls through to the shared-key
+# step below, and the caller's ssh then fails as an unreachable HOST rather
+# than as a missing KEY.
 #
 # Part of retiring the shared fleet key `grotap_agents` (phase 2b,
 # 2026-09-16). Phase 1 (2026-09-16 04:01Z) provisioned per-target keys on
@@ -54,7 +59,9 @@
 #      when that file exists and is readable. A missing or unreadable key
 #      (including this fallback) exits 1 and names the path on stderr.
 #      Nothing is printed on stdout. Callers must not substitute
-#      grotap_agents when this script fails.
+#      grotap_agents when this script fails. Any target other than the
+#      literal "agents" that reaches this step also gets a WARNING line on
+#      stderr, so a key miss is not read as a dead host.
 #
 # Target/host-name table: an explicit table below, NOT a parse of
 # agents/SERVERS.md. SERVERS.md is prose documentation (free-text rows, IPs
@@ -98,6 +105,21 @@ if [[ -z "$TARGET" ]]; then
 fi
 
 SHARED_KEY="$HOME/.ssh/grotap_agents"
+
+# The ops box (owner workstation) holds the grotap_from06_* keys. It was
+# renamed agent-06 -> ops-01 on 2026-10-02; both names match. Team boxes
+# (team-claude-01, team-codex-grok-monitor-01, team-astra-01) do not.
+# GROTAP_OPS_HOST=1|0 forces the answer.
+_ssh_key_for_is_ops_host() {
+  case "${GROTAP_OPS_HOST:-}" in
+    1|true|yes) return 0 ;;
+    0|false|no) return 1 ;;
+  esac
+  case "$1" in
+    agent-06-claude|agent-06|*agent-06*|ops-01|ops-01.*) return 0 ;;
+  esac
+  return 1
+}
 
 # --- IP -> Hetzner Cloud name (see header comment) --------------------------
 # The key stem is the Hetzner Cloud name. Old slot names (agent-01, agent-20,
@@ -149,8 +171,11 @@ declare -A _SSH_KEY_FOR_HOST_BY_IP=(
   ["agent-10-codex"]="agent-10-codex"
   ["monitor-01-deepseek"]="monitor-01-deepseek"
   # Live boxes that were missing from this table, so a name lookup fell
-  # through to grotap_agents. The key stem is the host name.
+  # through to grotap_agents. The key stem is the host name. Both IPs
+  # checked against the Hetzner API 2026-09-27 (farm project).
+  ["178.156.222.217"]="agent-11-codex"
   ["agent-11-codex"]="agent-11-codex"
+  ["178.156.212.74"]="agent-13-monitor"
   ["agent-13-monitor"]="agent-13-monitor"
   # agent-21/31/41 REMOVED 2026-09-16, agent-30 (167.233.59.142) and
   # llm-gpu-02 (178.63.124.99) REMOVED 2026-09-20: those Hetzner servers were
@@ -166,6 +191,15 @@ declare -A _SSH_KEY_FOR_HOST_BY_IP=(
   # a per-host pair exists. No grotap_forge-01 key is deployed.
   ["178.156.246.81"]="forge-01"
   ["forge-01"]="forge-01"
+  # Server renames 2026-10-02 (IPs and the old names are kept). The new
+  # names resolve to the SAME key stem, because the key files on the ops box
+  # keep their old names (grotap_from06_agent-21-shared, ...). Do not
+  # rename key files during the freeze.
+  ["team-claude-01"]="agent-21-shared"
+  ["team-codex-grok-monitor-01"]="agent-22-shared"
+  ["team-astra-01"]="agent-team-01-astra"
+  ["ops-01"]="agent-06-claude"
+  ["openreplay-ai-support-01"]="openreplay-ai-support"
   ["5.161.189.143"]="openreplay-01"
   ["supportagents.grotap.com"]="openreplay-01"
   ["openreplay-01"]="openreplay-01"
@@ -238,9 +272,9 @@ if [[ -n "$team_user" && "$team_user" != "root" && "$team_user" != "agent" ]]; t
   }
   _local_for_team="$(hostname -s 2>/dev/null || hostname 2>/dev/null || true)"
   _team_from=""
-  case "$_local_for_team" in
-    agent-06|*agent-06*) _team_from="06" ;;
-  esac
+  if _ssh_key_for_is_ops_host "$_local_for_team"; then
+    _team_from="06"
+  fi
   if [[ -n "$_team_from" ]]; then
     _seat_try "$_SEAT_KEY_DIR/grotap_from${_team_from}_${team_user}"
   fi
@@ -339,9 +373,9 @@ fi
 # look for, so it falls straight through to the shared-key fallback.
 _local_host="$(hostname -s 2>/dev/null || hostname 2>/dev/null || true)"
 from_suffix=""
-case "$_local_host" in
-  agent-06-claude|agent-06|*agent-06*) from_suffix="06" ;;
-esac
+if _ssh_key_for_is_ops_host "$_local_host"; then
+  from_suffix="06"
+fi
 
 # Stems to try: the canonical name, then any pre-rename filename.
 _key_stems=("$canon")
@@ -416,4 +450,14 @@ case "$canon" in
     ;;
 esac
 
+# --- 3. Shared-key fallthrough ----------------------------------------------
+# Reaching here means no per-host key was found. The shared fleet key is
+# being retired, so this answer increasingly means "a key the host does not
+# accept", and the caller's ssh then fails as an unreachable HOST, not a
+# missing KEY. Say so on stderr. stdout and the exit code are unchanged.
+# The literal target "agents" IS the shared key by name, not a fallthrough.
+if [[ "$canon" != "agents" ]]; then
+  printf 'ssh-key-for: WARNING: no per-host key for %s -- falling back to the RETIRED shared key %s. If ssh now fails, the host is probably reachable and the KEY is the problem: register a per-host key (see agents/SERVERS.md).\n' \
+    "$canon" "$SHARED_KEY" >&2
+fi
 _require_key_file "$SHARED_KEY"

@@ -1,6 +1,6 @@
 {
-  "remove_after": "2026-10-03",
-  "note": "TODO(2026-10-03): delete the aliases object and every caller that rewrites a slot name. After that date the only live server name is the Hetzner Cloud name, which equals the OS hostname. key_file_stems do not expire: the private-key files on agent-06 are still named grotap_from06_<old stem> and must keep resolving until those files are renamed. Do not rename key files during the freeze. This file must ship in three places: the status-server install FILES list (agents/install-status-server.sh copies it next to status-server.js), the orchestrator image at dist/data/fleet-aliases.json, and the backend image at app/data/fleet-aliases.json. CI guards enforce all three: scripts/check_status_server_shipped_files.py, orchestrator npm run test:shipped-json, and backend/scripts/check_fleet_aliases_image.py.",
+  "remove_after": "2026-12-31",
+  "note": "TODO(2026-12-31): delete the aliases object (extended from 2026-10-03 on 2026-10-02: the 2026-10-02 server renames ops-01, team-claude-01, team-codex-grok-monitor-01, team-astra-01 and openreplay-ai-support-01 report their new OS hostnames as agent_server, and pool counts fold them onto the current names below) and every caller that rewrites a slot name. After that date the only live server name is the Hetzner Cloud name, which equals the OS hostname. key_file_stems do not expire: the private-key files on agent-06 are still named grotap_from06_<old stem> and must keep resolving until those files are renamed. Do not rename key files during the freeze. This file must ship in three places: the status-server install FILES list (agents/install-status-server.sh copies it next to status-server.js), the orchestrator image at dist/data/fleet-aliases.json, and the backend image at app/data/fleet-aliases.json. CI guards enforce all three: scripts/check_status_server_shipped_files.py, orchestrator npm run test:shipped-json, and backend/scripts/check_fleet_aliases_image.py.",
   "hetzner_names": [
     "agent-01-claude",
     "agent-02-claude",
@@ -37,7 +37,12 @@
     "cobrowse-01": "openreplay-01",
     "grotap-cobrowse-01": "openreplay-01",
     "runner-01": "openreplay-ai-support",
-    "grotap-runner-01": "openreplay-ai-support"
+    "grotap-runner-01": "openreplay-ai-support",
+    "ops-01": "agent-06-claude",
+    "team-claude-01": "agent-21-shared",
+    "team-codex-grok-monitor-01": "agent-22-shared",
+    "team-astra-01": "agent-team-01-astra",
+    "openreplay-ai-support-01": "openreplay-ai-support"
   },
   "key_file_stems": {
     "agent-01-claude": ["agent-01"],

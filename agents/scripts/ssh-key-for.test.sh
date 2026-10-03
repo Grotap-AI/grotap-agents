@@ -132,26 +132,26 @@ expect "178.156.246.81"                grotap_forge-01        "forge-01 IP still
 expect "forge-01"                      grotap_forge-01        "forge-01 name still the forge key"
 expect "5.78.178.81"                   grotap_agents          "deleted Hillsboro agent-05 stays unmapped"
 
-echo "== alias map is ignored after 2026-10-03 =="
+echo "== alias map is ignored after remove_after (2026-12-31) =="
 : > "$FAKE_HOME/.ssh/grotap_agent-04-claude"
 err="$(mktemp)"
-got="$(HOME="$FAKE_HOME" FLEET_ALIAS_TODAY=2026-10-03 bash "$RESOLVER" agent-04 2>"$err")"
+got="$(HOME="$FAKE_HOME" FLEET_ALIAS_TODAY=2026-12-31 bash "$RESOLVER" agent-04 2>"$err")"
 got="${got##*/}"
 if [[ "$got" == "grotap_agent-04-claude" ]]; then
   PASS=$((PASS + 1))
-  printf '  ok   %-34s -> %s\n' "agent-04 on 2026-10-03" "$got"
+  printf '  ok   %-34s -> %s\n' "agent-04 on 2026-12-31" "$got"
 else
   FAIL=$((FAIL + 1))
-  printf '  FAIL %-34s -> %s (want grotap_agent-04-claude)\n' "agent-04 on 2026-10-03" "$got"
+  printf '  FAIL %-34s -> %s (want grotap_agent-04-claude)\n' "agent-04 on 2026-12-31" "$got"
 fi
-got="$(HOME="$FAKE_HOME" FLEET_ALIAS_TODAY=2026-10-04 bash "$RESOLVER" agent-04 2>"$err")"
+got="$(HOME="$FAKE_HOME" FLEET_ALIAS_TODAY=2027-01-01 bash "$RESOLVER" agent-04 2>"$err")"
 got="${got##*/}"
 if [[ "$got" == "grotap_agent-04" && "$(cat "$err")" == *"ignoring alias map"* ]]; then
   PASS=$((PASS + 1))
-  printf '  ok   %-34s -> %s\n' "agent-04 after 2026-10-03" "$got"
+  printf '  ok   %-34s -> %s\n' "agent-04 after 2026-12-31" "$got"
 else
   FAIL=$((FAIL + 1))
-  printf '  FAIL %-34s -> %s (want grotap_agent-04) stderr=%s\n' "agent-04 after 2026-10-03" "$got" "$(cat "$err")"
+  printf '  FAIL %-34s -> %s (want grotap_agent-04) stderr=%s\n' "agent-04 after 2026-12-31" "$got" "$(cat "$err")"
 fi
 rm -f "$err" "$FAKE_HOME/.ssh/grotap_agent-04-claude" "$FAKE_HOME/.ssh/grotap_agent-01-claude"
 
@@ -187,6 +187,37 @@ expect_missing "agent-13-monitor"   grotap_agent-13-monitor "monitor box missing
 : > "$FAKE_HOME/.ssh/grotap_agent-13-monitor"
 expect "agent-11-codex"                grotap_agent-11-codex "codex box does not take the shared key"
 expect "agent-13-monitor"              grotap_agent-13-monitor "monitor box does not take the shared key"
+# The IPs used to miss the table and fall through to grotap_agents.
+expect "178.156.222.217"               grotap_agent-11-codex "codex box IP does not take the shared key"
+expect "root@178.156.212.74"           grotap_agent-13-monitor "monitor box IP does not take the shared key"
+
+echo "== the shared-key fallthrough is loud on stderr, stdout unchanged =="
+_warn_err="$(mktemp)"
+_warn_got="$(HOME="$FAKE_HOME" bash "$RESOLVER" "not-a-host-we-own" 2>"$_warn_err")"
+if [[ "${_warn_got##*/}" == "grotap_agents" && "$(cat "$_warn_err")" == *"WARNING: no per-host key for not-a-host-we-own"* ]]; then
+  PASS=$((PASS + 1))
+  printf '  ok   fallthrough warns on stderr\n'
+else
+  FAIL=$((FAIL + 1))
+  printf '  FAIL fallthrough got=[%s] stderr=%s\n' "$_warn_got" "$(cat "$_warn_err")"
+fi
+_warn_got="$(HOME="$FAKE_HOME" bash "$RESOLVER" "agents" 2>"$_warn_err")"
+if [[ "${_warn_got##*/}" == "grotap_agents" && ! -s "$_warn_err" ]]; then
+  PASS=$((PASS + 1))
+  printf '  ok   literal "agents" stays quiet\n'
+else
+  FAIL=$((FAIL + 1))
+  printf '  FAIL literal agents got=[%s] stderr=%s\n' "$_warn_got" "$(cat "$_warn_err")"
+fi
+_warn_got="$(HOME="$FAKE_HOME" bash "$RESOLVER" "agent-03" 2>"$_warn_err")"
+if [[ "${_warn_got##*/}" == "grotap_agent-03" && ! -s "$_warn_err" ]]; then
+  PASS=$((PASS + 1))
+  printf '  ok   per-host hit stays quiet\n'
+else
+  FAIL=$((FAIL + 1))
+  printf '  FAIL per-host hit got=[%s] stderr=%s\n' "$_warn_got" "$(cat "$_warn_err")"
+fi
+rm -f "$_warn_err"
 expect "forge-01"                      grotap_forge-01      "forge name uses the workstation file when that file exists"
 expect "5.78.178.81"                   grotap_agents        "released agent-05 address is not mapped"
 expect "178.156.209.112"               grotap_agents        "released prompt-01-claude address is not mapped"
@@ -447,6 +478,45 @@ else
 fi
 rm -f "$_seat_err"
 rm -rf "$SEAT_CANON" "$SEAT_ROOTISH" "$SEAT_AGENTISH" "$SEAT_HOSTBIN"
+
+echo "== renamed ops box (agent-06 -> ops-01) and new team-box names =="
+REN_HOME="$(mktemp -d)"
+mkdir -p "$REN_HOME/.ssh"
+: > "$REN_HOME/.ssh/grotap_agents"
+for stem in agent-21-shared agent-22-shared agent-team-01-astra agent-06 agent-20; do
+  : > "$REN_HOME/.ssh/grotap_from06_${stem}"
+done
+REN_HOSTBIN="$(mktemp -d)"
+ren_expect() {
+  local host="$1" target="$2" want="$3" ops="${4:-}" got
+  printf '#!/bin/sh\necho %s\n' "$host" > "$REN_HOSTBIN/hostname"
+  chmod +x "$REN_HOSTBIN/hostname"
+  got="$(PATH="$REN_HOSTBIN:$PATH" HOME="$REN_HOME" GROTAP_OPS_HOST="$ops" FLEET_ALIAS_TODAY=2026-10-04 bash "$RESOLVER" "$target" 2>/dev/null)"
+  got="${got##*/}"
+  if [[ "$got" == "$want" ]]; then
+    PASS=$((PASS + 1))
+    printf '  ok   %-40s -> %s\n' "$host:$target${ops:+ ops=$ops}" "$got"
+  else
+    FAIL=$((FAIL + 1))
+    printf '  FAIL %-40s -> %s (want %s)\n' "$host:$target${ops:+ ops=$ops}" "$got" "$want"
+  fi
+}
+for h in ops-01 agent-06; do
+  ren_expect "$h" "87.99.148.22"               grotap_from06_agent-20
+  ren_expect "$h" "team-claude-01"             grotap_from06_agent-21-shared
+  ren_expect "$h" "agent-21-shared"            grotap_from06_agent-21-shared
+  ren_expect "$h" "5.161.119.92"               grotap_from06_agent-21-shared
+  ren_expect "$h" "team-codex-grok-monitor-01" grotap_from06_agent-22-shared
+  ren_expect "$h" "178.156.215.173"            grotap_from06_agent-22-shared
+  ren_expect "$h" "team-astra-01"              grotap_from06_agent-team-01-astra
+  ren_expect "$h" "ops-01"                     grotap_from06_agent-06
+done
+# A team box is not the ops box: per-host-only targets fail closed, no from06.
+ren_expect team-claude-01 "team-codex-grok-monitor-01" ""
+# Override both ways.
+ren_expect laptop "team-claude-01" grotap_from06_agent-21-shared 1
+ren_expect ops-01 "87.99.148.22"   grotap_agents 0
+rm -rf "$REN_HOME" "$REN_HOSTBIN"
 
 echo
 printf 'passed=%d failed=%d\n' "$PASS" "$FAIL"

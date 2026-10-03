@@ -3,7 +3,7 @@
 #
 # Seats:
 #   agent-21-shared: claude, astra
-#   agent-22-shared: codex, grok, monitor
+#   team-codex-grok-monitor-01 (was agent-22-shared): codex, grok, monitor
 #
 # The hook is off after a plain install. --canary turns it on only for
 # the codex user on agent-22-shared.
@@ -27,7 +27,7 @@ repo that seat commits in runs the hook. Plain install leaves the hook off
 (it logs "ggshield hook disabled" and exits 0).
 
   --user USER   seat to install (root only; re-execs as that user)
-  --canary      install and enable the hook (codex on agent-22-shared only)
+  --canary      install and enable the hook (codex on team-codex-grok-monitor-01 / agent-22-shared only)
   --disable     install if needed and set the hook off
   --uninstall   remove the hook and unset core.hooksPath when it is ours
   --purge       with --uninstall, also remove the venv
