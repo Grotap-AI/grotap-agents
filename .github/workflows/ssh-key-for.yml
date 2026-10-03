@@ -19,7 +19,7 @@ jobs:
 
       - name: Twin drift guard
         run: |
-          # These sums match the grotap-platform rename-hostname-breaks PR (2026-10-02).
+          # These sums match the grotap-platform openreplay-02 cleanup PR (2026-10-03; supersedes #271).
           # Bump each expected sum in the same change that updates that
           # file, and update the platform copy together.
           check() {
@@ -28,6 +28,6 @@ jobs:
             echo "$path $actual"
             test "$actual" = "$expected"
           }
-          check agents/scripts/ssh-key-for.sh 30a1ddb45d28ef50a7546687f10198756db10d9e205be0f178a0586d98493f32
-          check agents/scripts/ssh-key-for.test.sh d0b62ca099aef71b055d91ca7c0dac8bc5a6b801a3b1beef18f31afa1e38ce4e
-          check agents/fleet-aliases.json b42f94d2c95e3b643ef99a1711a7051b670aa4c794a78103ad1609f9fd9e113a
+          check agents/scripts/ssh-key-for.sh b8b0abc47c640804d51e982dbeaa03f5f5c394699fb8ff341eadb9dbdd4a9557
+          check agents/scripts/ssh-key-for.test.sh 22c416126b0cde43058a848dc553b133574ea4593ed4360c28f47399f35e939f
+          check agents/fleet-aliases.json df33dec620971d9656e43358973834f7655e23796e79a1939b442c9244740d3b

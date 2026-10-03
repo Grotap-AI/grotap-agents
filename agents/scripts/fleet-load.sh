@@ -1,6 +1,7 @@
 #!/bin/bash
 # fleet-load.sh — Read-only CPU / memory / disk sampler for the worker boxes
-# (agent-01-claude through agent-04-claude, and agent-06-claude).
+# (agent-02-claude through agent-04-claude, and agent-06-claude). agent-01-claude's
+# IP 5.161.74.39 now belongs to openreplay-02 and is not sampled.
 #
 # Why this exists: since 2026-09-15 every worker box runs TWO daemons — the agent tmux
 # session used by dispatch.sh, and forgejo-runner (v13.1.0, HOST execution mode, capacity 2,
@@ -25,7 +26,8 @@ set -uo pipefail
 # Source of truth is agents/SERVERS.md. Kept as name:ip so the script also works on a box
 # with no ~/.ssh/config (e.g. agent-06-claude) as well as on the owner workstation.
 HOSTS=(
-  "agent-01-claude:5.161.74.39"
+  # agent-01-claude (5.161.74.39) left the loop 2026-10-02: Hetzner recycled that IP
+  # to openreplay-02 (OpenReplay, supportagents.grotap.com). Do not re-add it.
   "agent-02-claude:5.161.81.193"
   "agent-03-claude:178.156.222.220"
   "agent-04-claude:5.161.73.195"
@@ -121,7 +123,6 @@ PROBE_EOF
 key_for() {
   local name="$1" legacy=""
   case "$name" in
-    agent-01-claude) legacy=agent-01 ;;
     agent-02-claude) legacy=agent-02 ;;
     agent-03-claude) legacy=agent-03 ;;
     agent-04-claude) legacy=agent-04 ;;

@@ -45,7 +45,8 @@ expect() {
 echo "== canonical forms =="
 # Desktop key grotap_agent-0N matches alias agent-0N. No offset.
 expect "agent-01"                      grotap_agent-01      "alias agent-01"
-expect "5.161.74.39"                   grotap_agent-01      "agent-01 IP"
+expect "5.161.74.39"                   grotap_cobrowse-01   "recycled agent-01 IP is openreplay-02"
+expect "openreplay-02"                 grotap_cobrowse-01   "openreplay-02 uses the cobrowse-01 key files"
 expect "agent-02"                      grotap_agent-02      "alias agent-02"
 expect "5.161.81.193"                  grotap_agent-02      "agent-02 IP"
 expect "agent-03"                      grotap_agent-03      "alias agent-03"
@@ -57,7 +58,8 @@ expect "178.156.246.81"                grotap_forge-01      "forge-01 IP"
 expect "forge-01"                      grotap_forge-01      "forge-01 name"
 expect "5.78.178.81"                   grotap_agents        "retired agent-05 stays unmapped"
 expect "178.156.209.112"               grotap_agents        "retired prompt-01 stays unmapped"
-expect "5.161.189.143"                 grotap_cobrowse-01   "cobrowse IP"
+expect "5.161.189.143"                 grotap_agents        "deleted openreplay-01 IP stays unmapped"
+expect "openreplay-01"                 grotap_agents        "deleted openreplay-01 name is not a key stem"
 
 echo "== non-canonical caller tokens must NOT fall back to the shared key =="
 expect "root@178.156.222.220"          grotap_agent-03      "ssh destination"
@@ -127,7 +129,6 @@ echo "== Hetzner stem wins when that key file exists; forge-01 is unchanged =="
 : > "$FAKE_HOME/.ssh/grotap_agent-01-claude"
 expect "agent-01"                      grotap_agent-01-claude "alias prefers the Hetzner key file"
 expect "agent-01-claude"               grotap_agent-01-claude "Hetzner name"
-expect "5.161.74.39"                   grotap_agent-01-claude "IP prefers the Hetzner key file"
 expect "178.156.246.81"                grotap_forge-01        "forge-01 IP still the forge key"
 expect "forge-01"                      grotap_forge-01        "forge-01 name still the forge key"
 expect "5.78.178.81"                   grotap_agents          "deleted Hillsboro agent-05 stays unmapped"
@@ -180,7 +181,7 @@ expect "claude@agent-21-shared"        claude_ed25519       "present team key"
 expect "claude@10.0.0.21"              claude_ed25519       "user@ip"
 expect "Claude@Agent-21-Shared"        claude_ed25519       "mixed case is lowercased"
 expect "agent@agent-01"                grotap_agent-01      "agent@ stays on the host key"
-expect "root@5.161.74.39"              grotap_agent-01      "root@ stays on the host key"
+expect "root@5.161.73.195"             grotap_agent-04      "root@ stays on the host key"
 expect_missing "agent-11-codex"      grotap_agent-11-codex   "codex box missing key does not take the shared key"
 expect_missing "agent-13-monitor"   grotap_agent-13-monitor "monitor box missing key does not take the shared key"
 : > "$FAKE_HOME/.ssh/grotap_agent-11-codex"
@@ -337,7 +338,6 @@ expect_same_day() {
   fi
 }
 for day in 2026-10-03 2026-10-04; do
-  expect_same_day "$day" "5.161.74.39"          grotap_from06_agent-01
   expect_same_day "$day" "agent-01-claude"      grotap_from06_agent-01
   expect_same_day "$day" "5.161.81.193"         grotap_from06_agent-02
   expect_same_day "$day" "agent-02-claude"      grotap_from06_agent-02

@@ -67,7 +67,8 @@ fi
 # /home/agent/.ssh/grotap_from06_claude instead, which is the seat key, so
 # the roster uses the cloud name.
 AGENTS=(
-  "agent-01-claude:5.161.74.39"
+  # The agent-01 box left the roster 2026-10-02: Hetzner recycled its IP to
+  # openreplay-02 (OpenReplay, supportagents.grotap.com). Do not re-add it.
   "agent-02-claude:5.161.81.193"
   "agent-03-claude:178.156.222.220"
   "agent-04-claude:5.161.73.195"

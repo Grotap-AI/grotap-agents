@@ -24,7 +24,8 @@ SSH_KEY="$HOME/.ssh/grotap_agents"
 
 # Active fleet (consolidated 2026-04-29: agent-01/08/09/10/11 retired).
 AGENTS=(
-  "agent-01-claude:5.161.74.39"
+  # agent-01-claude (5.161.74.39) left the loop 2026-10-02: Hetzner recycled that IP
+  # to openreplay-02 (OpenReplay, supportagents.grotap.com). Do not re-add it.
   "agent-02-claude:5.161.81.193"
   "agent-03-claude:178.156.222.220"
   "agent-04-claude:5.161.73.195"

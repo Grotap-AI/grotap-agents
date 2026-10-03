@@ -225,7 +225,6 @@ echo "== post-cutover shared hosts are on the health roster =="
 # is not the roster. forge-01, maps-01, and deleted agent-05 stay off it.
 health_roster="$(roster_block "$MONITOR" "AGENTS=(")"
 for need in \
-  "agent-01-claude:5.161.74.39" \
   "agent-02-claude:5.161.81.193" \
   "agent-03-claude:178.156.222.220" \
   "agent-04-claude:5.161.73.195" \
@@ -242,7 +241,8 @@ for need in \
       ;;
   esac
 done
-for banned in forge-01 maps-01 agent-05 178.156.246.81 5.161.107.80 5.78.178.81; do
+# agent-01-claude / 5.161.74.39: that IP is openreplay-02 since 2026-10-02.
+for banned in forge-01 maps-01 agent-05 agent-01-claude 5.161.74.39 178.156.246.81 5.161.107.80 5.78.178.81; do
   case "$health_roster" in
     *"$banned"*)
       check "$banned is absent from the health roster (saw: $health_roster)" false
