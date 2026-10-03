@@ -273,4 +273,38 @@
 #   Rotated 2026-09-28 (follow-up, step 5) from d6772167 to
 #   5106dd71a7f35fc1639cbeb2b846b82ebc1669ff, the rotation commit above.
 #   Range d6772167..5106dd71 touches only agents/BOOTSTRAP_SHA.
-5106dd71a7f35fc1639cbeb2b846b82ebc1669ff
+#
+#   Rotated 2026-10-03 (urgent, owner-directed via Shadow) from
+#   5106dd71a7f35fc1639cbeb2b846b82ebc1669ff to
+#   f0d9bb705d9d33c177f2228eab424913727bd71e.
+#   That SHA is the content commit on chore/bootstrap-pin-no-cred-rewrite,
+#   one commit past master 501dd736d5797f1a315de42d1abd522d7c65008d, which
+#   was resolved from the REMOTE with git ls-remote. Strict descendant of
+#   the outgoing pin (git merge-base --is-ancestor 5106dd71 f0d9bb7, exit 0).
+#   It reaches refs/heads/master only when this PR lands as a MERGE COMMIT.
+#   Squash or rebase drops it, and verify_bootstrap_pin then hard-fails every
+#   host that has ~/.grotap_bootstrap_pin_seen.
+#   WHY: at 5106dd71, ensure_git_auth rewrote ~/bin/git-credential-doppler
+#   and the global and repo credential.helper (--replace-all) on every case,
+#   back to the old grotap/prd GITHUB_TOKEN helper. That broke the claude
+#   seat's pushes at 08:24 PT today. Master 501dd73 (#18, 24dae11) made the
+#   helper fail closed, but it still rewrote it, so it would have replaced
+#   team-astra-01's working root fleet helper for the agent user with a
+#   ~/bin helper that gets no token.
+#   f0d9bb7 makes ensure_git_auth write no file and no git config. It picks
+#   the box's root-owned helper for the runner process only
+#   (GIT_CONFIG_COUNT). Seats use the seat helper and never the fleet one.
+#   agent/root use /usr/local/lib/grotap/git-credential-doppler when it is
+#   installed. Otherwise the configured helper is left alone.
+#   No grotap/prd fallback remains in the runner.
+#   setup-team2-box.sh no longer writes the old helper.
+#   Reviewed before blessing: 32 commits (5106dd71..f0d9bb7): agents/lessons/*.md,
+#   dispatch task files, ssh-key-for.sh/test and fleet-aliases.json twins of
+#   grotap-platform (#29 and earlier), #18 the fail-closed runner helper,
+#   #19 sync-all-agents.sh, #21 a rename, #28 drop agent-07, and f0d9bb7.
+#   BOOTSTRAP.md and agents/GLOBAL.md are UNTOUCHED in the range (git diff
+#   --name-only, empty), so no model instruction changes with this rotation.
+#   Supersedes the pin part of grotap-agents#24 (24dae114).
+#   Per step 5 this rotation commit is itself unblessed until a follow-up
+#   rotation pins the merge commit.
+f0d9bb705d9d33c177f2228eab424913727bd71e

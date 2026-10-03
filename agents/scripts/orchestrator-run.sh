@@ -82,43 +82,70 @@ print(json.dumps(out))
 
 PAYLOAD="$(cat)"
 
-# ── Self-healing git auth (durability fix, v2) ───────────────────────────────
-# .gitconfig is PERSISTENT and shared by every process on the box; the env of
-# whichever process wrote it is not. The previous version persisted an inline
-# helper reading $GH_PUSH_TOKEN — it worked inside this script (which exports
-# the var) but broke every OTHER push path (dispatch.sh runners) with empty-
-# password "Authentication failed" each time an orchestrator run rewrote the
-# config (2026-07-03 outage). So: persist only a SELF-SUFFICIENT helper script
-# that resolves the token per call — env GITHUB_TOKEN first, then this seat's
-# own Doppler scope (no grotap/prd fallback; fails closed — item 22). Re-written on every run so it
-# survives reprovision and stale copies.
-ensure_git_auth() {
-  mkdir -p "$HOME/bin"
-  cat > "$HOME/bin/git-credential-doppler" <<'HELPER'
-#!/bin/sh
-# git credential helper for a fleet seat. $GITHUB_TOKEN first, then THIS
-# seat's own Doppler scope (its .doppler.yaml service token). Fails closed:
-# no --project/--config override and no grotap/prd fallback. On any failure
-# it prints nothing and exits 1, so git reports an auth error instead of
-# silently borrowing a broader credential. Safe to persist in .gitconfig.
-[ "${1:-get}" = get ] || exit 0
-tok="${GITHUB_TOKEN:-}"
-if [ -z "$tok" ]; then
-  tok="$(doppler secrets get GITHUB_TOKEN --plain 2>/dev/null)" || tok=""
-fi
-[ -n "$tok" ] || exit 1
-printf 'username=x-access-token\npassword=%s\n' "$tok"
-HELPER
-  chmod +x "$HOME/bin/git-credential-doppler"
-  if [ -z "${GITHUB_TOKEN:-}" ] && ! doppler secrets get GITHUB_TOKEN --plain >/dev/null 2>&1; then
-    log "WARN: no GitHub token resolvable (env GITHUB_TOKEN or this seat's Doppler scope) — git push will fail closed"
+# ── Git auth: choose the box's root-owned helper; write NOTHING ──────────────
+# History: until 2026-10-03 this function rewrote ~/bin/git-credential-doppler
+# and `git config --global/--local --replace-all credential.helper` on EVERY
+# run. .gitconfig is shared by every process on the box, so each case put this
+# script's idea of a helper back over whatever the box had been given. At pin
+# 5106dd71 that was the grotap/prd GITHUB_TOKEN helper, and it broke the claude
+# seat's pushes on 2026-10-03 08:24 PT; at 24dae114 it was a fail-closed helper
+# that the `agent` user could not satisfy on the team boxes, and --replace-all
+# would also have dropped team-astra-01's working root helper.
+#
+# Every fleet box now ships root-owned helpers (provisioned, not written here):
+#   agent / root : /usr/local/lib/grotap/git-credential-doppler
+#                  (box's read-only token, /etc/grotap/doppler/doppler.yaml)
+#   seats        : /usr/local/lib/grotap-seat/git-credential-seat-doppler
+#                  (the seat's own Doppler scope)
+# So this function writes no file and no git config. It selects the helper for
+# THIS process only, through GIT_CONFIG_COUNT (git >= 2.31): an empty
+# credential.helper first (drops every inherited helper, including stale
+# ~/bin ones), then the chosen helper. Selection mirrors grotap-platform
+# agents/lib/git-credential-helper.sh: a seat NEVER gets the fleet helper and
+# fails closed without its own; agent/root on a box with no fleet helper
+# installed (ops-01) keep the helper the box already has configured.
+_FLEET_GIT_HELPER="${GROTAP_FLEET_GIT_HELPER:-/usr/local/lib/grotap/git-credential-doppler}"
+_SEAT_GIT_HELPER_DEFAULT="/usr/local/lib/grotap-seat/git-credential-seat-doppler"
+
+_runner_is_seat() {
+  local actor="${GROTAP_RUN_USER:-}"
+  [ -n "$actor" ] || actor="$(id -un 2>/dev/null || true)"
+  case "$actor" in ""|agent|root) return 1 ;; esac
+  [ -n "${GROTAP_RUN_USER:-}" ] && return 0
+  case "$actor" in claude|codex|grok|monitor|astra) return 0 ;; esac
+  return 1
+}
+
+# Process-local git config; nothing on disk changes.
+_runner_git_helper_env() {
+  export GIT_TERMINAL_PROMPT=0
+  if [ -n "${1:-}" ]; then
+    export GIT_CONFIG_COUNT=2 \
+      GIT_CONFIG_KEY_0=credential.helper GIT_CONFIG_VALUE_0= \
+      GIT_CONFIG_KEY_1=credential.helper GIT_CONFIG_VALUE_1="$1"
+  else
+    export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=credential.helper GIT_CONFIG_VALUE_0=
   fi
-  # --replace-all: collapse any stale/duplicate helper entries (empty-string
-  # resets and old inline $GH_PUSH_TOKEN helpers included). Worktrees share
-  # the repo config, so this covers them too.
-  git config --global --replace-all credential.helper "!$HOME/bin/git-credential-doppler" >> "$LOG" 2>&1 || true
-  if [ -d "$PLATFORM_DIR/.git" ]; then
-    git -C "$PLATFORM_DIR" config --replace-all credential.helper "!$HOME/bin/git-credential-doppler" >> "$LOG" 2>&1 || true
+}
+
+ensure_git_auth() {
+  local seat
+  if _runner_is_seat; then
+    seat="${GROTAP_SEAT_GIT_HELPER:-$_SEAT_GIT_HELPER_DEFAULT}"
+    case "$seat" in
+      *git-credential-seat-doppler*) ;;
+      *) seat="$_SEAT_GIT_HELPER_DEFAULT" ;;   # never the fleet program for a seat
+    esac
+    if [ -x "$seat" ] && [ ! -d "$seat" ]; then
+      _runner_git_helper_env "$seat"
+    else
+      _runner_git_helper_env ""
+      log "WARN: seat $(id -un 2>/dev/null) has no executable $seat — git push will fail closed (the fleet helper is never used for a seat)"
+    fi
+  elif [ -x "$_FLEET_GIT_HELPER" ] && [ ! -d "$_FLEET_GIT_HELPER" ]; then
+    _runner_git_helper_env "$_FLEET_GIT_HELPER"
+  else
+    log "git auth: $_FLEET_GIT_HELPER not installed on $(hostname); keeping the credential.helper this box already has configured"
   fi
 }
 
@@ -376,7 +403,6 @@ ensure_repo() {
   if [ ! -d "$PLATFORM_DIR/.git" ]; then
     log "Cloning grotap-platform..."
     git clone https://github.com/Grotap-AI/grotap-platform.git "$PLATFORM_DIR" >> "$LOG" 2>&1
-    ensure_git_auth   # re-assert repo-scope helper now that .git exists
   fi
   cd "$PLATFORM_DIR" || return 1
   git fetch origin master --quiet >> "$LOG" 2>&1 || { sleep 5; git fetch origin master --quiet >> "$LOG" 2>&1; }
@@ -684,9 +710,9 @@ esac
 # into claude. `Bash(env)` is in the allow list, which makes that inheritance
 # directly readable by the agent.
 # GITHUB_TOKEN is stripped too: the runner's own push happens outside this
-# invocation, and git inside the worktree still authenticates because
-# git-credential-doppler falls back to `doppler secrets get` — a helper git
-# spawns itself, which the Bash(doppler *) deny rule does not touch.
+# invocation, and git inside the worktree still authenticates through the
+# root-owned helper ensure_git_auth selected (GIT_CONFIG_COUNT, inherited) — a
+# helper git spawns itself, which the Bash(doppler *) deny rule does not touch.
 if [ "$PERM_MODE" = "bypass" ]; then
   PERM_ARGS=(--dangerously-skip-permissions)
 else

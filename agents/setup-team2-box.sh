@@ -27,25 +27,13 @@ fi
 id agent >/dev/null 2>&1 || useradd -m -s /bin/bash agent
 mkdir -p /home/agent/bin /home/agent/worktrees
 
-# Git credential helper — Doppler-backed, never a static token (GLOBAL.md rule)
-cat > /home/agent/bin/git-credential-doppler <<'EOS'
-#!/bin/sh
-# git credential helper for a fleet seat. $GITHUB_TOKEN first, then THIS
-# seat's own Doppler scope (its .doppler.yaml service token). Fails closed:
-# no --project/--config override and no grotap/prd fallback. On any failure
-# it prints nothing and exits 1, so git reports an auth error instead of
-# silently borrowing a broader credential. Safe to persist in .gitconfig.
-[ "${1:-get}" = get ] || exit 0
-tok="${GITHUB_TOKEN:-}"
-if [ -z "$tok" ]; then
-  tok="$(doppler secrets get GITHUB_TOKEN --plain 2>/dev/null)" || tok=""
-fi
-[ -n "$tok" ] || exit 1
-printf 'username=x-access-token\npassword=%s\n' "$tok"
-EOS
-chmod +x /home/agent/bin/git-credential-doppler
+# Git credential helper: NOT written here. The box gets the root-owned
+# /usr/local/lib/grotap/git-credential-doppler (box token in
+# /etc/grotap/doppler/doppler.yaml) from the root provisioning step; seats use
+# /usr/local/lib/grotap-seat/git-credential-seat-doppler. A per-user copy in
+# ~/bin is what fleet runners used to rewrite on every case (2026-10-03).
 chown -R agent:agent /home/agent
-su - agent -c "git config --global credential.helper '/home/agent/bin/git-credential-doppler' && git config --global user.name 'Grotap Agent' && git config --global user.email 'agents@grotap.com'"
+su - agent -c "git config --global credential.helper /usr/local/lib/grotap/git-credential-doppler && git config --global user.name 'Grotap Agent' && git config --global user.email 'agents@grotap.com'"
 
 # aider — Team 2 open-model runtime (pipx, isolated venv)
 su - agent -c "pipx install aider-chat >/dev/null 2>&1 || pipx upgrade aider-chat >/dev/null 2>&1; pipx ensurepath >/dev/null 2>&1" \
