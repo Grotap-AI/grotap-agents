@@ -299,7 +299,9 @@ _CACHE_SH="$(cd "$(dirname "$0")" && pwd)/claude-prompt-cache.sh"
 # The task reads these straight from its environment. It must NOT wrap a
 # command in its own `doppler run -- cmd "$VAR"`: the shell expands "$VAR"
 # before doppler starts, so a name missing here arrives as an empty string.
-# Override with REVIEW_GATE_ONLY_SECRETS (comma list).
+# The list is fixed here on purpose. There is no environment override: a
+# REVIEW_GATE_ONLY_SECRETS in cron or a caller's env must not widen what the
+# child can read. Change the list only in this file, through review.
 #
 # Doppler containment for the child. The parent's Doppler login stays usable
 # for the doppler run above; the child gets none of it:
@@ -311,13 +313,18 @@ _CACHE_SH="$(cd "$(dirname "$0")" && pwd)/claude-prompt-cache.sh"
 #                              orchestrator-run.sh denylist entries. Enforced
 #                              under bypassPermissions too.
 # The temp dir is removed by the EXIT trap above.
+readonly RG_ONLY_SECRETS="ANTHROPIC_API_KEY,NODE_SECRET,DATABASE_URL,GITHUB_TOKEN"
+if [[ -n "${REVIEW_GATE_ONLY_SECRETS+x}" ]]; then
+  echo "review-gate: REVIEW_GATE_ONLY_SECRETS is set but ignored; the child gets only ${RG_ONLY_SECRETS}" >&2
+fi
+unset REVIEW_GATE_ONLY_SECRETS
 RG_DOPPLER_EMPTY="$(mktemp -d "${TMPDIR:-/tmp}/review-gate-doppler.XXXXXX")" || {
   echo "mktemp -d for the empty Doppler config dir failed; not starting claude" >&2
   exit 1
 }
 chmod 700 "$RG_DOPPLER_EMPTY"
 timeout "$TIMEOUT_SECS" doppler run --project grotap --config prd \
-  --only-secrets "${REVIEW_GATE_ONLY_SECRETS:-ANTHROPIC_API_KEY,NODE_SECRET,DATABASE_URL,GITHUB_TOKEN}" -- \
+  --only-secrets "$RG_ONLY_SECRETS" -- \
   env -u DOPPLER_TOKEN DOPPLER_CONFIG_DIR="$RG_DOPPLER_EMPTY" bash "$_CACHE_SH" \
   claude -p "$(cat "$TASK")" \
     --permission-mode bypassPermissions \
