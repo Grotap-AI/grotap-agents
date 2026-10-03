@@ -19,7 +19,7 @@ jobs:
 
       - name: Twin drift guard
         run: |
-          # These sums match grotap-platform #278 (anchored ops-host check, 2026-10-03).
+          # These sums match grotap-platform (scan-01 + mdm-01 key rows, 2026-10-03).
           # Bump each expected sum in the same change that updates that
           # file, and update the platform copy together.
           check() {
@@ -28,6 +28,6 @@ jobs:
             echo "$path $actual"
             test "$actual" = "$expected"
           }
-          check agents/scripts/ssh-key-for.sh 0e1a56bfb50f775df38a6724b323307590e35386b0fce34bbbc039b95f4f1864
-          check agents/scripts/ssh-key-for.test.sh 18ceb0394140649e4c4e768584c78e2078d7878bbbe2890b03a20ab3c9d4e8ab
+          check agents/scripts/ssh-key-for.sh fa5529d137f7a79585edbdb9436dd577b5ac7ec913f965a653fa634d955b425a
+          check agents/scripts/ssh-key-for.test.sh b850fab4bd8d890b31a52c4b0c32463835bd54e6621e2698212c161b6263ef1e
           check agents/fleet-aliases.json df33dec620971d9656e43358973834f7655e23796e79a1939b442c9244740d3b

@@ -212,6 +212,15 @@ declare -A _SSH_KEY_FOR_HOST_BY_IP=(
   ["openreplay-02"]="openreplay-02"
   ["178.156.199.83"]="openreplay-ai-support"
   ["openreplay-ai-support"]="openreplay-ai-support"
+  # scan-01 (ClamAV, core project, Hetzner id 168175702) and mdm-01 (core,
+  # id 153766531). IPs checked against the Hetzner API 2026-10-03. The ops
+  # box holds grotap_from06_scan-01 and grotap_from06_mdm-01 (minted
+  # 2026-10-02). Both hosts still accept grotap_agents, so they are not
+  # per-host-only and a caller with no per-host file keeps the shared key.
+  ["5.161.75.121"]="scan-01"
+  ["scan-01"]="scan-01"
+  ["87.99.140.189"]="mdm-01"
+  ["mdm-01"]="mdm-01"
 )
 
 # --- Canonicalize the target BEFORE the lookup -------------------------------
