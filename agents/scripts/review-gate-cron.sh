@@ -135,7 +135,10 @@ release_gate_claims() {
   fi
   return 0
 }
-trap 'rm -f "$LOCK" "$STDERR_FILE"; release_gate_claims' EXIT
+# RG_DOPPLER_EMPTY is the empty Doppler config dir handed to the Claude child
+# (see the launch below). Created there; removed here on every exit path.
+RG_DOPPLER_EMPTY=""
+trap 'rm -f "$LOCK" "$STDERR_FILE"; [ -n "$RG_DOPPLER_EMPTY" ] && rm -rf "$RG_DOPPLER_EMPTY"; release_gate_claims' EXIT
 
 sync_repo() {
   # $1 = repo path. Fetch ONLY master, then hard-reset onto it.
@@ -275,21 +278,50 @@ echo "queue: $QUEUE reviewable cases (change_review + parked awaiting_review)"
 [[ "$QUEUE" =~ ^[0-9]+$ ]] || { echo "FATAL: QUEUE is non-numeric ('$QUEUE') — accessor broken"; exit 1; }
 if [ "$QUEUE" = "0" ]; then echo "queue empty — nothing to do"; exit 0; fi
 
-# Run Claude with the standing task. Doppler injects DATABASE_URL etc. for the
-# psql/API calls the task makes. Bypass permissions: this box is a headless runner.
+# Run Claude with the standing task. Doppler injects only the allowlisted names
+# below for the psql/API calls the task makes. Bypass permissions: this box is a
+# headless runner.
 cd "$PLATFORM_REPO"
 # From here on the Claude run may have claimed rows, so the EXIT trap must release
 # them. Set BEFORE the invocation, not after: the timeout SIGKILL is exactly the
 # path that needs the release, and it never returns to the next line.
 CLAUDE_LAUNCHED=1
-# review-gate-task.md is byte-stable. Doppler injects prd into the child it
-# starts, which is after any unset in this shell, so the helper has to run
-# inside that child and exec claude itself. A parent unset does not stick.
+# review-gate-task.md is byte-stable. Doppler injects the allowlisted names into
+# the child it starts, after anything this shell unsets, so the cache helper
+# runs inside that child and execs claude itself.
 _CACHE_SH="$(cd "$(dirname "$0")" && pwd)/claude-prompt-cache.sh"
-timeout "$TIMEOUT_SECS" doppler run --project grotap --config prd -- \
-  bash "$_CACHE_SH" \
+# item 22: the model child gets ONLY the names it needs, not all of prd
+# (258 names incl. admin keys and other Doppler tokens):
+#   ANTHROPIC_API_KEY  authenticates claude
+#   DATABASE_URL       the §0 claim / release psql in review-gate-task.md
+#   NODE_SECRET        X-Node-Secret for gate-route-back and report-progress.sh
+#   GITHUB_TOKEN       git fetch/push of the case branches
+# The task reads these straight from its environment. It must NOT wrap a
+# command in its own `doppler run -- cmd "$VAR"`: the shell expands "$VAR"
+# before doppler starts, so a name missing here arrives as an empty string.
+# Override with REVIEW_GATE_ONLY_SECRETS (comma list).
+#
+# Doppler containment for the child. The parent's Doppler login stays usable
+# for the doppler run above; the child gets none of it:
+#   env -u DOPPLER_TOKEN       no token in its environment
+#   DOPPLER_CONFIG_DIR=<empty> a doppler CLI started by the child finds no
+#                              saved token (agent's ~/.doppler/.doppler.yaml is
+#                              scoped / and can read all of grotap/prd)
+#   --disallowedTools          Bash(doppler*) and Read(**/.doppler/**), the
+#                              orchestrator-run.sh denylist entries. Enforced
+#                              under bypassPermissions too.
+# The temp dir is removed by the EXIT trap above.
+RG_DOPPLER_EMPTY="$(mktemp -d "${TMPDIR:-/tmp}/review-gate-doppler.XXXXXX")" || {
+  echo "mktemp -d for the empty Doppler config dir failed; not starting claude" >&2
+  exit 1
+}
+chmod 700 "$RG_DOPPLER_EMPTY"
+timeout "$TIMEOUT_SECS" doppler run --project grotap --config prd \
+  --only-secrets "${REVIEW_GATE_ONLY_SECRETS:-ANTHROPIC_API_KEY,NODE_SECRET,DATABASE_URL,GITHUB_TOKEN}" -- \
+  env -u DOPPLER_TOKEN DOPPLER_CONFIG_DIR="$RG_DOPPLER_EMPTY" bash "$_CACHE_SH" \
   claude -p "$(cat "$TASK")" \
     --permission-mode bypassPermissions \
+    --disallowedTools "Bash(doppler*)" "Read(**/.doppler/**)" \
     --model "${REVIEW_GATE_MODEL:-claude-sonnet-4-6}" \
     --max-turns 400
 RC=$?

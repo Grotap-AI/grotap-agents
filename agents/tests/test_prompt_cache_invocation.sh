@@ -139,6 +139,13 @@ for a in "$@"; do printf '%s\n' "$a" >> "$STATE_DIR/claude.argv"; done
     fi
   done
 } > "$STATE_DIR/claude.env"
+{
+  printf 'DOPPLER_TOKEN=%s\n' "${DOPPLER_TOKEN-<unset>}"
+  printf 'DOPPLER_CONFIG_DIR=%s\n' "${DOPPLER_CONFIG_DIR-<unset>}"
+  if [ -n "${DOPPLER_CONFIG_DIR:-}" ] && [ -d "$DOPPLER_CONFIG_DIR" ]; then
+    printf 'DOPPLER_CONFIG_DIR_ENTRIES=%s\n' "$(ls -A "$DOPPLER_CONFIG_DIR" | wc -l | tr -d ' ')"
+  fi
+} > "$STATE_DIR/claude.doppler"
 printf 'stub-ok\n'
 exit 0
 EOF
@@ -223,6 +230,7 @@ timeout 60 env \
   CLAUDE_CODE_DISABLE_PROMPT_CACHING=from-parent \
   CLAUDE_CODE_DISABLE_PROMPT_CACHING_EXTRA=from-parent \
   KEEP_SENTINEL=from-parent \
+  DOPPLER_TOKEN=parent-token-must-not-reach-claude \
   bash "$GATE"
 gate_rc=$?
 if [[ "$gate_rc" -ne 0 ]]; then
@@ -235,6 +243,14 @@ assert_eq "G1 review-gate exit" "$gate_rc" "0"
 assert_eq "G1 claude saw -p" "$(grep -qxF -- '-p' "$GSTATE/claude.argv" && echo yes || echo no)" "yes"
 assert_recorded_env "G1" "$GSTATE/claude.env"
 assert_eq "G1 log records claude exit 0" "$(grep -c 'claude exit: 0' "$GATE_LOG")" "1"
+assert_eq "G1 claude child has no DOPPLER_TOKEN" "$(grep -x 'DOPPLER_TOKEN=<unset>' "$GSTATE/claude.doppler" >/dev/null && echo yes || echo no)" "yes"
+g1_cfg="$(sed -n 's/^DOPPLER_CONFIG_DIR=//p' "$GSTATE/claude.doppler")"
+assert_eq "G1 claude child gets a temp DOPPLER_CONFIG_DIR" "$([[ "$g1_cfg" == */review-gate-doppler.* ]] && echo yes || echo no)" "yes"
+assert_eq "G1 that DOPPLER_CONFIG_DIR was empty" "$(sed -n 's/^DOPPLER_CONFIG_DIR_ENTRIES=//p' "$GSTATE/claude.doppler")" "0"
+assert_eq "G1 the EXIT trap removed DOPPLER_CONFIG_DIR" "$([[ -n "$g1_cfg" && ! -e "$g1_cfg" ]] && echo yes || echo no)" "yes"
+assert_eq "G1 claude denies Bash(doppler*)" "$(grep -qxF -- 'Bash(doppler*)' "$GSTATE/claude.argv" && echo yes || echo no)" "yes"
+assert_eq "G1 claude denies Read(**/.doppler/**)" "$(grep -qxF -- 'Read(**/.doppler/**)' "$GSTATE/claude.argv" && echo yes || echo no)" "yes"
+assert_eq "G1 parent still narrows doppler run to the 4 names" "$(grep -c -- '--only-secrets ANTHROPIC_API_KEY,NODE_SECRET,DATABASE_URL,GITHUB_TOKEN' "$GSTATE/doppler.argv")" "1"
 
 echo "W1: remote-control wrapper clears the switches before claude inherits them"
 WSTATE="$TMP/wrap-state"

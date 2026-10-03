@@ -25,7 +25,10 @@ GATE_ID="${GATE_ID:-review-gate-$(hostname -s)-$$}"
 # empty-queue pre-check uses the same predicate. Change both or neither: if the
 # pre-check's window is SHORTER than this one it counts cases this UPDATE then
 # refuses, and the gate burns a whole Claude run discovering it has no work.
-CLAIMED_IDS=$(doppler run -- psql "$DATABASE_URL" -Atc "
+# DATABASE_URL is injected into your environment by the gate. Use it directly;
+# never wrap this in `doppler run --` (the shell expands "$DATABASE_URL" first).
+: "${DATABASE_URL:?DATABASE_URL not injected - stop and report, do not review}"
+CLAIMED_IDS=$(psql "$DATABASE_URL" -Atc "
 UPDATE pipeline_cases
 SET claimed_by  = '$GATE_ID',
     claimed_at  = NOW(),
@@ -59,7 +62,7 @@ echo "Claimed for this run ($GATE_ID): $CLAIMED_IDS"
 
 **On exit — success or failure — release your claims.** Run this before exiting:
 ```bash
-doppler run -- psql "$DATABASE_URL" -Atc "
+psql "$DATABASE_URL" -Atc "
 UPDATE pipeline_cases
 SET claimed_by  = NULL,
     claimed_at  = NULL,
@@ -116,7 +119,7 @@ cd frontend && npm install --silent && npx tsc --noEmit && cd ..
   attempt's own commits with `git revert <sha>`" or "start a fresh worktree from
   `origin/master`". See fleet-ops.md for the full rule.
   ```bash
-  NODE_SECRET=$(doppler secrets get NODE_SECRET --plain)
+  : "${NODE_SECRET:?NODE_SECRET not injected - stop and report}"  # injected by the gate; do not call doppler
   curl -sf -X POST "https://api.grotap.com/pipeline/cases/${CASE_ID}/gate-route-back" \
     -H "X-Node-Secret: $NODE_SECRET" \
     -H "Content-Type: application/json" \
