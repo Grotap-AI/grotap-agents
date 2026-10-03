@@ -59,7 +59,7 @@ fi
 # seats. fleet-aliases.json lists those two cloud names and has no aliases
 # entry and no key_file_stems entry for either, so the name is not rewritten
 # to a seat user. Checked with ssh-key-for.sh as root on a host named
-# agent-06 (hostname prints agent-06, HOME is root's home, aliases file is
+# agent-06-claude (hostname prints agent-06-claude, HOME is root's home, aliases file is
 # the repo copy): agent-21-shared prints
 # /root/.ssh/grotap_from06_agent-21-shared and agent-22-shared prints
 # /root/.ssh/grotap_from06_agent-22-shared when those files exist. A seat
@@ -84,6 +84,56 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 KEY_FOR="${HEALTH_MONITOR_SSH_KEY_FOR:-$SCRIPT_DIR/ssh-key-for.sh}"
 SSH_BIN="${HEALTH_MONITOR_SSH:-ssh}"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/ggshield-lib.sh"
+
+# Fail-open lines live in each seat's ~/.local/state/grotap/ggshield-failopen.log
+# on the shared host. Count the last hour. Alert when that count is above 0.
+# HEALTH_MONITOR_GGSHIELD_LOG_ROOT reads $root/<host>/<seat>/ggshield-failopen.log
+# instead of ssh, for tests. strict-mode blocks are not in this log.
+ggshield_check_failopens() {
+  local name="$1" ip="$2" key="$3"
+  local seats seat cutoff count tmp ssh_rc log_file
+  case "$name" in
+    agent-21-shared) seats="claude astra" ;;
+    agent-22-shared) seats="codex grok monitor" ;;
+    *) return 0 ;;
+  esac
+  cutoff="$(date -u -d '1 hour ago' +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || true)"
+  if [ -z "$cutoff" ]; then
+    return 0
+  fi
+  # shellcheck disable=SC2086
+  for seat in $seats; do
+    case "$seat" in
+      claude|astra|codex|grok|monitor) ;;
+      *) continue ;;
+    esac
+    count=0
+    if [ -n "${HEALTH_MONITOR_GGSHIELD_LOG_ROOT:-}" ]; then
+      log_file="${HEALTH_MONITOR_GGSHIELD_LOG_ROOT}/${name}/${seat}/ggshield-failopen.log"
+      count="$(ggshield_count_failopens "$log_file" "$cutoff")"
+    else
+      tmp="$(mktemp)"
+      ssh_rc=0
+      # Seat names are fixed above. The path is expanded here, not on the remote shell.
+      # shellcheck disable=SC2029
+      "$SSH_BIN" -n -i "$key" -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o BatchMode=yes \
+        "root@${ip}" "cat /home/${seat}/.local/state/grotap/ggshield-failopen.log" >"$tmp" 2>/dev/null || ssh_rc=$?
+      if [ "$ssh_rc" -eq 0 ]; then
+        count="$(ggshield_count_failopens "$tmp" "$cutoff")"
+      fi
+      rm -f "$tmp"
+    fi
+    case "$count" in
+      ''|*[!0-9]*) count=0 ;;
+    esac
+    if [ "$count" -gt 0 ]; then
+      echo "[$TIMESTAMP] GGSHIELD FAILOPEN: ${seat}@${name} — ${count} in the last hour" >> "$ALERT_LOG"
+      OVERALL="DEGRADED"
+    fi
+  done
+}
 
 for ENTRY in "${AGENTS[@]}"; do
   NAME="${ENTRY%%:*}"
@@ -116,6 +166,7 @@ for ENTRY in "${AGENTS[@]}"; do
   # consume the pipe and the rest of the sweep never sees it.
   if "$SSH_BIN" -n -i "$SSH_KEY_FOR_TARGET" -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o BatchMode=yes "root@$IP" "echo ok" >/dev/null 2>&1; then
     echo "0" > "$FAIL_FILE"
+    ggshield_check_failopens "$NAME" "$IP" "$SSH_KEY_FOR_TARGET"
   else
     PREV=$(cat "$FAIL_FILE" 2>/dev/null || echo "0")
     COUNT=$((PREV + 1))

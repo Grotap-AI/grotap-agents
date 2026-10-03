@@ -24,7 +24,8 @@ Usage: install-ggshield-hook.sh [--user USER] [--canary | --disable | --uninstal
 Installs pinned ggshield into ~/.local/share/grotap/ggshield-venv and sets
 git config --global core.hooksPath to ~/.config/grotap/git-hooks so every
 repo that seat commits in runs the hook. Plain install leaves the hook off
-(it logs "ggshield hook disabled" and exits 0).
+(it logs "ggshield hook disabled" and exits 0). The mode file is off, on,
+or strict. This installer never writes strict.
 
   --user USER   seat to install (root only; re-execs as that user)
   --canary      install and enable the hook (codex on team-codex-grok-monitor-01 / agent-22-shared only)

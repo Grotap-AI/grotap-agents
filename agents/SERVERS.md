@@ -35,7 +35,7 @@ Bootstrap names are the locked Cloud names, not `agent-NN`. Map, status, and the
 Cloud renames already applied (2026-09-21): `agent-01-claude` … `agent-06-claude`,
 `agent-10-codex`, `monitor-01-deepseek`, `openreplay-01`, `openreplay-ai-support`.
 `prompt-01-claude` (`178.156.209.112`, was `claudecode-01`, then `claude-code-01`) was **deleted 2026-09-26**. Hetzner has no server by that name.
-Post-cutover, the **active** seat hosts are **`agent-21-shared`** `5.161.119.92` (Team Claude and Team Astra seats) and **`agent-22-shared`** `178.156.215.173` (Team Codex, Grok, and Monitor seats). `agent-06-claude` (`5.161.53.103`) stays the ops host. `prompt-01-astra` (`5.161.243.18`, Hetzner id 167204705) and `agent-team-01-astra` (`5.161.80.75`, id 167204706) are retiring, not the live Astra seats. Do not retire `openreplay-ai-support`.
+Post-cutover, the **active** seat hosts are **`agent-21-shared`** `5.161.119.92` (Team Claude and Team Astra seats) and **`agent-22-shared`** `178.156.215.173` (Team Codex, Grok, and Monitor seats). `agent-06-claude` (`5.161.53.103`) stays the ops host. `prompt-01-astra` (`5.161.243.18`, Hetzner id 167204705) and `agent-team-01-astra` (`5.161.80.75`, id 167204706) are retiring, not the live Astra seats. Do not retire `openreplay-ai-support`. `agent-11-codex` is a retired name and must never be re-created or re-added.
 
 **Hetzner Cloud name is the primary column.** Short names `agent-01` … `agent-06` are SSH/dispatch aliases only. Each one is the **same IP** as `agent-01-claude` … `agent-06-claude`. `ssh agent-01` is `5.161.74.39`. Do not point `agent-01-claude` at `agent-02`.
 
@@ -78,7 +78,6 @@ reason here, so the next reader can tell an exception from a mistake.
 | agent-03-claude | 178.156.222.220 | retiring (pending snapshot + delete) |
 | agent-04-claude | 5.161.73.195 | retiring (pending snapshot + delete) |
 | agent-10-codex | 87.99.148.22 | retiring (pending snapshot + delete) |
-| agent-11-codex | — | retiring (pending snapshot + delete) |
 | agent-13-monitor | — | retiring (pending snapshot + delete) |
 | monitor-01-deepseek | 178.156.219.232 | retiring (pending snapshot + delete) |
 | agent-01-grok | 5.161.83.78 | retiring (pending snapshot + delete) |
@@ -86,7 +85,7 @@ reason here, so the next reader can tell an exception from a mistake.
 | prompt-01-astra | 5.161.243.18 | retiring (pending snapshot + delete) |
 | agent-team-01-astra | 5.161.80.75 | retiring (pending snapshot + delete) |
 
-Footnotes: Linux hostname on `agent-06-claude` is `agent-06-claude`. `agent-10-codex` Linux hostname may still be `agent-20`. `monitor-01-deepseek` Linux hostname may still be `agent-40`. `5.161.189.143` is `openreplay-01`. Live ops (`grotap-status`, `cloudflared`, `review-gate.timer`, deploy-ops crons) run on `agent-06-claude`. `agent-11-codex` and `agent-13-monitor` have no IPv4 in this file (`ssh-key-for.sh` maps the names only). Grok addresses are the ones in that table.
+Footnotes: Linux hostname on `agent-06-claude` is `agent-06-claude`. `agent-10-codex` Linux hostname may still be `agent-20`. `monitor-01-deepseek` Linux hostname may still be `agent-40`. `5.161.189.143` is `openreplay-01`. Live ops (`grotap-status`, `cloudflared`, `review-gate.timer`, deploy-ops crons) run on `agent-06-claude`. `agent-13-monitor` has no IPv4 in this file (`ssh-key-for.sh` maps the name only). `agent-11-codex` is a retired name: do not re-create it and do not re-add it. Grok addresses are the ones in that table.
 
 ## Active dispatch pool
 
@@ -136,7 +135,8 @@ Team Codex seats are **active** on `agent-22-shared` (`178.156.215.173`). The bo
 | Server | IP | Hardware / DC | Purpose | Execute slots |
 |---|---|---|---|---|
 | agent-10-codex | 87.99.148.22 | cpx21, Ashburn (id 148646754). Cloud name `agent-10-codex`. Linux hostname may still be `agent-20`. **retiring (pending snapshot + delete)** | Team Builder — GPT Codex via OpenRouter (was Team 2 open-model executor) | 3 |
-| agent-11-codex | — | **retiring (pending snapshot + delete)**. No IPv4 in this file | Second Codex builder. Not a reserved name | — |
+
+**`agent-11-codex` is a retired name.** It must never be re-created or re-added. Do not provision a server by that name, and do not put it back on a roster.
 
 Baseline: Ubuntu 24.04, agent user, node 22, doppler CLI + `git-credential-doppler`, aider (pipx),
 4 GiB swap, `~/grotap-agents` + `~/grotap-platform` clones, `~/worktrees`. Scale Team Builder by adding
@@ -234,6 +234,7 @@ One active account (**K0281854926**, console.hetzner.cloud). Verified via API 7/
 - **prompt-01-claude** (`178.156.209.112`, Hetzner server ID 149250118, Hetzner project `ClaudeCode`, was `claudecode-01` / `claude-code-01`, DNS `claudecode.grotap.com`). **Deleted 2026-09-26.** Hetzner has no server by that name. Not `prompt-01-astra`.
 - **Deleted agent-01** (5.161.189.143, deleted 6/29 — IP recycled to openreplay-01, former cobrowse-01). That address is not `agent-01-claude`. `agent-01-claude` is `5.161.74.39` and is retiring (pending snapshot + delete). · **agent-07** (89.167.66.105, gone with cancelled account) · **agent-08** (77.42.42.213, deleted; old dispatch box). Live ops is `agent-06-claude`.
 - **agent-05-claude** (former Hillsboro address `5.78.178.81`). **Deleted 2026-09-26.** Hetzner can reassign that address. Do not put it on a health, monitor, or fleet roster.
+- **agent-11-codex** — retired name. It was reserved for a second Codex builder and has no metal. Must never be re-created or re-added.
 - **agent-09/10/11** (46.62.184.50/.52/.51, Robot EX44s) — cancelled in Hetzner **Robot** 6/29 (separate from cloud console); they answer ping until their termination date, then get wiped. Verify each shows a cancellation date in Robot.
 
 ## New-server onboarding
