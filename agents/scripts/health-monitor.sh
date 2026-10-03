@@ -67,10 +67,9 @@ fi
 # /home/agent/.ssh/grotap_from06_claude instead, which is the seat key, so
 # the roster uses the cloud name.
 AGENTS=(
-  "agent-01-claude:5.161.74.39"
-  "agent-02-claude:5.161.81.193"
-  "agent-03-claude:178.156.222.220"
-  "agent-04-claude:5.161.73.195"
+  # The agent-01..04 claude boxes were deleted (G6b, 2026-09-26..10-03). The
+  # first one's address now belongs to openreplay-02 and the other three are
+  # released. Do not re-add them (see health-monitor.test.sh banned list).
   "agent-06-claude:5.161.53.103"
   "agent-21-shared:5.161.119.92"
   "agent-22-shared:178.156.215.173"

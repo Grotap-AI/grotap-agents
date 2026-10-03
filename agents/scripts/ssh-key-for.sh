@@ -144,7 +144,10 @@ _ssh_key_for_is_ops_host() {
 #   agent-11-codex 178.156.222.217, agent-13-monitor 178.156.212.74
 #   openreplay-01 5.161.189.143 (deleted 2026-10-03)
 declare -A _SSH_KEY_FOR_HOST_BY_IP=(
-  ["5.161.74.39"]="agent-01-claude"
+  # 5.161.74.39 was agent-01-claude. That box was deleted and Hetzner recycled
+  # the address to openreplay-02 (id 168488339) on 2026-10-02. The
+  # agent-01-claude name row stays.
+  ["5.161.74.39"]="openreplay-02"
   ["5.161.53.103"]="agent-06-claude"
   ["agent-01-claude"]="agent-01-claude"
   ["agent-02-claude"]="agent-02-claude"
@@ -197,8 +200,13 @@ declare -A _SSH_KEY_FOR_HOST_BY_IP=(
   ["team-astra-01"]="agent-team-01-astra"
   ["ops-01"]="agent-06-claude"
   ["openreplay-ai-support-01"]="openreplay-ai-support"
-  ["supportagents.grotap.com"]="openreplay-01"
-  ["openreplay-01"]="openreplay-01"
+  # openreplay-02 (ccx23, 5.161.74.39) took over supportagents.grotap.com on
+  # 2026-10-02. It carries the authorized_keys of the old OpenReplay box, so
+  # key_file_stems maps it to the existing cobrowse-01 key files.
+  # openreplay-01 (5.161.189.143) was deleted 2026-10-03 00:26 PT. Its name
+  # and IP are not mapped (Hetzner recycles released addresses).
+  ["supportagents.grotap.com"]="openreplay-02"
+  ["openreplay-02"]="openreplay-02"
   ["178.156.199.83"]="openreplay-ai-support"
   ["openreplay-ai-support"]="openreplay-ai-support"
 )
