@@ -275,23 +275,30 @@ echo "queue: $QUEUE reviewable cases (change_review + parked awaiting_review)"
 [[ "$QUEUE" =~ ^[0-9]+$ ]] || { echo "FATAL: QUEUE is non-numeric ('$QUEUE') — accessor broken"; exit 1; }
 if [ "$QUEUE" = "0" ]; then echo "queue empty — nothing to do"; exit 0; fi
 
-# Run Claude with the standing task. Doppler injects DATABASE_URL etc. for the
-# psql/API calls the task makes. Bypass permissions: this box is a headless runner.
+# Run Claude with the standing task. Doppler injects only the allowlisted names
+# below for the psql/API calls the task makes. Bypass permissions: this box is a
+# headless runner.
 cd "$PLATFORM_REPO"
 # From here on the Claude run may have claimed rows, so the EXIT trap must release
 # them. Set BEFORE the invocation, not after: the timeout SIGKILL is exactly the
 # path that needs the release, and it never returns to the next line.
 CLAUDE_LAUNCHED=1
-# review-gate-task.md is byte-stable. Doppler injects prd into the child it
-# starts, which is after any unset in this shell, so the helper has to run
-# inside that child and exec claude itself. A parent unset does not stick.
+# review-gate-task.md is byte-stable. Doppler injects the allowlisted names into
+# the child it starts, after anything this shell unsets, so the cache helper
+# runs inside that child and execs claude itself.
 _CACHE_SH="$(cd "$(dirname "$0")" && pwd)/claude-prompt-cache.sh"
 # item 22: the model child gets ONLY the names it needs, not all of prd
-# (258 names incl. admin keys and other Doppler tokens). ANTHROPIC_API_KEY
-# authenticates claude; NODE_SECRET is for the report-progress.sh callbacks
-# the task makes. Override with REVIEW_GATE_ONLY_SECRETS (comma list).
+# (258 names incl. admin keys and other Doppler tokens):
+#   ANTHROPIC_API_KEY  authenticates claude
+#   DATABASE_URL       the §0 claim / release psql in review-gate-task.md
+#   NODE_SECRET        X-Node-Secret for gate-route-back and report-progress.sh
+#   GITHUB_TOKEN       git fetch/push of the case branches
+# The task reads these straight from its environment. It must NOT wrap a
+# command in its own `doppler run -- cmd "$VAR"`: the shell expands "$VAR"
+# before doppler starts, so a name missing here arrives as an empty string.
+# Override with REVIEW_GATE_ONLY_SECRETS (comma list).
 timeout "$TIMEOUT_SECS" doppler run --project grotap --config prd \
-  --only-secrets "${REVIEW_GATE_ONLY_SECRETS:-ANTHROPIC_API_KEY,NODE_SECRET}" -- \
+  --only-secrets "${REVIEW_GATE_ONLY_SECRETS:-ANTHROPIC_API_KEY,NODE_SECRET,DATABASE_URL,GITHUB_TOKEN}" -- \
   env -u DOPPLER_TOKEN bash "$_CACHE_SH" \
   claude -p "$(cat "$TASK")" \
     --permission-mode bypassPermissions \
