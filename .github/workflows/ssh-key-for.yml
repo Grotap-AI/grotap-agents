@@ -17,6 +17,12 @@ jobs:
       - name: health-monitor key fail-closed
         run: bash agents/scripts/health-monitor.test.sh
 
+      - name: orchestrator-run git auth never rewrites helpers
+        run: bash agents/tests/test_git_auth_no_rewrite.sh
+
+      - name: orchestrator-run security
+        run: bash agents/tests/test_orchestrator_run_security.sh
+
       - name: Twin drift guard
         run: |
           # These sums match grotap-platform (scan-01 + mdm-01 key rows, 2026-10-03).
