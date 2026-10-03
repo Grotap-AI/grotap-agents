@@ -62,12 +62,15 @@ for ENTRY in "${AGENTS[@]}"; do
 
   # 2) Ensure the `agent` user's Doppler CLI has the fleet token (push-auth).
   if [ -n "$FLEET_TOKEN" ]; then
-    DOP=$(ssh -i "$SSH_KEY" -o ConnectTimeout=5 -o StrictHostKeyChecking=no "root@$IP" \
-      "su - agent -c 'doppler configure set token \"$FLEET_TOKEN\" --scope / --silent >/dev/null 2>&1; doppler secrets get GITHUB_TOKEN --project grotap --config prd --plain 2>&1 | head -c 10'" 2>&1)
-    if printf '%s' "$DOP" | grep -q '^github_pat'; then
+    # The token goes over ssh stdin (never on a command line, local or remote),
+    # and the remote side prints only OK or FAIL: no token bytes, not even a
+    # prefix, reach this terminal or its logs.
+    DOP=$(printf '%s\n' "$FLEET_TOKEN" | ssh -i "$SSH_KEY" -o ConnectTimeout=5 -o StrictHostKeyChecking=no "root@$IP" \
+      "su - agent -c 'doppler configure set token --scope / --silent >/dev/null 2>&1; if doppler secrets get GITHUB_TOKEN --project grotap --config prd --plain 2>/dev/null | grep -q ^github_pat; then echo OK; else echo FAIL; fi'" 2>/dev/null | tail -1)
+    if [ "$DOP" = "OK" ]; then
       echo "  ·  ✓ doppler push-auth OK"
     else
-      echo "  ·  ✗ doppler push-auth FAILED ($DOP)"
+      echo "  ·  ✗ doppler push-auth FAILED"
     fi
   else
     echo "  ·  (doppler bootstrap skipped — no token)"
