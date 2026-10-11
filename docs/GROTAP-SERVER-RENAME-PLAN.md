@@ -57,7 +57,7 @@ Number bands for agents:
 | **cobrowse-runner.service** on openreplay-01 | **Disable & remove** now (service, not the whole VM) | As soon as you approve ops cleanup | Broken (404/500 claims); product policy is NO cobrowse |
 | **agent-05-claude** (today `05-Agent`) | Keep name, leave **powered off** or delete if you will not use a 5th Claude worker | Optional | Already off - only pay storage/IP if Hetzner still bills the off VM |
 | Cobrowse.io dependency / any cobrowse app paths | Already policy: never restore | Ongoing | Replaced by OpenReplay Assist + MDM remote for tablets |
-| Old missing boxes (agent-21/41, GPU/Team3, Lane C) | Already gone - do not recreate under old names | - | Leaner fleet is intentional |
+| Old missing boxes (agent-21/41, Team3) | Already gone - do not recreate under old names | - | Leaner fleet is intentional |
 
 **Do not retire:** mdm-01, openreplay-01 (after rename), Claude agents 01-04/06, agent-10-codex, monitor-01-deepseek, forge/maps/scan. `prompt-01-claude` (was claude-code-01, `178.156.209.112`) was deleted 2026-09-26.
 

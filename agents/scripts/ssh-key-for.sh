@@ -131,7 +131,7 @@ _ssh_key_for_is_ops_host() {
 # onto a grotap_agent-02 file. Every TEAM_POOL host has a row. Astra and Team
 # Grok do not fall through to the shared farm key.
 # agent-21 / agent-31 / agent-41 were deleted 2026-09-16. agent-30
-# (167.233.59.142) and llm-gpu-02 (178.63.124.99) were deleted 2026-09-20.
+# (167.233.59.142) was deleted 2026-09-20.
 # Deleted 2026-09-26 and not mapped (Hetzner recycles the addresses):
 #   agent-05-claude 5.78.178.81
 #   prompt-01-claude / claude-code-01 / claudecode-01 178.156.209.112
@@ -180,9 +180,8 @@ declare -A _SSH_KEY_FOR_HOST_BY_IP=(
   # checked against the Hetzner API 2026-09-27 (farm project).
   ["agent-11-codex"]="agent-11-codex"
   ["agent-13-monitor"]="agent-13-monitor"
-  # agent-21/31/41 REMOVED 2026-09-16, agent-30 (167.233.59.142) and
-  # llm-gpu-02 (178.63.124.99) REMOVED 2026-09-20: those Hetzner servers were
-  # deleted or cancelled and their IPs released. Hetzner recycles released IPs,
+  # agent-21/31/41 REMOVED 2026-09-16, agent-30 (167.233.59.142) REMOVED
+  # 2026-09-20: those Hetzner servers were deleted and their IPs released. Hetzner recycles released IPs,
   # so mapping one to a fleet host name would offer a fleet key to a stranger.
   # agent-05-claude (5.78.178.81) and prompt-01-claude (178.156.209.112)
   # were deleted 2026-09-26. Hetzner recycles released addresses, so do not
@@ -190,7 +189,7 @@ declare -A _SSH_KEY_FOR_HOST_BY_IP=(
   ["5.161.107.80"]="maps-01"
   # forge-01's address (restored in #175) and its name. Both stay. A
   # missing per-host key falls through to the shared fleet key — see the
-  # header: maps-01/forge-01/GEX131 keep working off grotap_agents until
+  # header: maps-01/forge-01 keep working off grotap_agents until
   # a per-host pair exists. No grotap_forge-01 key is deployed.
   ["178.156.246.81"]="forge-01"
   ["forge-01"]="forge-01"
@@ -455,7 +454,7 @@ done
 # Astra is per-host only. A missing file must not offer the shared farm key.
 # forge-01 and agent-06 have no own key deployed (no grotap_forge-01,
 # no grotap_from06_agent-06). They stay off this list and fall through
-# to grotap_agents, matching the header note on maps-01/forge-01/GEX131.
+# to grotap_agents, matching the header note on maps-01/forge-01.
 case "$canon" in
   prompt-01-astra|agent-team-01-astra|agent-21-shared|agent-22-shared|agent-01-grok|agent-02-grok|agent-11-codex|agent-13-monitor)
     if [[ -n "$from_suffix" ]]; then
