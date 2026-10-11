@@ -925,6 +925,40 @@ rollback section below depends on GitHub never being more than ten minutes behin
 depends on the push mirror outright — it *is* the deploy path. **Nothing may be cut over until the
 push mirror is configured and proven**, in the direction opposite to today's.
 
+#### When one is created it MUST carry a branch filter — and the filter has limits
+
+The create payload and the canary run are in `forge-push-mirror-procedure.md` (§2, §5 step 4, §7.5).
+These points from the 2026-09-16 source read are not recorded there:
+
+- `grotap-platform` carried **712 branches on the forge, 653 of them `case-CASE-*`** agent branches
+  (GitHub had 713, counted 2026-09-16 — the forge's branches *are* GitHub's, arrived by pull mirror).
+  After cutover the forge is where new agent branches are born, so a filterless push mirror would fan
+  every one of them back into GitHub forever.
+- Verified against the running Forgejo 13.0.5 (`GET /swagger.v1.json`) and
+  `services/mirror/mirror_push.go` at tag `v13.0.5`: `branch_filter` is **comma-separated**, and each
+  entry is expanded literally into one git refspec `+refs/heads/<entry>:refs/heads/<entry>`. Glob
+  entries work because git refspecs take wildcards, not because Forgejo globs.
+- **A branch filter does not restrict tags.** `+refs/tags/*:refs/tags/*` is appended unconditionally
+  in every case.
+- **There is no PATCH/PUT endpoint for push mirrors.** The API exposes only `GET`, `POST` and
+  `DELETE /repos/{owner}/{repo}/push_mirrors[/{name}]`. A filter set wrong can only be corrected in the
+  web UI (Settings → Repository → Mirror Settings, which calls `UpdatePushMirrorBranchFilter`) or by
+  deleting the mirror and re-creating it. **Get it right in the create call.**
+
+After creating one, confirm on the box that git agrees — the refspec list is the real control, not the
+API row:
+
+```bash
+ssh root@178.156.246.81 \
+  "git -C /opt/forge/forgejo/git/repositories/grotap-ai/<repo>.git config --get-all remote.<remote_name>.push"
+# expect exactly: +refs/heads/master:refs/heads/master
+#                 +refs/tags/*:refs/tags/*
+# a line reading +refs/heads/*:refs/heads/* means the filter did NOT take — delete and re-create
+```
+
+Read `<remote_name>` from `GET .../push_mirrors`; Forgejo generates it (e.g. `remote_mirror_…`), it is
+not the remote host name.
+
 ### Fleet references that a push-path move would break
 
 These read GitHub directly and are not fixed by changing a remote:

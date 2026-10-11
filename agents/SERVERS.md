@@ -235,11 +235,112 @@ One active account (**K0281854926**, console.hetzner.cloud). Verified via API 7/
 - **agent-09/10/11** (46.62.184.50/.52/.51, Robot EX44s) — cancelled in Hetzner **Robot** 6/29 (separate from cloud console); they answer ping until their termination date, then get wiped. Verify each shows a cancellation date in Robot.
 
 ## New-server onboarding
-1. `ssh -i ~/.ssh/grotap_agents root@<IP>`; add a `Host` alias for the **Cloud name** (`agent-01-claude`, `agent-10-codex`, `monitor-01-deepseek`, `openreplay-01`, …). `prompt-01-claude` was deleted 2026-09-26 — do not add an alias for it. Short names `agent-01` … `agent-06` may also exist; each one is the same IP as `agent-01-claude` … `agent-06-claude`, and none of them is a Hetzner name. A brand-new box has no per-host key yet, so this first-contact step always uses the shared fleet key regardless of the SSH key retirement above — that's expected, not a regression.
+1. First contact: `ssh -i <the key you gave Hetzner at create time> root@<IP>`; add a `Host` alias for the **Cloud name** (`agent-01-claude`, `agent-10-codex`, `monitor-01-deepseek`, `openreplay-01`, …). `prompt-01-claude` was deleted 2026-09-26 — do not add an alias for it. Short names `agent-01` … `agent-06` may also exist; each one is the same IP as `agent-01-claude` … `agent-06-claude`, and none of them is a Hetzner name. A brand-new box has no per-host key yet, so this first-contact step uses whichever key was injected at provisioning. Do NOT assume `~/.ssh/grotap_agents` still works — the shared fleet key is being retired and has already been left out of at least one new box's `authorized_keys` (2026-09-20). Register the real keys in step 5 before anything automated talks to the box.
 2. `bash agents/ensure-swap.sh` (script lives in THIS repo — canonical copy; persistent 4 GiB swap — idempotent; OOM has wedged two boxes). No checkout on the box yet? Run it from your local clone: `ssh agent-01-claude "bash -s" < agents/ensure-swap.sh`.
 3. Git auth: install `/home/agent/bin/git-credential-doppler` as `credential.helper` (per GLOBAL) — never a static token.
 4. Add to `agents/config.sh` (IP, roles, overflow flag); verify it appears in `./agents/server-status.sh` before dispatching.
-5. If provisioning a per-host key pair for this box (SSH key retirement, phase 2b started 2026-09-16): add its entry to the `HOST_BY_IP` table in `agents/scripts/ssh-key-for.sh` (kept in BOTH grotap-agents and grotap-platform — see that file's header), and drop `grotap_from<source>_<this-host>` into `~/.ssh/` for both `root` and `agent` on the source box. Until that exists, every script that talks to this host goes on resolving to the shared fleet key automatically — no code change required.
+5. **Register the box's SSH key in all four places below before you dispatch anything to it.** This is
+   no longer optional housekeeping: see "SSH key registration" immediately below.
+
+## SSH key registration — the four places (mandatory for every new box)
+
+A new fleet host is only reachable once its key is registered in four separate places. There is no
+generator that does this for you: every one of these steps is a deliberate manual edit. Miss any of
+them and the box does not report an authentication error — it reports as unreachable, which is why
+this drift has gone unnoticed for days before.
+
+**1. The orchestrator's Railway variable.** The LangGraph orchestrator on Railway reads each host's
+private key, base64-encoded, from an environment variable (`ssh_private_key_for` in
+`orchestrator/src/config.ts`, grotap-platform). Which variable depends on the host:
+- a host named `agent-NN` or `agent-NN-<role>` derives `SSH_PRIVATE_KEY_AGENT_<NN>_B64` from its two
+  digits (`agent-04-claude` → `SSH_PRIVATE_KEY_AGENT_04_B64`) — always two digits, uppercase, `_B64`;
+- a host whose name cannot derive a variable, or whose digits belong to another box, is listed in
+  `NAMED_HOST_KEY_VARS` with its own variable (e.g. `agent-team-01-astra` →
+  `SSH_PRIVATE_KEY_AGENT_TEAM_01_ASTRA_B64`); a mapped host takes only that variable and never the
+  shared key;
+- a dedicated seat user on a shared host reads `SSH_PRIVATE_KEY_<USER>_B64` and never the shared key.
+
+A new host that fits none of these has no per-host key path in the orchestrator — add it to
+`NAMED_HOST_KEY_VARS` or it will use the shared key or fail.
+
+**2. The IP→host map in `agents/scripts/ssh-key-for.sh`.** The table `_SSH_KEY_FOR_HOST_BY_IP` turns
+whatever token a caller holds — an IP, a DNS name, `root@host` — into the canonical fleet host name the
+key filename is built from. A host absent from this table is not an error; it falls through to the
+shared-key step.
+
+**3. `SSH_KEY_HOST_BY_IP` in `agents/status-server.js`** (grotap-platform). A *second*, independently
+maintained copy of the same host table, re-implemented in JavaScript for the status server ("Same rows
+as ssh-key-for.sh"). It has already drifted from the shell resolver more than once. Adding a host to one
+and not the other is the normal way this breaks.
+
+**4. The orchestrator's PUBLIC key in `/home/agent/.ssh/authorized_keys` on the new box.** The three
+places above are the outbound half — which private key we offer. This is the inbound half: without it
+Railway cannot open a session at all, no matter how correctly the variable is named. It is the step most
+often forgotten because nothing in the repo records it.
+
+### Two copies of ssh-key-for.sh, and which one is current
+
+`agents/scripts/ssh-key-for.sh` exists in **both** grotap-agents and grotap-platform and must be
+byte-identical (see the TWIN FILE note in its header). The duplication is deliberate — callers live in
+both repos (dispatch.sh, config.sh, update-fleet-cli.sh and reconcile_dispatch.py on the platform side;
+health-monitor.sh, sync-all-agents.sh and setup-agent06.sh on the agents side) and neither repo reaches
+across a guessed checkout path. Duplication is the design; *silent* duplication is the defect.
+
+**This drifted once and it was expensive.** Until 2026-09-20 the published grotap-agents copy carried
+only five host rows while the grotap-platform copy carried fourteen, so seven hosts (forge-01 and
+maps-01 among them) resolved to the retired shared key for every consumer that ran out of the
+grotap-agents checkout, `health-monitor.sh` above all. Commit `f4ccb58` in grotap-agents reconciled the
+two copies. Treat grotap-platform as the current one if they ever disagree again: that is where
+per-host-key work lands first — but confirm with `git log` in both repos before copying.
+
+**Verify, do not assume.** Run
+
+```bash
+bash agents/scripts/ssh-key-for.twin-check.sh
+```
+
+It diffs the two checkouts against **each other** (never a file against itself, and it fails rather
+than skips when it cannot find the twin), and it covers `ssh-key-for.sh`, its test, and itself.
+Compare published copies — `git show origin/master:agents/scripts/ssh-key-for.sh` in each repo —
+rather than working trees, because a local branch can make the two look identical while the published
+copies differ.
+
+### The failure mode: a key-registration miss looks like an unreachable host
+
+When a host is missing from the resolver's table, `ssh-key-for.sh` falls through to the shared fleet
+key `~/.ssh/grotap_agents`; the connection is attempted with a credential the host may no longer accept,
+and it simply fails. The host then surfaces in monitoring as UNREACHABLE — indistinguishable from a box
+that is down, a firewall change, or a network fault. **Read an unreachable fleet host as a possible
+key-registration miss** and check these four places before you go looking at the box itself.
+
+The fallthrough announces itself: `ssh-key-for.sh` writes a line to **stderr** when it hands back the
+shared key for a target it does not recognise:
+
+```
+ssh-key-for: WARNING: no per-host key for <target> -- falling back to the RETIRED shared key ...
+```
+
+The literal target `agents` is the shared key by name and stays quiet. If the shared key file itself is
+missing or unreadable the resolver exits 1 and names the path — callers must not substitute
+`grotap_agents` themselves. Running the resolver by hand is the quickest way to tell a key miss from a
+dead box:
+
+```bash
+bash agents/scripts/ssh-key-for.sh <host-or-IP>   # a WARNING line means place 2 is the one you missed
+```
+
+The orchestrator warns too: `config.ts` logs a fallback-to-SHARED warning when a host has no
+`SSH_PRIVATE_KEY_AGENT_<NN>_B64`, a separate warning when the variable does not decode to a PEM key, and
+throws `MissingSshKeyError` when there is neither a per-host key nor a shared key. Those lines in the
+Railway logs are the fastest confirmation that place 1 is the one you missed.
+
+### The shared-key fallback is disappearing
+
+The fallback is not a safety net any more. The shared key `grotap_agents` is being retired — it was
+left out of a new Ashburn box's `authorized_keys` outright on 2026-09-20, and named/seat hosts already
+refuse it. "Falls back to the shared key" is becoming "falls back to nothing". Any host still relying on
+that fallthrough is already broken or about to be, which is what makes all four registration points
+mandatory rather than best-effort.
 
 ## Shared-host ggshield pre-commit hook
 

@@ -7,9 +7,19 @@
 
 ## Inventory
 
+> **Updated 2026-10-11 (verified via Neon API + Doppler `grotap/prd`):** the control plane moved on
+> 2026-09-20 from `green-rice-76766370` (us-west-2) to `raspy-block-90057530` "Grotap Platform East"
+> (aws-us-east-1). Doppler prd `DATABASE_URL` and `DATABASE_URL_EAST` both point at endpoint
+> `ep-fancy-shape-awkq4a6y` (East). `green-rice-76766370` still exists (the planned 2026-09-21 deletion
+> did not happen); Doppler prd `DATABASE_URL_WEST` still points at its endpoint `ep-lively-hall-akihzj70`.
+> Evidence below that cites `green-rice-76766370` is the original 2026-07-04 audit and is left as the
+> historical record. Projects created since that audit (e.g. the `-east` tenant/shard projects) are not
+> yet in this table.
+
 | Project ID | Name | Region | Purpose | Referenced by | Verdict | Keep / Delete-proposed |
 |---|---|---|---|---|---|---|
-| `green-rice-76766370` | Grotap Platform | us-west-2 | Control plane DB | Everything (DATABASE_URL, app backend) | REFERENCED | **KEEP** |
+| `raspy-block-90057530` | Grotap Platform East | aws-us-east-1 | Control plane DB (endpoint `ep-fancy-shape-awkq4a6y`) | Everything (DATABASE_URL, app backend) | REFERENCED | **KEEP** |
+| `green-rice-76766370` | Grotap Platform | us-west-2 | **Former** control plane DB (endpoint `ep-lively-hall-akihzj70`) — cut over to East 2026-09-20; still exists as of 2026-10-11 | Doppler prd `DATABASE_URL_WEST` only | RETIRED (rollback copy) | Deletion owner-gated |
 | `proud-union-74070434` | grotap-tenant-grotap | us-west-2 | GroTap tenant DB | `tenants.neon_project_id` (GroTap) | REFERENCED | **KEEP** |
 | `cool-wave-48964273` | tenant-org_01KW8JP2P21CVVGHEP808T847C | us-east-1 | Manor View Farm tenant DB | `tenants.neon_project_id` (Manor View Farm) | REFERENCED | **KEEP** |
 | `dry-scene-84148651` | rfid-pipe-knowledge | us-west-2 | App knowledge DB (canonical copy) | Doppler `RFID_PIPE_KNOWLEDGE_DB_URL` prd+dev (endpoint `ep-wild-pine-akam1cxh`) | REFERENCED (config only — no code reads the var yet) | **KEEP** |

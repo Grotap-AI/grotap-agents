@@ -16,7 +16,7 @@ Multi-tenant AI-powered ERP/SaaS platform. Every feature is a discrete app; tena
 | Frontend (React + Vercel) | apps.grotap.com / agents.grotap.ai |
 | Backend (FastAPI + Railway) | api.grotap.com |
 | Marketing site (Vercel, grotap-landing repo) | grotap.com |
-| Control plane DB (Neon) | `green-rice-76766370` |
+| Control plane DB (Neon) | `raspy-block-90057530` — "Grotap Platform East", `aws-us-east-1` (moved 2026-09-20 from `green-rice-76766370` / us-west-2, which still exists as of 2026-10-11) |
 | Reports (GitHub Pages) | grotap1.github.io/Reports |
 
 ## Current State (2026-07-05)
