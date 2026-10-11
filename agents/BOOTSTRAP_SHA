@@ -331,4 +331,31 @@
 #   Per step 5 this rotation commit is itself unblessed. Hosts run
 #   56f6d3d, which contains the GLOBAL freeze. That is the known steady
 #   state, not a fault to chase.
-56f6d3d6d888fcef74bdb8130e163ecb61b6bc12
+#
+#   Rotated 2026-10-11 (owner-approved, second of the day) from
+#   56f6d3d6d888fcef74bdb8130e163ecb61b6bc12 to
+#   f4bb99fa3198f20df1b11161aa67abd2f832f185 (#39), the live master tip
+#   resolved from the REMOTE with git ls-remote. Strict descendant of the
+#   outgoing pin (git merge-base --is-ancestor 56f6d3d f4bb99f, exit 0).
+#   Already on refs/heads/master, so a squash merge of this rotation is safe.
+#   Reviewed before blessing, range 56f6d3d..f4bb99f (7 commits: 4edce0a
+#   prior pin, #34-#39, all docs/cleanup):
+#     agents/scripts/orchestrator-run.sh UNTOUCHED; bash -n clean at f4bb99f.
+#     BOOTSTRAP.md (#39): retitled fleet/jumpbox init; step 1 skips the pull
+#       on fleet hosts (runner syncs and pins); old step 5 handoff-staleness
+#       check dropped; load order defers to AGENTS.md; dispatch-frozen note;
+#       raw-IP SSH examples replaced by a pointer to SERVERS.md. No new
+#       commands beyond existing ones.
+#     agents/GLOBAL.md (#39): header points at AGENTS.md load order; Control
+#       Neon id now raspy-block-90057530 (aws-us-east-1); Dispatch FROZEN
+#       paragraph (auto_assign=false, PIPELINE-FIRST resumes on unfreeze);
+#       "no git add -A" moved from the Fleet line into the Git line.
+#       Rules 1-11 unchanged. No secret material.
+#     Also in the tree: AGENTS.md/GEMINI.md/BOT.md/.gemini settings (#35),
+#       SERVERS.md host renames (#38), dead GPU references removed from
+#       ssh-key-for.sh comments (#34, comment-only) plus a new
+#       ssh-key-for.twin-check.sh, lessons/*.md one-liners, docs.
+#   This rotation commit touches only this file, so no second rotation is
+#   needed: the shipped change (#38/#39) is inside the pinned tree. Hosts
+#   run f4bb99f; the tip sits one commit past it, the known steady state.
+f4bb99fa3198f20df1b11161aa67abd2f832f185
