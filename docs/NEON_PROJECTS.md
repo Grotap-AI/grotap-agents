@@ -13,14 +13,20 @@
 > `ep-fancy-shape-awkq4a6y` (East). `green-rice-76766370` still exists (the planned 2026-09-21 deletion
 > did not happen); Doppler prd `DATABASE_URL_WEST` still points at its endpoint `ep-lively-hall-akihzj70`.
 > Evidence below that cites `green-rice-76766370` is the original 2026-07-04 audit and is left as the
-> historical record. Projects created since that audit (e.g. the `-east` tenant/shard projects) are not
-> yet in this table.
+> historical record. The tenant databases moved east the same day (`docs/NEON-TENANT-EAST-CUTOVER-20260920.md`
+> in grotap-platform): the Neon API now lists **13 projects**, and the three created since the July audit
+> (`frosty-morning-27784024`, `frosty-hall-15953008`, `withered-firefly-51409214`) are in the table below.
+> Control plane check 2026-10-11: `tenants.neon_project_id` for GroTap = `frosty-morning-27784024`;
+> `tenant_shards` shard 1 `neon_project_id` = `frosty-hall-15953008`.
 
 | Project ID | Name | Region | Purpose | Referenced by | Verdict | Keep / Delete-proposed |
 |---|---|---|---|---|---|---|
 | `raspy-block-90057530` | Grotap Platform East | aws-us-east-1 | Control plane DB (endpoint `ep-fancy-shape-awkq4a6y`) | Everything (DATABASE_URL, app backend) | REFERENCED | **KEEP** |
 | `green-rice-76766370` | Grotap Platform | us-west-2 | **Former** control plane DB (endpoint `ep-lively-hall-akihzj70`) — cut over to East 2026-09-20; still exists as of 2026-10-11 | Doppler prd `DATABASE_URL_WEST` only | RETIRED (rollback copy) | Deletion owner-gated |
-| `proud-union-74070434` | grotap-tenant-grotap | us-west-2 | GroTap tenant DB | `tenants.neon_project_id` (GroTap) | REFERENCED | **KEEP** |
+| `frosty-morning-27784024` | grotap-tenant-grotap-east | aws-us-east-1 | GroTap tenant DB (endpoint `ep-delicate-silence-auk3ejss`), created 2026-09-20 | `tenants.neon_project_id` (GroTap) | REFERENCED | **KEEP** |
+| `proud-union-74070434` | grotap-tenant-grotap | us-west-2 | **Former** GroTap tenant DB (endpoint `ep-jolly-thunder-aklzabzm`) — cut over to `frosty-morning-27784024` 2026-09-20 | Doppler prd `TENANT_GROTAP_DSN_WEST_ROLLBACK`, `TENANT_GROTAP_APP_DSN_WEST_ROLLBACK` only | RETIRED (rollback copy) | Deletion owner-gated |
+| `frosty-hall-15953008` | grotap-shard-1-east | aws-us-east-1 | Pooled-tenant shard 1 (`tenant_shards.shard_id = 1`, endpoint `ep-icy-king-av1uoiqf`), created 2026-09-20 | `tenant_shards.neon_project_id` (shard 1) | REFERENCED | **KEEP** |
+| `withered-firefly-51409214` | grotap-shard-1 | us-west-2 | **Former** pooled-tenant shard 1 (endpoint `ep-weathered-violet-a67plavf`), created 2026-07-05 — cut over to `frosty-hall-15953008` 2026-09-20 | Doppler prd `SHARD1_DSN_WEST_ROLLBACK`, `SHARD1_APP_DSN_WEST_ROLLBACK` only | RETIRED (rollback copy) | Deletion owner-gated |
 | `cool-wave-48964273` | tenant-org_01KW8JP2P21CVVGHEP808T847C | us-east-1 | Manor View Farm tenant DB | `tenants.neon_project_id` (Manor View Farm) | REFERENCED | **KEEP** |
 | `dry-scene-84148651` | rfid-pipe-knowledge | us-west-2 | App knowledge DB (canonical copy) | Doppler `RFID_PIPE_KNOWLEDGE_DB_URL` prd+dev (endpoint `ep-wild-pine-akam1cxh`) | REFERENCED (config only — no code reads the var yet) | **KEEP** |
 | `wispy-sky-20074345` | grotap-platform-rules | us-east-2 | Platform rules DB (canonical copy) | Doppler `PLATFORM_RULES_DB_URL` prd+dev (endpoint `ep-lively-sound-aj36xban`); code: `ingestion-worker/src/functions/platformRulesQuery.ts`, `agent-worker/src/agents/nodes/platformRulesPrecheck.ts` | REFERENCED | **KEEP** |
