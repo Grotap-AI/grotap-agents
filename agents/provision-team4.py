@@ -3,8 +3,8 @@
 agent-41 was deleted 2026-09-16. Do not recreate agent-40 or agent-41.
 
 Owner-approved 2026-07-13 ("execute all of your plan", docs/GPT56_SOL_TEAM4_PLAN.md):
-2x cpx21 in ASH (Ashburn) — inference is OpenRouter-hosted (openai/gpt-5.6-*), so no
-GPU-LAN adjacency needed and Ashburn is ~1/3 the FSN1 price. No private network attach
+2x cpx21 in ASH (Ashburn) — inference is OpenRouter-hosted (openai/gpt-5.6-*), so
+Ashburn is fine and ~1/3 the FSN1 price. No private network attach
 (team2-llm-lan is eu-central; ash cannot join — same reason team2 boxes aren't on it).
 Uses HETZNER_FARM_API_TOKEN. Idempotent.
 

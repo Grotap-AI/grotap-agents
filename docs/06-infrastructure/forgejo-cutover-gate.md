@@ -553,7 +553,7 @@ this work:
 - Update `agents/SERVERS.md`, which still documents the shared key as the root SSH method. It needs
   **two** greps, because the file records the key in two different forms: `grotap_agents` finds the
   literal invocation (one occurrence), and `fleet key` finds the prose rows that say
-  `Root SSH = fleet key` (three occurrences — GEX131, maps-01, forge-01). The prose rows are the ones
+  `Root SSH = fleet key` (two occurrences — maps-01, forge-01). The prose rows are the ones
   a reader must rewrite when the key is retired, and they do not contain the string the first grep
   looks for.
 - Only then remove the public key from every `authorized_keys` and delete the private key from
@@ -564,7 +564,7 @@ hour, when commit `6bd54b4` fixed that file's roster and added a comment block a
 earlier draft of this section also miscounted `SERVERS.md` as "two hits, lines 82 and 92" — in fact
 the literal `grotap_agents` has only ever appeared once (line 92); what sits at 78, 81 and 82 is the
 prose `Root SSH = fleet key`. That miscount is exactly why both greps below are required: a check
-that looks only for the path silently passes while three rows still tell a reader the fleet key is
+that looks only for the path silently passes while two rows still tell a reader the fleet key is
 the way in. Treat every line number here as a hint that will rot, and the strings as the check:
 
 ```bash
@@ -613,30 +613,29 @@ the shared key without changing this takes production pipeline dispatch down com
 `/dispatch` call fails. This must be solved and smoke-tested before any `authorized_keys` is touched.
 `orchestrator/src/ssh.ts:3` and `orchestrator/src/config/failure-classes.ts:118` also name the key.
 
-**Nine further hosts have no per-host key at all, and all nine are live.** The per-host keys minted on 2026-09-15 cover only
+**Eight further hosts have no per-host key at all, and all eight are live.** The per-host keys minted on 2026-09-15 cover only
 `agent-02..06` and `forge-01`, and they exist **only on the workstation**. Neither agent-06 nor
 agent-04 holds a copy of any of them, and agent-06's own `~/.ssh/config` has no fleet `Host` blocks
 — just a GitHub deploy-key block — so its scripts fall through to the hardcoded shared path with no
 alternative available. Meanwhile `agent-20`/`21` (Team 2), `agent-30`/`31` (Team 3), `agent-40`/`41`
-(Team 4), `GEX131`/`llm-gpu-02`, `maps-01` and `claudecode-01` are reached today only through the
+(Team 4), `maps-01` and `claudecode-01` are reached today only through the
 workstation `~/.ssh/config`'s catch-all IP-glob blocks, which route them all at `grotap_agents`.
-Retiring the key without minting keys for these nine removes all SSH access to them. A sweep on
-2026-09-16 confirmed **all nine are reachable and all nine carry the shared key in `root`'s
+Retiring the key without minting keys for these eight removes all SSH access to them. A sweep on
+2026-09-16 confirmed **all eight are reachable and all eight carry the shared key in `root`'s
 `authorized_keys`** — none is decommissioned, so none can be skipped:
 `agent-20` 87.99.148.22, `agent-21` 5.161.243.18, `agent-30` 167.233.59.142,
 `agent-31` 167.233.194.57, `agent-40` 178.156.219.232, `agent-41` 178.156.220.48,
-`GEX131`/`llm-gpu-02` 178.63.124.99, `maps-01` 5.161.107.80, `claudecode-01` 178.156.209.112.
+`maps-01` 5.161.107.80, `claudecode-01` 178.156.209.112.
 
-> **Correction 2026-09-20.** That sweep is a dated snapshot and four of the nine are now
+> **Correction 2026-09-20.** That sweep is a dated snapshot and four of the eight are now
 > gone: `agent-21`, `agent-31` and `agent-41` were deleted in Hetzner on 2026-09-16 and
 > `agent-30` on 2026-09-20. All four addresses above are RELEASED, and Hetzner recycles
-> released addresses — never SSH them and never mint a key for them. Five hosts remain
-> in scope for the key work: `agent-20`, `agent-40`, `GEX131`/`llm-gpu-02`, `maps-01`,
-> `claudecode-01`.
+> released addresses — never SSH them and never mint a key for them. Four hosts remain
+> in scope for the key work: `agent-20`, `agent-40`, `maps-01`, `claudecode-01`.
 >
 > **Correction 2026-09-26.** `claudecode-01` / `prompt-01-claude` at `178.156.209.112`
 > was deleted from Hetzner on 2026-09-26. Hetzner has no server by that name. It is no
-> longer in scope for the key work. Do not SSH that address. The other four hosts named
+> longer in scope for the key work. Do not SSH that address. The other three hosts named
 > in the 2026-09-20 correction stay as written.
 
 **Thirteen workstation scripts each duplicate the same fallback line** — `agents/dispatch.sh:30`
@@ -674,16 +673,12 @@ was removed and sshd was not touched on any host.** The shared key remains live 
 
 #### Phase 2a complete — 2026-09-16 04:07Z, additive only
 
-All nine remaining hosts now have workstation per-host keys at `~/.ssh/grotap_<host>`, each proven by
+All eight remaining hosts now have workstation per-host keys at `~/.ssh/grotap_<host>`, each proven by
 a real login, with the shared key re-proven working alongside. Public halves were appended only to
-`/root/.ssh/authorized_keys` — **none of the nine has a `/home/agent` account**, which is a genuine
+`/root/.ssh/authorized_keys` — **none of the eight has a `/home/agent` account**, which is a genuine
 difference from agent-02..06 and matters when reasoning about who can reach what.
 
-The GPU box's key is `grotap_llm-gpu-02`, not `grotap_GEX131`: its actual hostname is `llm-gpu-02`,
-and the existing convention tracks hostnames (`agent-02`, `forge-01`) rather than Hetzner product
-labels. `GEX131` is the Hetzner label and appears in docs and scripts, but it is not an SSH identity.
-
-One wrinkle to know about before editing `~/.ssh/config` again: six of the nine (`agent-20`, `21`,
+One wrinkle to know about before editing `~/.ssh/config` again: six of the eight (`agent-20`, `21`,
 `30`, `31`, `40`, `41`) already had named `Host` blocks pointing at `grotap_agents`. Rather than
 edit those blocks, a new block with the dedicated key was inserted **directly above** each one, which
 wins because OpenSSH takes the first matching value. The old blocks are now shadowed dead code, kept
@@ -692,7 +687,7 @@ shared key — not before, and not left behind after. Verify placement with
 `ssh -G <host> | grep -i identityfile`, which lists the winning file first.
 
 Backups: `~/.ssh/config.bak-20260916T040704Z` on the workstation, and
-`/root/.ssh/authorized_keys.bak-20260916T040704Z` on each of the nine hosts.
+`/root/.ssh/authorized_keys.bak-20260916T040704Z` on each of the eight hosts.
 
 #### Phase 2c complete — 2026-09-16 04:11Z, the critical-path piece
 
@@ -747,7 +742,7 @@ deleting those glob blocks and the `StrictHostKeyChecking no` with them, and it 
 independently of the key retirement.
 
 **2. Seven more hosts depend on the shared key and have no per-host key at all.** The count of
-"nine remaining hosts" was itself incomplete. Also on `grotap_agents` with nothing else:
+"eight remaining hosts" was itself incomplete. Also on `grotap_agents` with nothing else:
 `agent-01` (5.161.189.143), `agent-07` (address since released), `agent-08` (77.42.42.213),
 `agent-09` (46.62.184.50), `agent-10` (46.62.184.52), `agent-11` (46.62.184.51), and
 `claudecode` (`claudecode.grotap.com`, user `user1`). Whether each is live must be established before

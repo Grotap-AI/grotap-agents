@@ -133,7 +133,7 @@ This item is an explicit owner-granted exception to the freeze — it is meta wo
 prioritized anyway; it does not widen the exception to any other meta work.
    **PAUSED by owner 2026-09-09** ("pause all cases asking about LLM improvements"): both scout
    flags set FALSE for the grotap org (`model_scout_enabled`, `improve_scout_enabled`); the 12
-   improvement-scout research cases filed 2026-09-10 (roots `CASE-20260910-CB8FE6` RTX PRO 6000,
+   improvement-scout research cases filed 2026-09-10 (roots `CASE-20260910-CB8FE6`,
    `D0EB72` Agentifying Agentic AI, `6AE32F` LLM-Coordination, `1C251D` SkillReducer, `C9F1AA`
    Context Engineering + 7 children) sit at `status='paused'` with the prior status in
    `metadata->>'paused_from'`; their 5 clarification/breakdown holds were dismissed by SQL (never
@@ -334,8 +334,7 @@ Lane-A-eligible the moment `MODEL_ROUTING_JSON` named it; the other half of the 
 the Railway `orchestrator` service 2026-09-15: `finalize`, `knowledge-select`, `compliance-check`
 and `learning-extract` were routed to Lane A, sending human rejection notes, review policy flags,
 error strings and outlines of up to 30 `orchestrator_knowledge` rows off-platform. Unclassified now
-means `critical`, which filters Lane A out of the cascade (Lane C is untouched — the filter only
-removes A). Making a key Lane-A-eligible is now explicit: add it to `TASK_PRIVACY_DEFAULTS` as
+means `critical`, which filters Lane A out of the cascade (the filter only removes A). Making a key Lane-A-eligible is now explicit: add it to `TASK_PRIVACY_DEFAULTS` as
 `"standard"`, or set `"privacy":"standard"` on its `MODEL_ROUTING_JSON` entry.
 Separately and unconditionally: every OpenRouter request now carries
 `provider.data_collection: "deny"`. It used to be gated on a flag that was only ever true when Lane A
