@@ -21,7 +21,7 @@ Do not load the full plan into every prompt. Sessions already load `agents/GLOBA
 
 - [ ] Desktop copy stayed a draft; the implemented plan is committed under the correct `docs/` path
 - [ ] Must-obey text is a ≤10-line pointer in `agents/GLOBAL.md`, not a copy of the plan
-- [ ] `./.claude-session-init.sh --validate` passes (`agents/GLOBAL.md` stays under its byte cap)
+- [ ] `./.claude-session-init.sh` passes (`agents/GLOBAL.md` stays under its byte cap)
 - [ ] No secrets in the plan or the pointer
 - [ ] If `agents/GLOBAL.md` changed: `agents/BOOTSTRAP_SHA` rotated per §ROTATION onto a commit that contains the change and is an ancestor of `origin/master`
 - [ ] The same SHA is mirrored to grotap-platform `agents/BOOTSTRAP_SHA`

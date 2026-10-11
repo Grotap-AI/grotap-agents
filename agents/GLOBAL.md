@@ -1,4 +1,4 @@
-# agents/GLOBAL.md — Load order: GLOBAL.md then (on demand) SERVERS.md then MODULE.md then ROLE.md then handoff.md
+# agents/GLOBAL.md — always loaded. Everything else on demand; canonical load order: `AGENTS.md` § Load order.
 # Keep SMALL. Ledgers: agents/LESSONS-ARCHIVE.md (never auto-load). FAIL essays: agents/lessons/always-on-fail-detail.md (on demand).
 
 ## Platform
@@ -41,7 +41,7 @@ A change that blocks one of these is part of that surface. A live fault that is 
 - Wiring: `include_router` required; prove FE/BE contract on real endpoint; task JSON contract keys are LAW.
 - Frontend: AppShell; no dead UI actions; enums match API.
 - State/jobs: idempotent webhooks; no poison txn swallow.
-- Fleet: no `git add -A`; master not main; task not done until merged+deployed.
+- Fleet: task not done until merged+deployed.
 - Before commit: Read matching `agents/lessons/*.md` by trigger only — never cat all lessons into the prompt.
 
 ## Key IDs
@@ -49,9 +49,9 @@ Control Neon `raspy-block-90057530` (aws-us-east-1) · Grotap tenant Neon `proud
 
 ## Fleet / Dispatch / Review / Deploy
 Roster+SSH: `agents/SERVERS.md` (do **not** auto-load into coding prompts).
-Dispatch continuous; teams/routing: `agents/SERVERS.md` + platform `agents/config.sh`.
+Dispatch FROZEN since 2026-10-11 (owner): pipeline_automation enabled, auto_assign=false for grotap + Manor View. Build in Claude sessions; still file/answer pipeline cases. PIPELINE-FIRST (plan → owner prompt → dispatch → review; direct builds only for trivial fixes, owner-assigned docs, emergencies) resumes when the owner unfreezes. Teams/routing: `agents/SERVERS.md` + platform `agents/config.sh`.
 Review: `/codex:review` then Rule 7 pipeline. Deploy: Vercel FE on master; Railway BE gated on green CI.
-Git: master; stage named paths only; tsc before commit; one app to one branch.
+Git: `master`, not `main`; stage named paths only (never `git add -A`); tsc before commit; one app to one branch.
 
 ## Lessons (on-demand only)
 | File | When |
