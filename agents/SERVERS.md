@@ -6,25 +6,29 @@ Hetzner Cloud names changed on 2026-10-02 PT. IPs, server ids, protection, firew
 Until the code accepts the new names, **the old names remain the live dispatch / pool / alias keys**
 (`agents/config.sh`, `agents/fleet-aliases.json`, `team_pools.json`, `FLEET_HOSTS`, key files `grotap_from06_<old>`).
 
-| IP | Hetzner id | New Hetzner name | Old name (still the pool key; kept as SSH alias and /etc/hosts alias) | OS hostname |
+| IP | Hetzner id | New Hetzner name | Old name (still the pool key; kept as SSH alias and /etc/hosts alias) | OS hostname (SSH check 2026-10-11) |
 |---|---|---|---|---|
 | `178.156.199.83` | 149246895 | `openreplay-ai-support-01` | `openreplay-ai-support` (`runner-01`) | `openreplay-ai-support-01` (renamed). `RUNNER_ID=openreplay-ai-support` unchanged. |
-| `5.161.80.75` | 167204706 | `team-astra-01` | `agent-team-01-astra` | still `agent-team-01-astra` (pending code fix) |
-| `178.156.215.173` | 167604967 | `team-codex-grok-monitor-01` | `agent-22-shared` | still `agent-22-shared` (pending code fix) |
-| `5.161.119.92` | 167539331 | `team-claude-01` | `agent-21-shared` | still `agent-21-shared` (pending code fix) |
-| `5.161.53.103` | 166626264 | `ops-01` | `agent-06-claude` (`agent-06`, `agent-06-ash`) | still `agent-06-claude` (pending code fix) |
+| `5.161.80.75` | 167204706 | `team-astra-01` | `agent-team-01-astra` | `team-astra-01` (renamed) |
+| `178.156.215.173` | 167604967 | `team-codex-grok-monitor-01` | `agent-22-shared` | `team-codex-grok-monitor-01` (renamed) |
+| `5.161.119.92` | 167539331 | `team-claude-01` | `agent-21-shared` | `team-claude-01` (renamed) |
+| `5.161.53.103` | 166626264 | `ops-01` | `agent-06-claude` (`agent-06`, `agent-06-ash`) | `ops-01` (renamed) |
 
 Unchanged: `maps-01`, `forge-01`, `mdm-01`, `scan-01`. (`openreplay-01` was deleted 2026-10-03; `openreplay-02` replaced it.)
 
-Why the OS hostnames wait: `agents/status-server.js` and `agents/scripts/ssh-key-for.sh` pick the
-`grotap_from06_*` keys only when the local hostname matches `agent-06`; `ggshield-lib.sh` compares
-`GGSHIELD_CANARY_HOST=agent-22-shared` with `hostname -s`; and `agents/scripts/report-progress.sh` posts
+OS hostnames now equal the Hetzner names on every live box (SSH check 2026-10-11). The old names are still
+the pool / dispatch keys in code, so they stay as aliases until `agents/fleet-aliases.json` expires
+(`remove_after` 2026-12-31). Where the old names still matter: the per-host key files keep their old
+stems (`grotap_from06_<old>`); `agents/status-server.js` and `agents/scripts/ssh-key-for.sh` pick those
+keys when the local hostname is `agent-06` or `ops-01` (both accepted); `ggshield-lib.sh` accepts both
+`team-codex-grok-monitor-01` and `agent-22-shared` as the canary host; and `agents/scripts/report-progress.sh` posts
 `$(hostname)` as `agent_server`, which the backend resolves through `fleet-aliases.json` and which
-`team_dispatch_target.py` / the orchestrator slot map match against the pool host name. A new hostname
-that is not in the alias map would drop running work out of per-host load counts (over-admission).
+`team_dispatch_target.py` / the orchestrator slot map match against the pool host name. `fleet-aliases.json`
+folds each new hostname onto its old pool name; a hostname missing from that map would drop running work
+out of per-host load counts (over-admission).
 Each box has `/etc/cloud/cloud.cfg.d/99-grotap-rename.cfg` (`preserve_hostname: true`,
-`manage_etc_hosts: false`) so a reboot does not pull the new Hetzner name into the hostname early.
-New SSH aliases: workstation `~/.ssh/config` and agent-06 `/root/.ssh/config` (`ops-01`, `team-claude-01`,
+`manage_etc_hosts: false`) (written before the hostname change; still present on the team boxes).
+New SSH aliases: workstation `~/.ssh/config` and ops-01 `/root/.ssh/config` (`ops-01`, `team-claude-01`,
 `team-codex-grok-monitor-01`, `team-astra-01`, `openreplay-ai-support-01`), with key symlinks
 `/root/.ssh/grotap_from06_<new> -> grotap_from06_<old>`. No Cloudflare DNS record used any old name, so none was added.
 
@@ -35,7 +39,7 @@ Bootstrap names are the locked Cloud names, not `agent-NN`. Map, status, and the
 Cloud renames already applied (2026-09-21): `agent-01-claude` … `agent-06-claude`,
 `agent-10-codex`, `monitor-01-deepseek`, `openreplay-01`, `openreplay-ai-support`.
 `prompt-01-claude` (was `claudecode-01`, then `claude-code-01`) was **deleted 2026-09-26**. Hetzner has no server by that name.
-Post-cutover, the **active** seat hosts are **`agent-21-shared`** `5.161.119.92` (Team Claude and Team Astra seats) and **`agent-22-shared`** `178.156.215.173` (Team Codex, Grok, and Monitor seats). `agent-06-claude` (`5.161.53.103`) stays the ops host. `prompt-01-astra` (Hetzner id 167204705) is deleted (absent from every Hetzner project, API check 2026-10-11). `agent-team-01-astra` (Hetzner name `team-astra-01`, `5.161.80.75`, id 167204706) is still running and retiring. Neither is a live Astra seat. Do not retire `openreplay-ai-support`.
+Post-cutover, the seat hosts are **`team-claude-01`** (formerly `agent-21-shared`) `5.161.119.92` (Team Claude seat) and **`team-codex-grok-monitor-01`** (formerly `agent-22-shared`) `178.156.215.173` (Team Codex, Grok, and Monitor seats). `ops-01` (formerly `agent-06-claude`, `5.161.53.103`) stays the ops host. `prompt-01-astra` (Hetzner id 167204705) is deleted (absent from every Hetzner project, API check 2026-10-11). `team-astra-01` (formerly `agent-team-01-astra`, `5.161.80.75`, id 167204706) is running and is still the `team5` pool in `agents/config.sh`, but idle: last dispatch 2026-10-03 04:36Z, no tmux, no worktrees, load 0.0 (check 2026-10-11). No retirement is scheduled; that is an owner decision. Do not retire `openreplay-ai-support-01`.
 
 **Hetzner Cloud name is the primary column.** Short names `agent-01` … `agent-06` are SSH/dispatch aliases only. Each one is the **same IP** as `agent-01-claude` … `agent-06-claude`. `agent-01-claude` … `agent-04-claude` are deleted. `5.161.74.39` (former `agent-01-claude`) was recycled by Hetzner to **`openreplay-02`** (id 168488339) — never point `agent-01` or `agent-01-claude` at it.
 
@@ -64,15 +68,15 @@ reason here, so the next reader can tell an exception from a mistake.
 
 ## Fleet map after the shared-host cutover
 
-`prompt-01-claude` (from `claudecode-01` / `claude-code-01`) was **deleted 2026-09-26**. Hetzner has no server by that name. `agent-05-claude` (Hillsboro) was **deleted the same day**; do not put its former address back on a monitor or roster list. Short aliases `agent-01` … `agent-04` and `agent-06` are the same IPv4 as `agent-01-claude` … `agent-04-claude` and `agent-06-claude`. `agent-team-01-astra` is `5.161.80.75`.
+`prompt-01-claude` (from `claudecode-01` / `claude-code-01`) was **deleted 2026-09-26**. Hetzner has no server by that name. `agent-05-claude` (Hillsboro) was **deleted the same day**; do not put its former address back on a monitor or roster list. Short aliases `agent-01` … `agent-04` and `agent-06` are the same IPv4 as `agent-01-claude` … `agent-04-claude` and `agent-06-claude`. `team-astra-01` (formerly `agent-team-01-astra`) is `5.161.80.75`.
 
-`agent-21-shared` and `agent-22-shared` are **active**. `agent-06-claude` is the ops host and stays running. The pre-cutover executor boxes below were **deleted** between 2026-09-26 and 2026-10-03: none of them is in any Hetzner project (API check 2026-10-11, all four tokens), so their addresses are released and not listed. Only `agent-team-01-astra` still runs.
+`team-claude-01` and `team-codex-grok-monitor-01` (formerly `agent-21-shared` / `agent-22-shared`) are **active**. `ops-01` (formerly `agent-06-claude`) is the ops host and stays running. The pre-cutover executor boxes below were **deleted** between 2026-09-26 and 2026-10-03: none of them is in any Hetzner project (API check 2026-10-11, all four tokens), so their addresses are released and not listed. Only `team-astra-01` still runs.
 
 | Cloud name | IPv4 | Status |
 |---|---|---|
-| agent-21-shared | 5.161.119.92 | active — Team Claude and Team Astra seats |
-| agent-22-shared | 178.156.215.173 | active — Team Codex, Grok, and Monitor seats |
-| agent-06-claude | 5.161.53.103 | running |
+| team-claude-01 (formerly `agent-21-shared`) | 5.161.119.92 | active — Team Claude seat. ccx33 Ashburn, id 167539331, created 2026-09-26 |
+| team-codex-grok-monitor-01 (formerly `agent-22-shared`) | 178.156.215.173 | active — Team Codex, Grok, and Monitor seats. ccx33 Ashburn, id 167604967, created 2026-09-27 |
+| ops-01 (formerly `agent-06-claude`) | 5.161.53.103 | running — ops host. cpx31 Ashburn, id 166626264, created 2026-09-20 |
 | agent-01-claude | — (released) | **deleted** — absent from every Hetzner project (API check 2026-10-11) |
 | agent-02-claude | — (released) | **deleted** — absent from every Hetzner project (API check 2026-10-11) |
 | agent-03-claude | — (released) | **deleted** — absent from every Hetzner project (API check 2026-10-11) |
@@ -84,28 +88,28 @@ reason here, so the next reader can tell an exception from a mistake.
 | agent-01-grok | — (released) | **deleted** — absent from every Hetzner project (API check 2026-10-11) |
 | agent-02-grok | — (released) | **deleted** — absent from every Hetzner project (API check 2026-10-11) |
 | prompt-01-astra | — (released) | **deleted** — absent from every Hetzner project (API check 2026-10-11) |
-| agent-team-01-astra | 5.161.80.75 | running (Hetzner name `team-astra-01`); retiring |
+| team-astra-01 (formerly `agent-team-01-astra`) | 5.161.80.75 | running, idle since 2026-10-03 — `team5` pool. cpx31 Ashburn, id 167204706, created 2026-09-24 |
 
-Footnotes: Linux hostname on `agent-06-claude` is `agent-06-claude`. `agent-10-codex` Linux hostname may still be `agent-20`. `monitor-01-deepseek` Linux hostname may still be `agent-40`. `5.161.74.39` is `openreplay-02` (not `agent-01-claude`). Live ops (`grotap-status`, `cloudflared`, `review-gate.timer`, deploy-ops crons) run on `agent-06-claude`. `agent-11-codex` and `agent-13-monitor` have no IPv4 in this file (`ssh-key-for.sh` maps the names only).
+Footnotes: Linux hostname on `ops-01` is `ops-01` (renamed from `agent-06-claude`). `agent-10-codex` Linux hostname may still be `agent-20`. `monitor-01-deepseek` Linux hostname may still be `agent-40`. `5.161.74.39` is `openreplay-02` (not `agent-01-claude`). Live ops (`grotap-status`, `cloudflared`, `review-gate.timer`, deploy-ops crons) run on `ops-01`. `agent-11-codex` and `agent-13-monitor` have no IPv4 in this file (`ssh-key-for.sh` maps the names only).
 
 ## Active dispatch pool
 
-SSH alias is not a Hetzner name. After cutover, Team Claude and Team Astra seats are on `agent-21-shared` (active). Team Codex, Grok, and Monitor seats are on `agent-22-shared` (active). `agent-01-claude` through `agent-04-claude` keep their old role rows for history only; all four are deleted. `agent-06-claude` remains the ops host.
+SSH alias is not a Hetzner name. After cutover, the Team Claude seat is on `team-claude-01` (formerly `agent-21-shared`, active); Team Astra (`team5`) moved to `team-astra-01` on 2026-09-27. Team Codex, Grok, and Monitor seats are on `team-codex-grok-monitor-01` (formerly `agent-22-shared`, active). `agent-01-claude` through `agent-04-claude` keep their old role rows for history only; all four are deleted. `ops-01` (formerly `agent-06-claude`) remains the ops host.
 
 | Cloud name | IP | Linux hostname | SSH alias (not a Cloud name) | Hardware / DC | Roles | Execute slots |
 |---|---|---|---|---|---|---|
-| agent-21-shared | 5.161.119.92 | agent-21-shared | — | **active** | Team Claude and Team Astra seats | — |
-| agent-22-shared | 178.156.215.173 | agent-22-shared | — | **active** | Team Codex, Grok, and Monitor seats | — |
-| agent-06-claude | 5.161.53.103 | agent-06-claude | `agent-06` | Ashburn. **Running** | Live ops host (was `agent-06-ash`). `grotap-status`, `cloudflared`, `review-gate.timer` active | 2 |
+| team-claude-01 | 5.161.119.92 | team-claude-01 | `agent-21-shared` (pool key) | ccx33, Ashburn. **active** | Team Claude seat (`astra` user still exists; `team5` pool is on `team-astra-01`) | — |
+| team-codex-grok-monitor-01 | 178.156.215.173 | team-codex-grok-monitor-01 | `agent-22-shared` (pool key) | ccx33, Ashburn. **active** | Team Codex, Grok, and Monitor seats | — |
+| ops-01 | 5.161.53.103 | ops-01 | `agent-06`, `agent-06-claude` | cpx31, Ashburn. **Running** | Live ops host (was `agent-06-ash`). `grotap-status`, `cloudflared`, `review-gate.timer` active | 2 |
 | agent-01-claude | — (released) | agent-01-claude | `agent-01` | cpx21, Ashburn. **deleted** — absent from every Hetzner project (API check 2026-10-11) | Intake, Triage, Security Reviewer | 3 |
 | agent-02-claude | — (released) | agent-02-claude | `agent-02` | cpx21, Ashburn. **deleted** — absent from every Hetzner project (API check 2026-10-11) | Planner, Fix/Logic/Policy/Perf Reviewer | 3 |
 | agent-03-claude | — (released) | agent-03-claude | `agent-03` | cpx21, Ashburn. **deleted** — absent from every Hetzner project (API check 2026-10-11). Console was **"03-Agent"** (ID 122714167). OOM-froze 7/5 (hard reset); keep swap enabled | Execute, Change Reviewer, Rule Enforcer, Build Validator | 3 |
 | agent-04-claude | — (released) | agent-04-claude | `agent-04` | cpx21, Ashburn. **deleted** — absent from every Hetzner project (API check 2026-10-11) | Pipeline Detail, Audit Filters, Mobile Approvals, Marketing (consolidated from agent-11 4/29: grotap.com site, Meta/Instagram/Facebook, YouTube, TikTok APIs) | 3 |
 
 Routing between roles follows the pipeline graph in `registry.md`; triggers/load-order per role live in each ROLE.md.
-**forgejo-runner v13.1.0** (systemd unit `forgejo-runner.service`, installed 2026-09-15) was on `agent-01-claude` through `agent-04-claude` (all deleted; their runners went with them) and is on `agent-06-claude`. `agent-05-claude` was deleted 2026-09-26, so that runner is gone with the box. HOST execution mode: CI jobs run natively as the unprivileged `forge-runner` user in a systemd jail (`ProtectSystem=strict`, `ProtectHome=tmpfs`, `NoNewPrivileges`, empty `CapabilityBoundingSet`), no Docker. Labels `ubuntu-latest:host` and `ubuntu-24.04:host`, capacity 2 per box, registered org-wide to `Grotap-AI` on forge-01. It is independent of the agent tmux sessions and of `dispatch.sh`.
+**forgejo-runner v13.1.0** (systemd unit `forgejo-runner.service`, installed 2026-09-15) was on `agent-01-claude` through `agent-04-claude` (all deleted; their runners went with them) and is on `ops-01`. `agent-05-claude` was deleted 2026-09-26, so that runner is gone with the box. HOST execution mode: CI jobs run natively as the unprivileged `forge-runner` user in a systemd jail (`ProtectSystem=strict`, `ProtectHome=tmpfs`, `NoNewPrivileges`, empty `CapabilityBoundingSet`), no Docker. Labels `ubuntu-latest:host` and `ubuntu-24.04:host`, capacity 2 per box, registered org-wide to `Grotap-AI` on forge-01. It is independent of the agent tmux sessions and of `dispatch.sh`.
 
-Dispatch assignment is owned by the backend 3-min loop + LangGraph orchestrator on Railway (which SSHes to the fleet). Live ops is on `agent-06-claude` (`5.161.53.103`): `grotap-status`, `cloudflared`, and `review-gate.timer` are active there, with the deploy-ops crons below.
+Dispatch assignment is owned by the backend 3-min loop + LangGraph orchestrator on Railway (which SSHes to the fleet). Live ops is on `ops-01` (`5.161.53.103`): `grotap-status`, `cloudflared`, and `review-gate.timer` are active there, with the deploy-ops crons below.
 
 **SSH key retirement (started 2026-09-16, in progress).** The shared fleet key `grotap_agents` is being
 replaced by per-host keys, host by host — it is NOT removed yet and every fleet script still falls back
@@ -119,19 +123,19 @@ that file's header), which falls back to the shared key for any target with no p
 maps-01, forge-01 and every other special host below included. Do not remove `grotap_agents`
 from any box or from `~/.ssh/config` until a later phase says so explicitly.
 
-## agent-06-claude detail (Ashburn ops host — `5.161.53.103`; Linux hostname `agent-06-claude`)
+## ops-01 detail (formerly `agent-06-claude`; Ashburn ops host — `5.161.53.103`; Linux hostname `ops-01`)
 `agent-05-claude` was deleted 2026-09-26 and is not the ops host.
 - Live units: `grotap-status`, `cloudflared`, `review-gate.timer`.
 - root cron: `health-monitor.sh` 5m · `deploy-verify.sh` 15m · `dns-watchdog.sh` + `env-validator.sh` daily · Wasabi DR backup (daily Neon dump 00:00 + weekly full Sun 02:00, object-lock-safe dated heartbeats) · `reconcile_dispatch.py` **10m** (flock; runs the git-pulled repo copy `grotap-platform/scripts/` with `--max 6 --days 14 --stale-min 10` — consolidated 2026-07-14, the old frozen `/home/agent/` copy + duplicate agent-cron entry are RETIRED) · fleet CLI update daily · release notes 13:00 · systemd `grotap-status` (status server).
 - agent cron: `pipeline_failure_monitor.py` 10m · `deploy_freshness_watchdog.py` 5m · **review gate every 15 min** (`review-gate-cron.sh`; empty queue exits <5s). `review-gate.timer` is active on this host.
-- Deploy Ops roles (trigger → role): merge-to-master → **Deploy Verifier**; verifier FAIL → **Deploy Executor**; before deploy-execute → **Env Validator**; every 5 min → **Health Monitor**; daily / after infra change → **DNS Watchdog**; verifier PASS → **Post-Deploy QA**. Escalate to human when deploy infra itself is broken; hotfix regressions route to the Team Claude seats on `agent-21-shared` (`agent-03-claude` is deleted).
+- Deploy Ops roles (trigger → role): merge-to-master → **Deploy Verifier**; verifier FAIL → **Deploy Executor**; before deploy-execute → **Env Validator**; every 5 min → **Health Monitor**; daily / after infra change → **DNS Watchdog**; verifier PASS → **Post-Deploy QA**. Escalate to human when deploy infra itself is broken; hotfix regressions route to the Team Claude seat on `team-claude-01` (`agent-03-claude` is deleted).
 
 ## Team Builder (was Team 2) — open-model executors (Hetzner project **OpenAgents.grotapai**, token `HETZNER_FARM_API_TOKEN`)
 Provisioned 2026-07-07 for the Team 2 program (cases AA8CFD/F404F8/959C5E). Aider + OpenRouter runtime —
 NO claude CLI on these boxes by design. ⚠ NOT in the Team 1 dispatch pool: do not dispatch until the
 `config.sh` team registry (F404F8 children) merges and `case_data.team=team2` routing is live.
 
-Team Codex seats are **active** on `agent-22-shared` (`178.156.215.173`). The boxes in this table are deleted.
+Team Codex seats are **active** on `team-codex-grok-monitor-01` (formerly `agent-22-shared`, `178.156.215.173`). The boxes in this table are deleted.
 
 | Server | IP | Hardware / DC | Purpose | Execute slots |
 |---|---|---|---|---|
@@ -148,7 +152,7 @@ OpenRouter (`x-ai/grok-4.5`) runtime — NO claude CLI by design. **FSN1 on purp
 Network `team2-llm-lan` (12438415) — the Ashburn team2 boxes cannot attach (single-zone rule). ⚠ NOT dispatchable until the `config.sh` team3 registry
 (case A5CE1C) merges and pilot cases are tagged `case_data.team=team3`.
 
-Team Grok seats are **active** on `agent-22-shared` (`178.156.215.173`). `agent-01-grok` and `agent-02-grok` are **deleted** — absent from every Hetzner project (API check 2026-10-11).
+Team Grok seats are **active** on `team-codex-grok-monitor-01` (formerly `agent-22-shared`, `178.156.215.173`). `agent-01-grok` and `agent-02-grok` are **deleted** — absent from every Hetzner project (API check 2026-10-11).
 
 > **Deleted 2026-09-20:** `agent-30` (150155427) was deleted from Hetzner
 > and its IP released, for the same reason its sibling `agent-31` went on
@@ -172,7 +176,7 @@ registry (case FC0208) merges and pilot cases are tagged `case_data.team=team4`.
 Team 5 note: the Codex CLI runner experiment (case 8B9BFC) SHARES this box by design
 (experiment phase; 3 slots/box, inference remote) — revisit if both teams go live.
 
-Team Monitor seats are **active** on `agent-22-shared` (`178.156.215.173`). The boxes below are deleted.
+Team Monitor seats are **active** on `team-codex-grok-monitor-01` (formerly `agent-22-shared`, `178.156.215.173`). The boxes below are deleted.
 
 | Server | IP | Hardware / DC | Purpose | Execute slots |
 |---|---|---|---|---|
@@ -185,7 +189,7 @@ via pipx, 4 GiB swap, docker + `grotap-sandbox:latest`, both repo clones, `~/wor
 > **Retired 2026-09-16:** `agent-21` (148646760), `agent-31` (150155432) and `agent-41`
 > (150671582) were deleted from Hetzner. Each had ZERO rows in `pipeline_dispatch_log` for its
 > entire life; verified empty first (no tmux, no worktrees, clones clean, load 0.00). Their
-> siblings agent-10-codex (was agent-20) and monitor-01-deepseek (was agent-40) are deleted too. Seats for those teams are active on `agent-22-shared` (agent-30 followed the deleted boxes on 2026-09-20).
+> siblings agent-10-codex (was agent-20) and monitor-01-deepseek (was agent-40) are deleted too. Seats for those teams are active on `team-codex-grok-monitor-01` (agent-30 followed the deleted boxes on 2026-09-20).
 > `TEAM_POOL` in `agents/config.sh` is now single-host for team2/4/5 (grotap-platform
 > `5226d7fc9`) and EMPTY for team3 since 2026-09-20. Rebuild specs: cpx21 (cpx22 for
 > team3/FSN1), ubuntu-24.04, labels `role=<open-model|grok|gpt>-executor`, `team=team<N>`;
@@ -196,7 +200,7 @@ via pipx, 4 GiB swap, docker + `grotap-sandbox:latest`, both repo clones, `~/wor
 |---|---|---|
 | openreplay-02 | 5.161.74.39 | **OpenReplay session-replay server** — `supportagents.grotap.com` (A record, DNS-only, verified 2026-10-11). ccx23 Ashburn (id 168488339), Hetzner project `Cobrowse.Grotap.com` (`HETZNER_COBROWSE_API_TOKEN`), created 2026-10-03; took over `supportagents.grotap.com` from `openreplay-01` on 2026-10-02. Linux hostname `openreplay-02`. ⚠ The address is recycled from deleted `agent-01-claude` — it is not an agent host; stale host-key warnings: `ssh-keygen -R 5.161.74.39`. `openreplay-01` (former names `grotap-cobrowse-01`, supportagents) was **deleted 2026-10-03**; its address is released and not listed. |
 | scan-01 | 5.161.75.121 | **ClamAV malware-scanning service** — `scan.grotap.com`, self-hosted virus scanning for all uploaded files (owner policy 2026-07-04: file bytes NEVER go to a third-party vendor; VirusTotal stays dormant). cpx21 **Ashburn** (id 168175702), Hetzner main project (`HETZNER_API_TOKEN`), created 2026-10-01 — rebuilt from the original fsn1 box (provisioned 2026-08-10, now gone; its address is released and not listed). Linux hostname `scan-01`; reachable over SSH from the ops host (`grotap_from06_scan-01`), while a direct connection from the owner workstation times out — replaces the stack lost when grotap-cobrowse-01 was wiped 2026-07-07. Docker stack `services/clamav-scan/` (Caddy → scanner-api → clamd; 3310 internal only). ⚠ **Deliberately holds NO Doppler token** — it parses hostile files, so `CLAMAV_SCAN_SECRET` is delivered to a root-owned `.env.runtime`, never a prd-wide token. DNS: `scan.grotap.com` A → `5.161.75.121`, DNS-only (verified 2026-10-11; HTTPS answers). Cases: CLAM01 (stack) / CLAM02 (prod env wiring). |
-| openreplay-ai-support | 178.156.199.83 | **OpenReplay AI Support runner — KEEP. Do not retire.** Former name `grotap-runner-01`. Live unit `support-runner`, `RUNNER_ID=openreplay-ai-support` (claim API healthy: runner-status 200, claim 204 on an empty queue; rename STATUS 2026-09-21). cpx21 Ashburn (id 149246895), Hetzner project `Cobrowse.Grotap.com` (`HETZNER_COBROWSE_API_TOKEN`), firewall `runner-fw` (inbound ssh+icmp only — runner is outbound-only). Provisioned 2026-07-09. The old `cobrowse-runner` unit is not the live identity. |
+| openreplay-ai-support-01 | 178.156.199.83 | **OpenReplay AI Support runner — KEEP. Do not retire.** Formerly `openreplay-ai-support` (still the pool key and `RUNNER_ID`), before that `grotap-runner-01`. Linux hostname `openreplay-ai-support-01`. Live unit `support-runner`, `RUNNER_ID=openreplay-ai-support` (claim API healthy: runner-status 200, claim 204 on an empty queue; rename STATUS 2026-09-21). cpx21 Ashburn (id 149246895), Hetzner project `Cobrowse.Grotap.com` (`HETZNER_COBROWSE_API_TOKEN`), firewall `runner-fw` (inbound ssh+icmp only — runner is outbound-only). Provisioned 2026-07-09. The old `cobrowse-runner` unit is not the live identity. |
 | mdm-01 | 87.99.140.189 | **Headwind MDM server** — `mdm.grotap.com`, Android tablet fleet management (Device-Owner QR enroll, silent Scan M APK push; remote-control plugin pending owner purchase). cpx21 Ashburn (id 153766531), Docker stack `/opt/hmdm-docker` (hmdm 0.1.8 + postgres:12 on loopback, MQTT `:31000`), UFW 22/80/443/31000, LE renew cron 1st+15th. Secrets `MDM_*` in Doppler. Full doc: `docs/06-infrastructure/mdm-tablets.md`. Provisioned 2026-07-21. |
 | maps-01 | 5.161.107.80 | **Map services: Martin tiles + TiTiler NAIP + Caddy** — `maps.grotap.com` (A record, unproxied, TTL 300 — no AAAA, no wildcard), MAP-1 CASE-20260914-76CACC / leaf 81D5CE. cpx31 **Ashburn** (id 165776284), Hetzner main project (`HETZNER_API_TOKEN`), firewall `maps-fw` (id 11619661: inbound TCP 22/80/443 + ICMP), labels `role=maps,owner=platform`. Provisioned 2026-09-14 — **bootstrap pending** (MAP-1's `bootstrap.sh` deploys the stack; base only so far: Ubuntu 24.04, docker.io + compose v2, ufw 22/80/443, gdal-bin, 2 GiB swap, `/data/{basemap,naip,ortho}`, `/opt/maps/.env` root:600 with `MAPS_SHARED_SECRET` + `MAPS_PUBLIC_HOST`). Root SSH = shared fleet key (no per-host key provisioned for this host; `ssh-key-for.sh` falls back to it automatically — see "New-server onboarding" below). Doppler prd+dev: `MAPS_TILE_BASE_URL`, `MAPS_SHARED_SECRET`, `MAPS_SERVER_IP` (copied to Railway `grotap-backend`). |
 | forge-01 | 178.156.246.81 | **Self-hosted git forge (Forgejo 13.0.5) — PROTECTED. Do not delete, downsize, or retire.** `forge.grotap.com` (A record, **proxied**) for HTTPS, `forge-ssh.grotap.com` (A record, **unproxied** — Cloudflare cannot proxy git-over-SSH) on port **2222**. **Restored and running.** cpx21 **Ashburn** (id 167546044; previous id 166078095 is gone), created 2026-09-26 10:49 AM PT from snapshot `436438026`. IPv4 `178.156.246.81` is the same address as before the deletion. Hetzner main project (`HETZNER_API_TOKEN`), firewall `forge-fw` (id 11628446: 22 + ICMP from the five worker IPs and the owner workstation only, 80/443 from Cloudflare ranges only, 2222 from the same fleet+workstation set), labels `role=forge,owner=platform`. Provisioned 2026-09-15. Stack in `/opt/forge`: docker compose (Forgejo + Caddy, Let's Encrypt cert on the origin), sqlite3 DB at `/opt/forge/forgejo/gitea/gitea.db`, 2 GiB swap, sshd drop-in `01-grotap-hardening.conf`. Hardened: `DISABLE_REGISTRATION`, `REQUIRE_SIGNIN_VIEW`, `INSTALL_LOCK`, `OFFLINE_MODE`. ⚠ **GitHub is still the source of truth** — all four repos (grotap-platform, grotap-agents, grotap-landing, grotap-platform-docs) are PULL MIRRORS refreshing every 10 min under the `Grotap-AI` org; no deploy path has moved off GitHub. Doppler prd+dev: `FORGE_URL`, `FORGE_SSH_HOST`, `FORGE_SSH_PORT`, `FORGE_SERVER_IP`, `FORGE_API_TOKEN`, `FORGE_ADMIN_USER`, `FORGE_ADMIN_PASSWORD`, `FORGEJO_WEBHOOK_SECRET`. Root SSH = shared fleet key (no per-host key provisioned for this host; `ssh-key-for.sh` falls back to it automatically — see "New-server onboarding" below). See **Protected infrastructure** below. |
@@ -217,19 +221,19 @@ It matters because:
 
 ## Prompt / Astra — not in the Team Claude pool
 
-Not dispatch executors. Not in `config.sh` pools. Team Astra seats are **active** on `agent-21-shared` (`5.161.119.92`). `prompt-01-astra` is deleted; `agent-team-01-astra` still runs and is retiring.
+Not in the Team Claude pool. `team-astra-01` (formerly `agent-team-01-astra`) is the `team5` pool in `config.sh` (moved off `agent-21-shared` 2026-09-27). `prompt-01-astra` is deleted.
 
 | Cloud name | IP | Role |
 |---|---|---|
 | prompt-01-astra | — (released) | Prompt Option — GPT-6 Astra (`gpt-6-astra`). **deleted** — absent from every Hetzner project (API check 2026-10-11). cpx31 Ashburn, Hetzner id 167204705. Outside the Team Claude pool. |
-| agent-team-01-astra | 5.161.80.75 | Agent Team — GPT-6 Astra (`gpt-6-astra`). Running as Hetzner `team-astra-01` (`HETZNER_CLAUDECODE_API_TOKEN` project); **retiring (pending snapshot + delete).** cpx31 Ashburn, Hetzner id 167204706. Outside the Team Claude pool. |
+| team-astra-01 (formerly `agent-team-01-astra`) | 5.161.80.75 | Agent Team — GPT-6 Astra (`gpt-6-astra`), `team5` pool. Linux hostname `team-astra-01`. `HETZNER_CLAUDECODE_API_TOKEN` project, cpx31 Ashburn ($73.49/mo), Hetzner id 167204706, created 2026-09-24. **Running but idle** (check 2026-10-11): last dispatch 2026-10-03 04:36Z, no tmux sessions, no worktrees, no custom systemd units or crontabs besides docker (no containers), load 0.0. Not scheduled for retirement; owner decision pending. Outside the Team Claude pool. |
 
 ## Hetzner account map
 One active account (**K0281854926**, console.hetzner.cloud). Verified via API 7/4: all cloud servers are visible to the single `HETZNER_API_TOKEN`; `HETZNER_API_TOKEN_2` was DEAD (401) and was retired on 2026-10-03; nothing should read it. Cobrowse runners live in their own project/token (above). Account `K0390490726` CANCELLED 6/30.
 
 ## Retired / cancelled — never dispatch, never re-add
 - **prompt-01-claude** (Hetzner server ID 149250118, Hetzner project `ClaudeCode`, was `claudecode-01` / `claude-code-01`, DNS `claudecode.grotap.com`). **Deleted 2026-09-26.** Hetzner has no server by that name. Not `prompt-01-astra`.
-- **Deleted agent-01** (deleted 6/29; its address went to `openreplay-01`, itself deleted 2026-10-03). · **agent-01-claude … agent-04-claude, agent-10/11-codex, monitor-01-deepseek, agent-13-monitor, agent-01/02-grok, prompt-01-astra, openreplay-01** — deleted 2026-09-26 … 2026-10-03; absent from every Hetzner project (API check 2026-10-11). `agent-01-claude`'s former address is now `openreplay-02`. · **agent-07** (gone with cancelled account; address released, in no Hetzner project as of 2026-10-03) · **agent-08** (deleted; old dispatch box). Live ops is `agent-06-claude`.
+- **Deleted agent-01** (deleted 6/29; its address went to `openreplay-01`, itself deleted 2026-10-03). · **agent-01-claude … agent-04-claude, agent-10/11-codex, monitor-01-deepseek, agent-13-monitor, agent-01/02-grok, prompt-01-astra, openreplay-01** — deleted 2026-09-26 … 2026-10-03; absent from every Hetzner project (API check 2026-10-11). `agent-01-claude`'s former address is now `openreplay-02`. · **agent-07** (gone with cancelled account; address released, in no Hetzner project as of 2026-10-03) · **agent-08** (deleted; old dispatch box). Live ops is `ops-01`.
 - **agent-05-claude** (Hillsboro). **Deleted 2026-09-26.** Hetzner can reassign its former address. Do not put it on a health, monitor, or fleet roster.
 - **agent-09/10/11** (Robot EX44s) — cancelled in Hetzner **Robot** 6/29 (separate from cloud console). The Robot API lists **0 servers** (check 2026-10-11), so all three are gone.
 
@@ -343,4 +347,4 @@ mandatory rather than best-effort.
 
 ## Shared-host ggshield pre-commit hook
 
-Seats on `agent-21-shared` (`claude`, `astra`) and `agent-22-shared` (`codex`, `grok`, `monitor`) can install a GitGuardian `ggshield` pre-commit hook with `agents/scripts/install-ggshield-hook.sh`. The hook is off after install. `--canary` enables it only for `codex` on `agent-22-shared`. Runbook: `docs/06-infrastructure/ggshield-seat-hook.md`. Do not install it on `forge-01` or `maps-01`.
+Seats on `team-claude-01` (`claude`, `astra`) and `team-codex-grok-monitor-01` (`codex`, `grok`, `monitor`) can install a GitGuardian `ggshield` pre-commit hook with `agents/scripts/install-ggshield-hook.sh`. The hook is off after install. `--canary` enables it only for `codex` on `team-codex-grok-monitor-01` (formerly `agent-22-shared`; `ggshield-lib.sh` accepts both names). Runbook: `docs/06-infrastructure/ggshield-seat-hook.md`. Do not install it on `forge-01` or `maps-01`.
