@@ -1,6 +1,10 @@
 # CLAUDE.md — grotap Agent Project
 # This file is loaded automatically by Claude Code at every session start.
 
+## Shared AI entry
+
+Shared AI entry: `AGENTS.md` (all AIs). Claude-specific mechanics below. Grok (Bot) uses `BOT.md` and Gemini uses `GEMINI.md`; the operating model is `docs/05-agents/owner-ai-teammates.md`.
+
 ## Mandatory Session Bootstrap
 
 At the start of EVERY session, before any other work:
@@ -20,7 +24,7 @@ Do not skip this on "quick" sessions — there are none.
 
 ## Rules
 
-Full rules are in `agents/GLOBAL.md`. The 8 absolute rules are enforced on every task.
+Full rules are in `agents/GLOBAL.md`. Its absolute rules are enforced on every task.
 
 ## Manor View go-live — IN FORCE through 2026-11-13 (owner 2026-10-11)
 
