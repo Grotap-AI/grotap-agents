@@ -22,6 +22,10 @@ Do not skip this on "quick" sessions — there are none.
 
 Full rules are in `agents/GLOBAL.md`. The 8 absolute rules are enforced on every task.
 
+## Manor View go-live — IN FORCE through 2026-11-13 (owner 2026-10-11)
+
+First customer: Manor View Farms. Soft go-live 2026-10-26. Hard go-live 2026-11-13. Until that hard go-live is over, work only ScanTap platform app, ScanTap Setup, ScanTap Mobile, ScanTap Mobile sister apps, Print Cloud Setup, Print Cloud Labels, and Vendor Avail & Inventory Planning. All other areas are paused. The same rule is in `agents/GLOBAL.md`. The map is `docs/PRIORITY_SURFACES.md`.
+
 ## Default Execution — PIPELINE-FIRST
 
 For any substantive change, the DEFAULT is to route it through the pipeline / agent fleet (plan → prompt

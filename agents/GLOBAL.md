@@ -23,6 +23,18 @@ React+Vercel `platform/frontend/` · FastAPI+Railway `platform/backend/` · Work
 | 10 | **AGENTIC EXECUTION SECURITY** — Agents propose; platform APIs are source of truth. No admin/commerce write keys on agent boxes to finish the job. Re-verify truth at commit; fail closed. Full: platform `docs/AGENTIC-EXECUTION-SECURITY-PLAN.md`. |
 | 11 | **PLAN MD GO-LIVE** — Desktop `*.md` are drafts. Implemented plans live in git (platform `docs/` or this repo’s `docs/`). Must-obey text is a short pointer here; do not load plan novels into prompts. Playbook: `docs/PLAN-GO-LIVE.md`. |
 
+## Manor View go-live — IN FORCE through 2026-11-13 (owner 2026-10-11)
+First customer: **Manor View Farms**. Soft go-live **2026-10-26**. Hard go-live **2026-11-13**.
+Until that hard go-live is over, work ONLY the surfaces below. Every other area is paused: do not file it, dispatch it, continue it, or merge it.
+1. ScanTap platform app (`scantap`)
+2. ScanTap Setup (`scan-m`)
+3. ScanTap Mobile (`com.grotap.scantap`, `com.grotap.scantap7`)
+4. ScanTap Mobile sister apps — Tag Caddy, Scan Map, Record Roads, Map Locations & Docks, Antenna Test, Fix Red RFID Tags
+5. Print Cloud Setup (`print-cloud`)
+6. Print Cloud Labels (slug today `label-designer`)
+7. Vendor Avail & Inventory Planning (`vendor-view`)
+A change that blocks one of these is part of that surface. A live fault that is losing customer data, money, or the ability to deploy may still be fixed. Detail: `docs/PRIORITY_SURFACES.md`. This replaces the 2026-09-15 surface order until 2026-11-14.
+
 ## Common FAIL Causes — SHORT (detail: `agents/lessons/always-on-fail-detail.md`)
 - SQL: control-plane DDL only in `backend/db/migrations/control_plane/vNNN_*.sql`; app schemas in BOTH `migrations/apps/<slug>/` and `ingestion-worker/migrations/apps/<slug>/`; never amend applied migrations; asyncpg JSONB=`json.dumps`+`::jsonb`; RLS GUC name exact.
 - Auth: `request.state.organization_id`; PUBLIC_PATHS for all non-JWT; fail closed in prd; allowlist paths for file reads.

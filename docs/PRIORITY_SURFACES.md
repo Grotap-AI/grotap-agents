@@ -2,9 +2,37 @@
 
 Moved out of platform/CLAUDE.md to shrink session preamble.
 
-## PRIORITY ORDER — IN FORCE (owner directive 2026-09-15, gate OPENED 2026-09-17)
+The short form of the freeze below is also in `agents/GLOBAL.md` (loaded into every agent prompt) and in platform `CLAUDE.md` (loaded every platform session). This file is the map.
 
-**The gate is open. This ordering governs what is worked on next, starting 2026-09-17.** The owner's
+## MANOR VIEW GO-LIVE — IN FORCE through 2026-11-13 (owner directive 2026-10-11)
+
+**First customer: Manor View Farms. Soft go-live 2026-10-26. Hard go-live 2026-11-13.**
+
+Until the hard go-live is over (through 2026-11-13; other work may resume 2026-11-14), these are the only areas of platform work. **Everything else is paused.** Do not file a case, dispatch a case, continue an in-flight case, or merge a branch outside this list.
+
+1. **ScanTap platform app** — web app, slug `scantap`
+2. **ScanTap Setup** — slug `scan-m` (display name ScanTap Setup)
+3. **ScanTap Mobile** — tablet app in `platform/mobile/scantap`. Packages `com.grotap.scantap` (11-inch) and `com.grotap.scantap7` (7-inch)
+4. **ScanTap Mobile sister apps** — the companion APKs built from that same tree (`services/sisterLaunch.ts`): Tag Caddy (`com.grotap.tagcaddy`), Scan Map (`com.grotap.scanmap`), Record Roads (`com.grotap.roads`), Map Locations & Docks (`com.grotap.docks`), Antenna Test (`com.grotap.antennatest`), Fix Red RFID Tags (`com.grotap.fixredtags`)
+5. **Print Cloud Setup** — slug `print-cloud` (launcher name Print Cloud Setup)
+6. **Print Cloud Labels** — the labels sister app. Slug today is `label-designer` (launcher name Label Designer). The owner name for this freeze is Print Cloud Labels
+7. **Vendor Avail & Inventory Planning** — slug `vendor-view` (launcher name Vendor View). Vendor Availability is `/vendor-view/availability`. There is no separate `inventory-planning` app slug; planning work the owner puts under this name stays inside `vendor-view`
+
+This **replaces** the 2026-09-15 / 2026-09-17 five-surface order (ScanTap, ScanTap Mobile, Print Cloud, Loop Engine, Free Stream) and the 2026-08-13 standing list for deciding what to work on next. Those sections below stay for factual detail. They do not choose the next case before 2026-11-14.
+
+Rules of this freeze:
+- One focus surface may still be finished before the next, but any of the seven may be worked when it prepares Manor View for 2026-10-26 or 2026-11-13. Do not start Loop Engine, Free Stream, Team Hub, fleet self-improvement, Forgejo cutover, or other apps "while you're in there."
+- **Vendor Avail & Inventory Planning is in scope for this go-live.** The older line that parked all of Vendor View below the five surfaces does not apply to this slice before 2026-11-14. It is not permission to reopen closed Vendor View cases that are outside this go-live.
+- **Blocker pull-forward still holds.** Work on a later or paused surface only for the part that unblocks a focus surface, and build only that part.
+- **Deploy and data exceptions still hold.** A live fault that is losing customer data, money, or the ability to deploy may be fixed. Judge by customer impact.
+- Platform basics (auth, tenancy, the app shell, a migration the focus apps need) are in scope only when a focus surface needs them to ship.
+- Parked work stays parked: Tree Islands / CAD-6 (do not merge draft PR 211, do not resolve those holds), antenna photo capture, and the September LLM-improvement pause.
+
+## PRIORITY ORDER — SUSPENDED until 2026-11-14 (owner directive 2026-09-15, gate OPENED 2026-09-17)
+
+**Not the order to work until Manor View's hard go-live is over.** See the section above. The notes below are the 2026-09-17 record.
+
+**Record only — suspended.** The gate was opened 2026-09-17 and this ordering governed what was worked on next from that date until the Manor View freeze. The owner's
 start condition was "once the Forgejo INFRASTRUCTURE upgrade is complete", and on 2026-09-17 the
 owner ruled that condition met — the forge, its runners, the HMAC route, dispatch admission control,
 per-host SSH keys and Cloudflare Access are all live (below). Moving the DEPLOY PATH to the forge was
@@ -145,6 +173,9 @@ prioritized anyway; it does not widen the exception to any other meta work.
    management of tablets and readers. Do not file or approve LLM-improvement work until unpaused.
 
 ## PRODUCT FREEZE on fleet self-improvement (owner directive 2026-08-13)
+
+**The Manor View go-live freeze at the top of this file is stricter and wins through 2026-11-13.** Meta work is paused even when it does not fit the exception below, unless it blocks one of the seven go-live surfaces or a live fault is losing customer data, money, or the ability to deploy.
+
 **No new pipeline / CI / monitoring / review-gate / orchestrator / backup-tooling case may be filed
 unless it BLOCKS a case on a PRIORITY SURFACE above (ScanTap, Scan M Platform, Scan M mobile,
 Print Cloud, platform basics, or the scout enablement).**
