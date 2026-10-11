@@ -67,6 +67,8 @@
 | [agent-development-teams](./05-agents/agent-development-teams.md) | Agent development teams — how to |
 | [agent-architecture-reliability](./05-agents/agent-architecture-reliability.md) | Agent architecture for reliability |
 | [agent-pipeline-optimizations](./05-agents/agent-pipeline-optimizations.md) | **Speed + cost optimizations — review parallelism, dynamic turns, token reduction** |
+| [agent-assignment-design](./05-agents/agent-assignment-design.md) | **OFFICIAL — agent assignment separate from execution, no model lock-in** |
+| [owner-ai-teammates](./05-agents/owner-ai-teammates.md) | Owner AI teammates — Claude Code, Grok (Bot), Gemini; shared entry `AGENTS.md` |
 
 ## Fleet rename (bootstrap names)
 | File | Topic |
