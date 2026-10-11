@@ -307,4 +307,28 @@
 #   Supersedes the pin part of grotap-agents#24 (24dae114).
 #   Per step 5 this rotation commit is itself unblessed until a follow-up
 #   rotation pins the merge commit.
-f0d9bb705d9d33c177f2228eab424913727bd71e
+#
+#   Rotated 2026-10-11 (owner-directed) from
+#   f0d9bb705d9d33c177f2228eab424913727bd71e to
+#   56f6d3d6d888fcef74bdb8130e163ecb61b6bc12.
+#   That SHA is the content commit already on refs/heads/master, resolved
+#   with git ls-remote after the push. Strict descendant of the outgoing
+#   pin (git merge-base --is-ancestor f0d9bb7 56f6d3d, exit 0).
+#   Reviewed before blessing, range f0d9bb7..56f6d3d:
+#     agents/scripts/orchestrator-run.sh UNTOUCHED.
+#     BOOTSTRAP.md UNTOUCHED.
+#     agents/GLOBAL.md changes only in 56f6d3d: the Manor View Farms
+#       go-live freeze (soft 2026-10-26, hard 2026-11-13). Rules 1-11
+#       are unchanged. CLAUDE.md and docs/PRIORITY_SURFACES.md carry the
+#       same freeze. No secret material.
+#     Already on master ahead of the old pin, and therefore in the tree
+#     this pin checks out: 2f3ed5d sync-all-agents.sh stops pushing
+#     FLEET_DOPPLER_TOKEN (#30); 1538221 env-validator.sh stops requiring
+#     dead HETZNER_API_TOKEN_2 (#31); lessons/build-ship.md, SERVERS.md,
+#     setup-agent06.sh, a health-monitor test, the ggshield seat-hook
+#     doc, and the prior pin commit 6477c49. The runner script is not
+#     among them.
+#   Per step 5 this rotation commit is itself unblessed. Hosts run
+#   56f6d3d, which contains the GLOBAL freeze. That is the known steady
+#   state, not a fault to chase.
+56f6d3d6d888fcef74bdb8130e163ecb61b6bc12
