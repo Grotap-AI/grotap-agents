@@ -45,7 +45,7 @@ A change that blocks one of these is part of that surface. A live fault that is 
 - Before commit: Read matching `agents/lessons/*.md` by trigger only — never cat all lessons into the prompt.
 
 ## Key IDs
-Control Neon `green-rice-76766370` · Grotap tenant Neon `proud-union-74070434` · Railway `f9bf333c-f929-413e-a95c-7923e10b5777`
+Control Neon `raspy-block-90057530` (aws-us-east-1) · Grotap tenant Neon `proud-union-74070434` · Railway `f9bf333c-f929-413e-a95c-7923e10b5777`
 
 ## Fleet / Dispatch / Review / Deploy
 Roster+SSH: `agents/SERVERS.md` (do **not** auto-load into coding prompts).
