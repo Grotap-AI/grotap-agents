@@ -1,16 +1,24 @@
 # AGENTS.md — Shared entry for every AI
 
-This file is the tool-neutral entry point for every AI that works in this repo: Claude Code, Grok (Bot / Grok Bot), Gemini, Codex and Cursor. All of them follow the same rules. Tool-specific entry files (listed at the end) add mechanics only.
+Tool-neutral entry for every AI in this repo (Claude Code, Grok, Gemini, Codex, Cursor). Same rules for all; tool files (end of file) add mechanics only.
 
-## Load order
+## Load order (canonical — `BOOTSTRAP.md` and `agents/GLOBAL.md` point here)
 
-At the start of every substantive session, before editing code or filing work:
+Always, at the start of every session:
 
-1. `agents/GLOBAL.md` — the single constitution. It holds the numbered absolute rules and the Manor View go-live freeze (in force through 2026-11-13). If anything here or in a tool file disagrees with it, `agents/GLOBAL.md` wins.
-2. `PROJECT_STATUS.md` — what is being built and what is live.
-3. `docs/PRIORITY_SURFACES.md` — the surface map and freezes.
-4. `docs/00-INDEX.md`, then the docs for the surface you are touching.
-5. For fleet, dispatch or role work only: `agents/SERVERS.md` and the matching `agents/lessons/*.md` files (by trigger, never all of them).
+1. Your tool entry file (`CLAUDE.md` is auto-loaded for Claude Code).
+2. `agents/GLOBAL.md` — the single constitution: the numbered absolute rules and the Manor View go-live freeze (through 2026-11-13). It wins over this file and every tool file.
+
+On demand — read only when your task touches it:
+
+- `docs/PRIORITY_SURFACES.md` — choosing or scoping work, or any freeze question.
+- `docs/00-INDEX.md`, then that surface's docs — before editing a surface.
+- `PROJECT_STATUS.md` — what is live and what is being built.
+- `agents/SERVERS.md` — fleet, SSH or host work.
+- `agents/roles/{module}/MODULE.md` then `{role}/ROLE.md` — fleet role work.
+- `agents/lessons/*.md` — by diff trigger (table in `agents/GLOBAL.md`), never all of them.
+
+Fleet and jumpbox sessions also follow `BOOTSTRAP.md`.
 
 ## Official designs
 
@@ -21,9 +29,9 @@ These are adopted by the owner and bind every AI:
 
 ## Shared defaults
 
-These owner defaults apply to every AI (they are also stated in `CLAUDE.md`). `agents/GLOBAL.md` wins on any conflict; a new rule goes into `agents/GLOBAL.md`, not here.
+These owner defaults apply to every AI. `agents/GLOBAL.md` wins on any conflict; new rules go there, not here.
 
-- Pipeline first. Substantive changes go through the pipeline and agent fleet (plan, owner prompt, dispatch, review). Building directly is for trivial fixes, doc work the owner assigned, and emergencies.
+- Pipeline first. Dispatch frozen since 2026-10-11 (auto_assign=false). Build in Claude sessions; still file/answer pipeline cases; PIPELINE-FIRST resumes when the owner unfreezes (`agents/GLOBAL.md` § Fleet).
 - Secrets live in Doppler only (`grotap` project). Use `doppler run -- <cmd>`. Never put a secret value in chat, prompts, task files, logs or commits.
 - Git discipline. The branch is `master`. Never run `git add -A` or `git add .`; stage named paths. Use worktrees for multi-session work and leave peers' files alone in shared checkouts.
 - Never name the competitor RFID vendor. Write "Competitor RFID Software" or `competitor`.
@@ -32,7 +40,7 @@ These owner defaults apply to every AI (they are also stated in `CLAUDE.md`). `a
 
 | Tool | Entry file | Notes |
 |---|---|---|
-| Claude Code | `CLAUDE.md` | Also runs `.claude-session-init.sh` and reads `BOOTSTRAP.md`. |
+| Claude Code | `CLAUDE.md` | Also runs `.claude-session-init.sh`. `BOOTSTRAP.md` is fleet/jumpbox only. |
 | Grok (Bot / Grok Bot) | `BOT.md` | Grok has no native repo file loading; the owner's Grok project instruction tells it to read `BOT.md` and this file. |
 | Gemini CLI | `GEMINI.md` | `.gemini/settings.json` makes Gemini load this file and `GEMINI.md`. |
 | Codex, Cursor | this file | Both read `AGENTS.md` natively. |

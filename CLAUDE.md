@@ -1,38 +1,15 @@
-# CLAUDE.md — grotap Agent Project
-# This file is loaded automatically by Claude Code at every session start.
+# CLAUDE.md — grotap-agents (auto-loaded every session)
 
-## Shared AI entry
+Shared entry for every AI: `AGENTS.md` (canonical load order). Constitution: `agents/GLOBAL.md`; its absolute rules win on any conflict. Grok: `BOT.md`. Gemini: `GEMINI.md`.
 
-Shared AI entry: `AGENTS.md` (all AIs). Claude-specific mechanics below. Grok (Bot) uses `BOT.md` and Gemini uses `GEMINI.md`; the operating model is `docs/05-agents/owner-ai-teammates.md`.
-
-## Mandatory Session Bootstrap
-
-At the start of EVERY session, before any other work:
-
-1. Run `./.claude-session-init.sh` to sync from GitHub and validate MD structure
-2. Read `BOOTSTRAP.md` for the full 6-step initialization protocol
-
-Do not skip this on "quick" sessions — there are none.
+## Session start (every session, no exceptions)
+Run `./.claude-session-init.sh`. The root tree is ff-only, so its pull is safe. `BOOTSTRAP.md` is for fleet and jumpbox sessions only.
 
 ## Repos
+`grotap-agents` = `C:\1Claude\` (docs in `docs/`). `grotap-platform` = `C:\1Claude\platform\`. `grotap-platform-docs` is remote-only and stale.
 
-| Repo | Purpose | Local Path |
-|---|---|---|
-| `grotap-agents` | Agent bootstrap architecture | `C:\1Claude\` |
-| `grotap-platform-docs` | Platform documentation (remote only, last push 2026-07-05; NOT cloned — working docs live in `C:\1Claude\docs\` inside this repo) | — |
-| `grotap-platform` | Application code | `C:\1Claude\platform\` |
+## Manor View go-live freeze, through 2026-11-13
+Work only ScanTap web, ScanTap Setup, ScanTap Mobile and sister apps, Print Cloud Setup/Labels, and Vendor Avail & Inventory Planning. All else is paused. Detail: `agents/GLOBAL.md`, `docs/PRIORITY_SURFACES.md`.
 
-## Rules
-
-Full rules are in `agents/GLOBAL.md`. Its absolute rules are enforced on every task.
-
-## Manor View go-live — IN FORCE through 2026-11-13 (owner 2026-10-11)
-
-First customer: Manor View Farms. Soft go-live 2026-10-26. Hard go-live 2026-11-13. Until that hard go-live is over, work only ScanTap platform app, ScanTap Setup, ScanTap Mobile, ScanTap Mobile sister apps, Print Cloud Setup, Print Cloud Labels, and Vendor Avail & Inventory Planning. All other areas are paused. The same rule is in `agents/GLOBAL.md`. The map is `docs/PRIORITY_SURFACES.md`.
-
-## Default Execution — PIPELINE-FIRST
-
-For any substantive change, the DEFAULT is to route it through the pipeline / agent fleet (plan → prompt
-the owner → dispatch → review + teach the machine), NOT to build it myself — dogfooding the fleet makes it
-smarter faster. Full rule + workflow in `platform/CLAUDE.md` ("Default Execution — PIPELINE-FIRST").
-I keep only the review gate and owner-approved irreversible ops (live migrations, data loads).
+## Execution
+PIPELINE-FIRST is the default. Dispatch frozen since 2026-10-11 (auto_assign=false). Build in Claude sessions; still file/answer pipeline cases; PIPELINE-FIRST resumes when the owner unfreezes. Keep the review gate and owner-approved irreversible ops.
