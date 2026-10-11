@@ -553,7 +553,7 @@ this work:
 - Update `agents/SERVERS.md`, which still documents the shared key as the root SSH method. It needs
   **two** greps, because the file records the key in two different forms: `grotap_agents` finds the
   literal invocation (one occurrence), and `fleet key` finds the prose rows that say
-  `Root SSH = fleet key` (two occurrences — maps-01, forge-01). The prose rows are the ones
+  `Root SSH = shared fleet key` (two occurrences — maps-01, forge-01). The prose rows are the ones
   a reader must rewrite when the key is retired, and they do not contain the string the first grep
   looks for.
 - Only then remove the public key from every `authorized_keys` and delete the private key from
@@ -563,7 +563,7 @@ this work:
 hour, when commit `6bd54b4` fixed that file's roster and added a comment block above the call. An
 earlier draft of this section also miscounted `SERVERS.md` as "two hits, lines 82 and 92" — in fact
 the literal `grotap_agents` has only ever appeared once (line 92); what sits at 78, 81 and 82 is the
-prose `Root SSH = fleet key`. That miscount is exactly why both greps below are required: a check
+prose `Root SSH = shared fleet key`. That miscount is exactly why both greps below are required: a check
 that looks only for the path silently passes while two rows still tell a reader the fleet key is
 the way in. Treat every line number here as a hint that will rot, and the strings as the check:
 
