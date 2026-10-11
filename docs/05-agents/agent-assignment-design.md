@@ -54,18 +54,21 @@ deterministic gates → review ladder → policy → human gate (exceptions only
 ### 3.4 Risk tiers (from changed paths)
 | Tier | Example paths | Executor | Review |
 |---|---|---|---|
-| T0 low | docs, copy, styles, tests-only | cheapest passing model | deterministic gates + cheap reviewer |
-| T1 normal | app routers/pages, scripts | mid model | gates + cheap reviewer, escalate on doubt |
-| T2 high | migrations, auth, billing/money, secrets, infra/CI, orchestrator | strongest model | gates + full ladder + human on exceptions |
+| T0 low | docs, copy, styles, tests-only | cheapest passing model | deterministic gates + Jev |
+| T1 normal | app routers/pages, scripts | mid model | gates + Jev; unsure → human |
+| T2 high | migrations, auth, billing/money, secrets, infra/CI, orchestrator | strongest model | gates + Jev with full evidence + human on exceptions |
 
 ### 3.5 Review ladder
-Deterministic gates first; then cheap reviewer → second opinion → strong final reviewer → human. Only escalate on
-doubt or tier. An "unsure" verdict goes up a rung, never becomes a reject.
+Deterministic gates run first (commit exists, tsc/py_compile, migration-validator, secret scan); broken work never
+reaches a reviewer. Then the ship decision follows constitution rule 9: when `JEV_ENABLED`, **Jev is the only judge**
+for assign and done-ship — no LLM-as-judge. Other models may produce advisory review notes for Jev or a human to read,
+but never a verdict. Risk tier sets how much evidence Jev gets (T2 adds the full diff and test output). Low confidence
+or an "unsure" verdict goes to `human_review`; it never becomes a silent reject.
 
 ## 4. Cost levers (measured basis)
 - Spend is dominated by cache reads and grows with **context size × turns** → smaller context packs, per-tier turn caps.
 - Cheap models for triage, classification, summaries, learning extraction; strong models only for T2 or after failure.
-- Fail fast on deterministic gates so review tokens are never spent on broken work.
+- Fail fast on deterministic gates so review tokens are never spent on broken work; Jev is the single ship judge, so no stacked LLM reviewers.
 - **Prerequisite:** cost telemetry must cover ~100% of billed spend (it captured 2–4% in September), or no saving can be proven.
 
 ## 5. Performance

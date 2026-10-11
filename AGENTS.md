@@ -21,7 +21,7 @@ These are adopted by the owner and bind every AI:
 
 ## Shared defaults
 
-These apply to every AI. They summarise the constitution and do not replace it.
+These owner defaults apply to every AI (they are also stated in `CLAUDE.md`). `agents/GLOBAL.md` wins on any conflict; a new rule goes into `agents/GLOBAL.md`, not here.
 
 - Pipeline first. Substantive changes go through the pipeline and agent fleet (plan, owner prompt, dispatch, review). Building directly is for trivial fixes, doc work the owner assigned, and emergencies.
 - Secrets live in Doppler only (`grotap` project). Use `doppler run -- <cmd>`. Never put a secret value in chat, prompts, task files, logs or commits.
