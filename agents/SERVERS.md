@@ -74,6 +74,7 @@ reason here, so the next reader can tell an exception from a mistake.
 
 | Cloud name | IPv4 | Status |
 |---|---|---|
+| ai-workstation-grotap-01 | 5.161.82.78 | active — owner AI workstation (Claude Code, Gemini CLI, Grok CLI under user `grotap`, `ai-session` tmux). ccx43 Ashburn, id 172152945, created 2026-10-24. Not in any dispatch pool; recycled fleet IP (old known_hosts entry removed) |
 | team-claude-01 (formerly `agent-21-shared`) | 5.161.119.92 | active — Team Claude seat. ccx33 Ashburn, id 167539331, created 2026-09-26 |
 | team-codex-grok-monitor-01 (formerly `agent-22-shared`) | 178.156.215.173 | active — Team Codex, Grok, and Monitor seats. ccx33 Ashburn, id 167604967, created 2026-09-27 |
 | ops-01 (formerly `agent-06-claude`) | 5.161.53.103 | running — ops host. cpx31 Ashburn, id 166626264, created 2026-09-20 |
@@ -101,6 +102,7 @@ SSH alias is not a Hetzner name. After cutover, the Team Claude seat is on `team
 
 | Cloud name | IP | Linux hostname | SSH alias (not a Cloud name) | Hardware / DC | Roles | Execute slots |
 |---|---|---|---|---|---|---|
+| ai-workstation-grotap-01 | 5.161.82.78 | ai-workstation-grotap-01 | — | ccx43, Ashburn. **active** | Owner AI workstation: `ssh ai-ashburn` / `ai claude|gemini|grok|shell` (desktop alias). Scripts: platform `scripts/claudecode/hetzner-bootstrap.sh`, `hetzner-create-workstation.sh`. Dedicated vCPU limit 32->40 (2026-10-24) | — |
 | team-claude-01 | 5.161.119.92 | team-claude-01 | `agent-21-shared` (pool key) | ccx33, Ashburn. **active** | Team Claude seat (`astra` user still exists; `team5` pool is on `team-astra-01`) | — |
 | team-codex-grok-monitor-01 | 178.156.215.173 | team-codex-grok-monitor-01 | `agent-22-shared` (pool key) | ccx33, Ashburn. **active** | Team Codex, Grok, and Monitor seats | — |
 | ops-01 | 5.161.53.103 | ops-01 | `agent-06`, `agent-06-claude` | cpx31, Ashburn. **Running** | Live ops host (was `agent-06-ash`). `grotap-status`, `cloudflared`, `review-gate.timer` active | 2 |
