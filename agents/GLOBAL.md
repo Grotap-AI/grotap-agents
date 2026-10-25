@@ -34,6 +34,7 @@ Until that hard go-live is over, work ONLY the surfaces below. Every other area 
 6. Print Cloud Labels (slug today `label-designer`)
 7. Vendor Avail & Inventory Planning (`vendor-view`)
 A change that blocks one of these is part of that surface. A live fault that is losing customer data, money, or the ability to deploy may still be fixed. Detail: `docs/PRIORITY_SURFACES.md`. This replaces the 2026-09-15 surface order until 2026-11-14.
+Owner exception 2026-10-24 ("required infrastructure"): the AI workstation `ai-workstation-grotap-01` (Hetzner box, Tailscale access, browser terminals/IDE, Aider, its rebuild scripts in `platform/scripts/claudecode/`) may be worked. It does not reopen other infrastructure (Forgejo cutover, fleet self-improvement).
 
 ## Common FAIL Causes — SHORT (detail: `agents/lessons/always-on-fail-detail.md`)
 - SQL: control-plane DDL only in `backend/db/migrations/control_plane/vNNN_*.sql`; app schemas in BOTH `migrations/apps/<slug>/` and `ingestion-worker/migrations/apps/<slug>/`; never amend applied migrations; asyncpg JSONB=`json.dumps`+`::jsonb`; RLS GUC name exact.
