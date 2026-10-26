@@ -1,6 +1,6 @@
 # Grotap skills library
 
-Version: see `VERSION` (0.1.0). Shared playbooks for the agent fleet. Nothing
+Version: see `VERSION` (0.1.3). Shared playbooks for the agent fleet. Nothing
 in this folder deploys, syncs to a server, or wires itself into session
 bootstrap.
 
@@ -43,6 +43,20 @@ bash skills/scripts/sync-skills.sh --mode symlink --home "$HOME"
 # Repo-level on a platform checkout (not this repo):
 bash skills/scripts/sync-skills.sh --mode symlink --repo /path/to/grotap-platform
 ```
+
+The installer refuses this checkout, and any directory inside it, for both
+`--repo` and `--home`. A real skill directory is left in place unless you
+pass `--force`, in symlink mode and in copy mode, under every root you pass.
+That includes a `--home` which is not the invoking user's `$HOME`. A copy
+that is already identical to the library is skipped, so a repeat run does
+not write another backup. `--force` moves the old directory outside every
+scanned skill root, to
+`${XDG_STATE_HOME:-$HOME/.local/state}/grotap-skills/backup/<run>/<root>/<name>`.
+One invocation uses one run directory, so every skill backed up in that run
+stays together. After that, older runs are pruned to the last five, and the
+run just written is kept. If `HOME` and `XDG_STATE_HOME` are both unset,
+`--force` stops before moving anything. A symlink into an existing real
+directory would otherwise land inside it.
 
 Codex 0.157 (`openai/codex` tag `rust-v0.157.0`, `codex-rs/ext/skills`) scans:
 
@@ -124,8 +138,8 @@ The skill does not pick a model. The box already has one.
 ## Loading test
 
 Infra runs this on the Hetzner builder `agent-11-codex` as the non-root
-`runner` user. It does not need root or an API key. It writes only under
-`--home`.
+`agent` user (uid 1000). It does not need root or an API key. It writes only
+under `--home`.
 
 ```bash
 bash skills/scripts/load-test.sh --home /tmp/skills-test-home
@@ -137,7 +151,12 @@ still print. Codex 0.157 omits a skill from the model-visible list when
 `agents/openai.yaml` sets `allow_implicit_invocation: false`, so the live
 check proves repo discovery with a scratch probe and expects the nine
 library skills to be absent from that list. The orchestrator still names
-them.
+them. The listing budget also includes the Codex built-in system skills
+that 0.157 lists from `$CODEX_HOME/skills/.system` (imagegen, openai-docs,
+plugin-creator, skill-creator, skill-installer). A system skill with
+`allow_implicit_invocation: false` stays out of that total. The script
+prints library-only and total-with-system separately. Headroom is against
+the total.
 
 ## Proof tool
 

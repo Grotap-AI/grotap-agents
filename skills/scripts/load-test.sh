@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # Read-only skills loading check for a builder box.
+# Intended Hetzner user is `agent` (uid 1000).
 # Writes only under --home (default /tmp/skills-test-home). Does not need root
 # or an API key. Skips Codex or Claude Code when that binary is missing.
-# Idempotent.
+# Idempotent. Headroom is library listing tokens plus Codex system skills
+# from $CODEX_HOME/skills/.system.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -35,12 +37,41 @@ tokens_from_bytes() {
 }
 
 front_description() {
-  local file="$1" line
-  line="$(sed -n 's/^description: "\(.*\)"[[:space:]]*$/\1/p' "$file" | head -n 1)"
-  if [[ -z "$line" ]]; then
-    line="$(sed -n "s/^description: '\\(.*\\)'[[:space:]]*$/\\1/p" "$file" | head -n 1)"
+  awk '
+    NR == 1 && $0 == "---" { infront = 1; next }
+    infront && $0 == "---" { exit }
+    infront && $0 ~ /^description:[[:space:]]*/ {
+      sub(/^description:[[:space:]]*/, "")
+      if ($0 ~ /^".*"$/) {
+        sub(/^"/, "")
+        sub(/"$/, "")
+      } else if ($0 ~ /^'\''.*'\''$/) {
+        sub(/^'\''/, "")
+        sub(/'\''$/, "")
+      }
+      printf "%s", $0
+      exit
+    }
+  ' "$1"
+}
+
+# Codex omits a skill from the model-visible listing when this flag is false.
+skill_is_explicit_only() {
+  local yaml="$1/agents/openai.yaml"
+  [[ -f "$yaml" ]] || return 1
+  grep -Eq '^[[:space:]]*allow_implicit_invocation:[[:space:]]*false[[:space:]]*$' "$yaml"
+}
+
+print_budget() {
+  local used_bytes="$1" used_tokens="$2"
+  echo "char_budget_8000_used: $used_bytes"
+  if [[ "$used_bytes" -le 8000 ]]; then
+    echo "char_budget_8000_headroom: $((8000 - used_bytes))"
+  else
+    echo "char_budget_8000_headroom: OVER by $((used_bytes - 8000))"
   fi
-  printf '%s' "$line"
+  echo "token_headroom_vs_128000_2pct: $((2560 - used_tokens))"
+  echo "token_headroom_vs_200000_2pct: $((4000 - used_tokens))"
 }
 
 echo "=== grotap skills load-test ==="
@@ -94,21 +125,18 @@ while IFS= read -r skill_md; do
   count=$((count + 1))
 done < <(find "$LIB" -mindepth 2 -maxdepth 2 -name SKILL.md | sort)
 
-echo "--- totals ---"
-echo "skill_count: $count"
-echo "description_chars: $char_total"
-echo "listing_bytes: $listing_bytes_total"
-echo "listing_tokens: $listing_tokens_total"
-echo "body_tokens: $body_tokens_total"
-echo "char_budget_8000_used: $listing_bytes_total"
-if [[ "$listing_bytes_total" -le 8000 ]]; then
-  echo "char_budget_8000_headroom: $((8000 - listing_bytes_total))"
-else
-  echo "char_budget_8000_headroom: OVER by $((listing_bytes_total - 8000))"
-fi
-echo "token_headroom_vs_128000_2pct: $((2560 - listing_tokens_total))"
-echo "token_headroom_vs_200000_2pct: $((4000 - listing_tokens_total))"
-echo "note: listing cost is name+description+path only. SKILL.md bodies stay on disk until a skill is invoked."
+library_skill_count=$count
+library_listing_bytes=$listing_bytes_total
+library_listing_tokens=$listing_tokens_total
+library_body_tokens=$body_tokens_total
+
+echo "--- library totals ---"
+echo "library_skill_count: $library_skill_count"
+echo "library_description_chars: $char_total"
+echo "library_listing_bytes: $library_listing_bytes"
+echo "library_listing_tokens: $library_listing_tokens"
+echo "library_body_tokens: $library_body_tokens"
+echo "note: library-only listing cost is name+description+path. Headroom below includes Codex system skills."
 
 echo "--- codex ---"
 if [[ -z "$CODEX_BIN" ]]; then
@@ -189,6 +217,49 @@ EOF
     echo "SKIP codex live list: binary is not 0.157.x"
   fi
 fi
+
+echo "--- system skills ---"
+SYSTEM_ROOT="$HOME_DEST/.codex/skills/.system"
+system_skill_count=0
+system_listing_bytes=0
+system_listing_tokens=0
+echo "system_root: $SYSTEM_ROOT"
+if [[ -d "$SYSTEM_ROOT" ]]; then
+  echo "name desc_chars listing_bytes listing_tokens skill_md"
+  while IFS= read -r skill_md; do
+    name="$(basename "$(dirname "$skill_md")")"
+    if skill_is_explicit_only "$(dirname "$skill_md")"; then
+      echo "system_skill_omitted_from_listing: $name (allow_implicit_invocation false)"
+      continue
+    fi
+    desc="$(front_description "$skill_md")"
+    desc_chars="${#desc}"
+    line="- ${name}: ${desc} (file: ${skill_md})"
+    listing_bytes="$(printf '%s\n' "$line" | wc -c | tr -d ' ')"
+    listing_tokens="$(tokens_from_bytes "$listing_bytes")"
+    printf '%s %s %s %s %s\n' \
+      "$name" "$desc_chars" "$listing_bytes" "$listing_tokens" "$skill_md"
+    system_listing_bytes=$((system_listing_bytes + listing_bytes))
+    system_listing_tokens=$((system_listing_tokens + listing_tokens))
+    system_skill_count=$((system_skill_count + 1))
+  done < <(find "$SYSTEM_ROOT" -mindepth 2 -maxdepth 2 -name SKILL.md | sort)
+else
+  echo "note: system skills were not materialized, so the total equals the library-only listing. Codex 0.157 writes built-ins such as imagegen, openai-docs, plugin-creator, skill-creator, and skill-installer under \$CODEX_HOME/skills/.system when it starts."
+fi
+
+listing_bytes_with_system=$((library_listing_bytes + system_listing_bytes))
+listing_tokens_with_system=$((library_listing_tokens + system_listing_tokens))
+echo "--- totals with system ---"
+echo "library_skill_count: $library_skill_count"
+echo "library_listing_bytes: $library_listing_bytes"
+echo "library_listing_tokens: $library_listing_tokens"
+echo "system_skill_count: $system_skill_count"
+echo "system_listing_bytes: $system_listing_bytes"
+echo "system_listing_tokens: $system_listing_tokens"
+echo "listing_bytes_with_system: $listing_bytes_with_system"
+echo "listing_tokens_with_system: $listing_tokens_with_system"
+print_budget "$listing_bytes_with_system" "$listing_tokens_with_system"
+echo "note: headroom is against the total (library plus system). SKILL.md bodies stay on disk until a skill is invoked."
 
 echo "--- claude code ---"
 if [[ -z "$CLAUDE_BIN" ]]; then
