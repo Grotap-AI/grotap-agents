@@ -58,7 +58,7 @@ Git: `master`, not `main`; stage named paths only (never `git add -A`); tsc befo
 |---|---|
 | `lessons/decomposition-gate.md` | decompose / review / merge gate / fan-out |
 | `lessons/sql-migrations.md` | SQL/migrations/RLS |
-| `lessons/wiring-contracts.md` | endpoints/events/contracts |
+| `lessons/wiring-contracts.md` | endpoints/events/contracts · any Scan M APK release (ask owner: all companies or ONE?) |
 | `lessons/build-ship.md` | tests/signatures/startup/CI |
 | `lessons/frontend.md` | frontend/mobile/UI enums |
 | `lessons/auth-security.md` | auth/secrets/fail-closed |
