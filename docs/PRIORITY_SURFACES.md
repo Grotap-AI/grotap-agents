@@ -26,6 +26,7 @@ Rules of this freeze:
 - **Blocker pull-forward still holds.** Work on a later or paused surface only for the part that unblocks a focus surface, and build only that part.
 - **Deploy and data exceptions still hold.** A live fault that is losing customer data, money, or the ability to deploy may be fixed. Judge by customer impact.
 - Platform basics (auth, tenancy, the app shell, a migration the focus apps need) are in scope only when a focus surface needs them to ship.
+- **Owner exception 2026-10-26: Local Backups.** The Admin app page `/admin/backups`, the `/local-backup` API (migration v277), and the GroTap Field 2.2 Backup agent (Windows only; no Android) may ship during the freeze. Scope is limited to that feature. Docs: platform `docs/LOCAL_BACKUP_AGENT_CONTRACT.md`, `docs/ICARUS_L1_BACKUP.md`.
 - Parked work stays parked: Tree Islands / CAD-6 (do not merge draft PR 211, do not resolve those holds), antenna photo capture, and the September LLM-improvement pause.
 
 ## PRIORITY ORDER — SUSPENDED until 2026-11-14 (owner directive 2026-09-15, gate OPENED 2026-09-17)
