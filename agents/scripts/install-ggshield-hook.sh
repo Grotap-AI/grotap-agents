@@ -2,11 +2,11 @@
 # Install the ggshield pre-commit hook for one seat user.
 #
 # Seats:
-#   agent-21-shared: claude, astra
-#   team-codex-grok-monitor-01 (was agent-22-shared): codex, grok, monitor
+#   team-claude-01 (agent-21-shared): claude, codex, grok, monitor, astra
+#   (since 2026-10-29; team-codex-grok-monitor-01 is deleted)
 #
 # The hook is off after a plain install. --canary turns it on only for
-# the codex user on agent-22-shared.
+# the codex user on team-claude-01 (agent-21-shared).
 #
 # Run as the seat user, or as root with --user SEAT.
 # Do not run this on forge-01 or maps-01.

@@ -108,7 +108,7 @@ SHARED_KEY="$HOME/.ssh/grotap_agents"
 
 # The ops box (owner workstation) holds the grotap_from06_* keys. It was
 # renamed agent-06 -> ops-01 on 2026-10-02; both names match. Team boxes
-# (team-claude-01, team-codex-grok-monitor-01, team-astra-01) do not.
+# (team-claude-01) do not.
 # GROTAP_OPS_HOST=1|0 forces the answer. The match is anchored: the whole
 # short name must be one of the four below (optionally followed by .<domain>).
 # status-server.js OPS_HOST_RE is the same rule; keep the two identical.
@@ -145,9 +145,12 @@ _ssh_key_for_is_ops_host() {
 #   prompt-01-astra 5.161.243.18, agent-01/02-grok 5.161.83.78 5.161.82.78
 #   agent-11-codex 178.156.222.217, agent-13-monitor 178.156.212.74
 #   openreplay-01 5.161.189.143 (deleted 2026-10-03)
-#   agent-22-shared / team-codex-grok-monitor-01 178.156.215.173 and
-#   agent-team-01-astra / team-astra-01 5.161.80.75: pending delete
-#   2026-10-29, every team seat moved to agent-21-shared (5.161.119.92).
+#   Deleted 2026-10-29 (every team seat moved to agent-21-shared
+#   5.161.119.92; support-runner moved to openreplay-02):
+#   agent-22-shared (team-codex-grok-monitor-01) 178.156.215.173,
+#   agent-team-01-astra (team-astra-01) 5.161.80.75, and
+#   openreplay-ai-support (openreplay-ai-support-01) 178.156.199.83.
+#   Their Hetzner-name rows are removed; the pool-key name rows stay.
 declare -A _SSH_KEY_FOR_HOST_BY_IP=(
   # 5.161.74.39 was agent-01-claude. That box was deleted and Hetzner recycled
   # the address to openreplay-02 (id 168488339) on 2026-10-02. The
@@ -166,7 +169,7 @@ declare -A _SSH_KEY_FOR_HOST_BY_IP=(
   # not fall through to the shared farm key.
   ["5.161.119.92"]="agent-21-shared"
   ["agent-21-shared"]="agent-21-shared"
-  # Former codex/grok/monitor box, pending delete 2026-10-29. Name row only.
+  # Former codex/grok/monitor box, deleted 2026-10-29. Name row only.
   ["agent-22-shared"]="agent-22-shared"
   # Team Grok. Cloud name = Linux hostname = SSH alias = key stem. No offset.
   # agent-06 file: $HOME/.ssh/grotap_from06_<name>. Not the shared farm key.
@@ -198,10 +201,7 @@ declare -A _SSH_KEY_FOR_HOST_BY_IP=(
   # keep their old names (grotap_from06_agent-21-shared, ...). Do not
   # rename key files during the freeze.
   ["team-claude-01"]="agent-21-shared"
-  ["team-codex-grok-monitor-01"]="agent-22-shared"
-  ["team-astra-01"]="agent-team-01-astra"
   ["ops-01"]="agent-06-claude"
-  ["openreplay-ai-support-01"]="openreplay-ai-support"
   # openreplay-02 (ccx23, 5.161.74.39) took over supportagents.grotap.com on
   # 2026-10-02. It carries the authorized_keys of the old OpenReplay box, so
   # key_file_stems maps it to the existing cobrowse-01 key files.
@@ -209,7 +209,9 @@ declare -A _SSH_KEY_FOR_HOST_BY_IP=(
   # and IP are not mapped (Hetzner recycles released addresses).
   ["supportagents.grotap.com"]="openreplay-02"
   ["openreplay-02"]="openreplay-02"
-  ["178.156.199.83"]="openreplay-ai-support"
+  # openreplay-ai-support-01 (178.156.199.83) was deleted 2026-10-29; the
+  # support-runner (RUNNER_ID openreplay-ai-support) now runs on
+  # openreplay-02. Name row only; the address is not mapped.
   ["openreplay-ai-support"]="openreplay-ai-support"
   # scan-01 (ClamAV, core project, Hetzner id 168175702) and mdm-01 (core,
   # id 153766531). IPs checked against the Hetzner API 2026-10-03. The ops

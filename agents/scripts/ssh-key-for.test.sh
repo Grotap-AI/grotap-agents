@@ -103,11 +103,12 @@ for _mint in grotap_prompt-01-astra grotap_agent-team-01-astra grotap_agent-21-s
 done
 expect "5.161.243.18"                 grotap_agents                "deleted prompt-01-astra IP stays unmapped"
 expect "prompt-01-astra"              grotap_prompt-01-astra       "astra prompt name"
-expect "5.161.80.75"                  grotap_agents                "pending-delete team-astra-01 IP stays unmapped"
+expect "5.161.80.75"                  grotap_agents                "deleted team-astra-01 IP stays unmapped"
+expect "178.156.199.83"               grotap_agents                "deleted openreplay-ai-support-01 IP stays unmapped"
 expect "agent-team-01-astra"          grotap_agent-team-01-astra   "astra agent name"
 expect "5.161.119.92"                 grotap_agent-21-shared       "shared host IP"
 expect "agent-21-shared"              grotap_agent-21-shared       "shared host name"
-expect "178.156.215.173"              grotap_agents                "pending-delete agent-22-shared IP stays unmapped"
+expect "178.156.215.173"              grotap_agents                "deleted agent-22-shared IP stays unmapped"
 expect "agent-22-shared"              grotap_agent-22-shared       "agent-22-shared name"
 
 echo "== Team Grok is per-host and does not offer the shared key when unminted =="
@@ -498,16 +499,17 @@ for h in ops-01 agent-06; do
   ren_expect "$h" "team-claude-01"             grotap_from06_agent-21-shared
   ren_expect "$h" "agent-21-shared"            grotap_from06_agent-21-shared
   ren_expect "$h" "5.161.119.92"               grotap_from06_agent-21-shared
-  ren_expect "$h" "team-codex-grok-monitor-01" grotap_from06_agent-22-shared
-  ren_expect "$h" "team-astra-01"              grotap_from06_agent-team-01-astra
+  # Deleted 2026-10-29: the Hetzner names no longer alias a per-host stem.
+  ren_expect "$h" "team-codex-grok-monitor-01" grotap_agents
+  ren_expect "$h" "team-astra-01"              grotap_agents
   ren_expect "$h" "ops-01"                     grotap_from06_agent-06
 done
 # A team box is not the ops box: per-host-only targets fail closed, no from06.
-ren_expect team-claude-01 "team-codex-grok-monitor-01" ""
+ren_expect team-claude-01 "agent-22-shared" ""
 # Anchored like status-server.js OPS_HOST_RE: a name that merely contains
 # agent-06 is not the ops box.
 for h in my-agent-06-test agent-060 xagent-06 ops-010; do
-  ren_expect "$h" "team-codex-grok-monitor-01" ""
+  ren_expect "$h" "agent-22-shared" ""
 done
 ren_expect ops-01.grotap.internal "agent-10-codex" grotap_from06_agent-20
 ren_expect OPS-01 "agent-10-codex" grotap_from06_agent-20

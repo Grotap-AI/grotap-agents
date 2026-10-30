@@ -15,7 +15,7 @@ GGSHIELD_VERSION="1.54.0"
 # Canary is one seat: the codex user. On 2026-10-29 every team seat moved
 # to team-claude-01 (Hetzner name agent-21-shared); both hostnames are the
 # same box and codex is still one seat on it. The old codex/grok/monitor box
-# (team-codex-grok-monitor-01 / agent-22-shared) is pending delete.
+# (team-codex-grok-monitor-01 / agent-22-shared) was deleted 2026-10-29.
 # GROTAP_GGSHIELD_CANARY_HOST replaces the list with one host.
 GGSHIELD_CANARY_USER="codex"
 if [[ -n "${GROTAP_GGSHIELD_CANARY_HOST:-}" ]]; then
