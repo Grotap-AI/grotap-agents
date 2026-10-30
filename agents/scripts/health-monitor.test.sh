@@ -314,8 +314,7 @@ echo "== post-cutover shared hosts are on the health roster =="
 health_roster="$(roster_block "$MONITOR" "AGENTS=(")"
 for need in \
   "agent-06-claude:5.161.53.103" \
-  "agent-21-shared:5.161.119.92" \
-  "agent-22-shared:178.156.215.173"
+  "agent-21-shared:5.161.119.92"
  do
   case "$health_roster" in
     *"$need"*)
@@ -330,7 +329,8 @@ done
 # other three addresses are released.
 for banned in forge-01 maps-01 agent-05 178.156.246.81 5.161.107.80 5.78.178.81 \
     agent-01-claude agent-02-claude agent-03-claude agent-04-claude \
-    5.161.74.39 5.161.81.193 178.156.222.220 5.161.73.195; do
+    5.161.74.39 5.161.81.193 178.156.222.220 5.161.73.195 \
+    agent-22-shared 178.156.215.173 agent-team-01-astra 5.161.80.75; do
   case "$health_roster" in
     *"$banned"*)
       check "$banned is absent from the health roster (saw: $health_roster)" false

@@ -94,22 +94,20 @@ expect_missing() {
   fi
 }
 expect_missing "prompt-01-astra"     grotap_prompt-01-astra       "astra prompt name missing"
-expect_missing "5.161.80.75"         grotap_agent-team-01-astra   "astra agent IP missing"
 expect_missing "agent-team-01-astra" grotap_agent-team-01-astra   "astra agent name missing"
 expect_missing "5.161.119.92"        grotap_agent-21-shared       "shared host IP missing"
 expect_missing "agent-21-shared"     grotap_agent-21-shared       "shared host name missing"
-expect_missing "178.156.215.173"     grotap_agent-22-shared       "agent-22-shared IP missing"
 expect_missing "agent-22-shared"     grotap_agent-22-shared       "agent-22-shared name missing"
 for _mint in grotap_prompt-01-astra grotap_agent-team-01-astra grotap_agent-21-shared grotap_agent-22-shared; do
   : > "$FAKE_HOME/.ssh/$_mint"
 done
 expect "5.161.243.18"                 grotap_agents                "deleted prompt-01-astra IP stays unmapped"
 expect "prompt-01-astra"              grotap_prompt-01-astra       "astra prompt name"
-expect "5.161.80.75"                  grotap_agent-team-01-astra   "astra agent IP"
+expect "5.161.80.75"                  grotap_agents                "pending-delete team-astra-01 IP stays unmapped"
 expect "agent-team-01-astra"          grotap_agent-team-01-astra   "astra agent name"
 expect "5.161.119.92"                 grotap_agent-21-shared       "shared host IP"
 expect "agent-21-shared"              grotap_agent-21-shared       "shared host name"
-expect "178.156.215.173"              grotap_agent-22-shared       "agent-22-shared IP"
+expect "178.156.215.173"              grotap_agents                "pending-delete agent-22-shared IP stays unmapped"
 expect "agent-22-shared"              grotap_agent-22-shared       "agent-22-shared name"
 
 echo "== Team Grok is per-host and does not offer the shared key when unminted =="
@@ -501,7 +499,6 @@ for h in ops-01 agent-06; do
   ren_expect "$h" "agent-21-shared"            grotap_from06_agent-21-shared
   ren_expect "$h" "5.161.119.92"               grotap_from06_agent-21-shared
   ren_expect "$h" "team-codex-grok-monitor-01" grotap_from06_agent-22-shared
-  ren_expect "$h" "178.156.215.173"            grotap_from06_agent-22-shared
   ren_expect "$h" "team-astra-01"              grotap_from06_agent-team-01-astra
   ren_expect "$h" "ops-01"                     grotap_from06_agent-06
 done

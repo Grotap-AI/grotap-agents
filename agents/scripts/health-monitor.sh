@@ -54,9 +54,10 @@ fi
 # reassign that address, so it is not probed. The deployed copy does not
 # have it; leaving it here alerts DEGRADED every 5 minutes. forge-01 and
 # maps-01 are not liveness targets and are not on this list.
-# agent-21-shared (5.161.119.92) holds the Team Claude and Team Astra seats.
-# agent-22-shared (178.156.215.173) holds the Team Codex, Grok, and Monitor
-# seats. fleet-aliases.json lists those two cloud names and has no aliases
+# agent-21-shared (5.161.119.92) holds every team seat since 2026-10-29
+# (claude, codex, grok, monitor, astra). agent-22-shared (178.156.215.173)
+# and agent-team-01-astra (5.161.80.75) are pending delete and are not
+# probed: Hetzner can reassign those addresses. fleet-aliases.json lists those two cloud names and has no aliases
 # entry and no key_file_stems entry for either, so the name is not rewritten
 # to a seat user. Checked with ssh-key-for.sh as root on a host named
 # agent-06 (hostname prints agent-06, HOME is root's home, aliases file is
@@ -72,7 +73,6 @@ AGENTS=(
   # released. Do not re-add them (see health-monitor.test.sh banned list).
   "agent-06-claude:5.161.53.103"
   "agent-21-shared:5.161.119.92"
-  "agent-22-shared:178.156.215.173"
 )
 
 if [ -n "${HEALTH_MONITOR_AGENTS:-}" ]; then

@@ -136,8 +136,7 @@ _ssh_key_for_is_ops_host() {
 #   agent-05-claude 5.78.178.81
 #   prompt-01-claude / claude-code-01 / claudecode-01 178.156.209.112
 #   agent-12-codex 178.156.203.132
-# The name agent-14-monitor was deleted the same day. 178.156.215.173 is
-# now agent-22-shared (Hetzner id 167604967) and is mapped below.
+# The name agent-14-monitor was deleted the same day.
 # forge-01 (178.156.246.81) stays on this row.
 # Deleted 2026-09-26..2026-10-03; address rows removed (name rows stay), so a
 # recycled address cannot select a fleet key (G6b, test_pool_ips_live.js):
@@ -146,6 +145,9 @@ _ssh_key_for_is_ops_host() {
 #   prompt-01-astra 5.161.243.18, agent-01/02-grok 5.161.83.78 5.161.82.78
 #   agent-11-codex 178.156.222.217, agent-13-monitor 178.156.212.74
 #   openreplay-01 5.161.189.143 (deleted 2026-10-03)
+#   agent-22-shared / team-codex-grok-monitor-01 178.156.215.173 and
+#   agent-team-01-astra / team-astra-01 5.161.80.75: pending delete
+#   2026-10-29, every team seat moved to agent-21-shared (5.161.119.92).
 declare -A _SSH_KEY_FOR_HOST_BY_IP=(
   # 5.161.74.39 was agent-01-claude. That box was deleted and Hetzner recycled
   # the address to openreplay-02 (id 168488339) on 2026-10-02. The
@@ -158,15 +160,13 @@ declare -A _SSH_KEY_FOR_HOST_BY_IP=(
   ["agent-04-claude"]="agent-04-claude"
   ["agent-06-claude"]="agent-06-claude"
   ["prompt-01-astra"]="prompt-01-astra"
-  ["5.161.80.75"]="agent-team-01-astra"
   ["agent-team-01-astra"]="agent-team-01-astra"
-  # Shared host. The team5 astra seat dials as the astra user. A bare
-  # name or IP must not fall through to the shared farm key.
+  # Shared host for every team seat since 2026-10-29 (claude, codex, grok,
+  # monitor, astra). Seats dial as their own users. A bare name or IP must
+  # not fall through to the shared farm key.
   ["5.161.119.92"]="agent-21-shared"
   ["agent-21-shared"]="agent-21-shared"
-  # Shared host for codex, grok, and monitor. A bare name or IP must not
-  # fall through to the shared farm key. Seats dial as their own users.
-  ["178.156.215.173"]="agent-22-shared"
+  # Former codex/grok/monitor box, pending delete 2026-10-29. Name row only.
   ["agent-22-shared"]="agent-22-shared"
   # Team Grok. Cloud name = Linux hostname = SSH alias = key stem. No offset.
   # agent-06 file: $HOME/.ssh/grotap_from06_<name>. Not the shared farm key.

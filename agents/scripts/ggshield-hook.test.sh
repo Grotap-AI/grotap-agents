@@ -119,7 +119,7 @@ new_home() {
 
 as_canary() {
   export STUB_ID_USER="codex"
-  export STUB_HOSTNAME="agent-22-shared"
+  export STUB_HOSTNAME="agent-21-shared"
 }
 
 install_ok() {
@@ -211,7 +211,7 @@ fi
 echo "== --canary is one seat only =="
 new_home wrong-user
 export STUB_ID_USER="grok"
-export STUB_HOSTNAME="agent-22-shared"
+export STUB_HOSTNAME="agent-21-shared"
 rc=0
 install_ok --canary || rc=$?
 if [[ "$rc" -ne 0 && ! -f "${HOME}/.config/grotap/ggshield-hook.mode" ]]; then
@@ -222,13 +222,13 @@ fi
 
 new_home wrong-host
 export STUB_ID_USER="codex"
-export STUB_HOSTNAME="agent-21-shared"
+export STUB_HOSTNAME="agent-22-shared"
 rc=0
 install_ok --canary || rc=$?
 if [[ "$rc" -ne 0 && ! -f "${HOME}/.config/grotap/ggshield-hook.mode" ]]; then
-  check "canary refused on agent-21-shared" true
+  check "canary refused on pending-delete agent-22-shared" true
 else
-  check "canary refused on agent-21-shared (rc=${rc})" false
+  check "canary refused on pending-delete agent-22-shared (rc=${rc})" false
 fi
 
 new_home not-root
@@ -247,9 +247,9 @@ as_canary
 install_ok --canary
 mode="$(tr -d '[:space:]' <"${HOME}/.config/grotap/ggshield-hook.mode")"
 if [[ "$mode" == "on" ]]; then
-  check "--canary writes on for codex@agent-22-shared" true
+  check "--canary writes on for codex@agent-21-shared" true
 else
-  check "--canary writes on for codex@agent-22-shared (saw ${mode})" false
+  check "--canary writes on for codex@agent-21-shared (saw ${mode})" false
 fi
 install_ok
 mode="$(tr -d '[:space:]' <"${HOME}/.config/grotap/ggshield-hook.mode")"
@@ -453,32 +453,32 @@ else
   check "canary FAILs when the hook is off (rc=${rc} out=${out})" false
 fi
 
-echo "== canary host rename (agent-22-shared -> team-codex-grok-monitor-01) =="
+echo "== canary seat moved (team-codex-grok-monitor-01 -> team-claude-01, 2026-10-29) =="
 new_home renamed-canary
-export STUB_ID_USER="codex"
-export STUB_HOSTNAME="team-codex-grok-monitor-01"
-rc=0
-install_ok --canary || rc=$?
-if [[ "$rc" -eq 0 && "$(tr -d '[:space:]' <"${HOME}/.config/grotap/ggshield-hook.mode" 2>/dev/null)" == "on" ]]; then
-  check "--canary accepted for codex@team-codex-grok-monitor-01" true
-else
-  check "--canary accepted for codex@team-codex-grok-monitor-01 (rc=${rc})" false
-fi
-
-new_home renamed-wrong-host
 export STUB_ID_USER="codex"
 export STUB_HOSTNAME="team-claude-01"
 rc=0
 install_ok --canary || rc=$?
-if [[ "$rc" -ne 0 && ! -f "${HOME}/.config/grotap/ggshield-hook.mode" ]]; then
-  check "canary refused on team-claude-01" true
+if [[ "$rc" -eq 0 && "$(tr -d '[:space:]' <"${HOME}/.config/grotap/ggshield-hook.mode" 2>/dev/null)" == "on" ]]; then
+  check "--canary accepted for codex@team-claude-01" true
 else
-  check "canary refused on team-claude-01 (rc=${rc})" false
+  check "--canary accepted for codex@team-claude-01 (rc=${rc})" false
+fi
+
+new_home renamed-wrong-host
+export STUB_ID_USER="codex"
+export STUB_HOSTNAME="team-codex-grok-monitor-01"
+rc=0
+install_ok --canary || rc=$?
+if [[ "$rc" -ne 0 && ! -f "${HOME}/.config/grotap/ggshield-hook.mode" ]]; then
+  check "canary refused on pending-delete team-codex-grok-monitor-01" true
+else
+  check "canary refused on pending-delete team-codex-grok-monitor-01 (rc=${rc})" false
 fi
 
 new_home canary-override
 export STUB_ID_USER="codex"
-export STUB_HOSTNAME="agent-22-shared"
+export STUB_HOSTNAME="agent-21-shared"
 rc=0
 GROTAP_GGSHIELD_CANARY_HOST="some-future-name" install_ok --canary || rc=$?
 if [[ "$rc" -ne 0 && ! -f "${HOME}/.config/grotap/ggshield-hook.mode" ]]; then

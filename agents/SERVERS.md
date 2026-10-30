@@ -1,5 +1,28 @@
 # agents/SERVERS.md — Fleet roster (single source of truth; loaded at bootstrap after GLOBAL.md)
 
+## Team-host consolidation 2026-10-29 PT (owner order)
+
+**Every agent team now runs on ONE host: `team-claude-01` (`agent-21-shared` pool key), `5.161.119.92`, ccx33 8 vCPU / 32 GB.**
+Seat users there: `claude` (team1), `codex` (team2), `grok` (team3), `monitor` (team4), `astra` (team5), each `#2`, box-wide
+`TEAM_HOST_CAP[agent-21-shared]=6`. `MONITOR_POOL` is `monitor@agent-21-shared`. team5 stays hard-isolated by team id
+(dispatch.sh refuses overflow on/off its pool) and dials `astra@` with the astra seat key (`SSH_PRIVATE_KEY_ASTRA_B64`).
+Homes for codex/grok/monitor were copied from `team-codex-grok-monitor-01` (uids 1003/1004/1005 on the new box); astra's
+codex profiles / `.codex-versions` / `.npm-global` were copied from `team-astra-01:/home/agent`. `/etc/grotap/doppler/astra-token`
+is ACL-readable by `astra` only.
+
+Hardening applied 2026-10-29 on `team-claude-01` and `team-astra-01`: `/etc/ssh/sshd_config.d/00-grotap-hardening.conf`
+(`PasswordAuthentication no`, `KbdInteractiveAuthentication no`, `PermitRootLogin prohibit-password`), UFW default-deny
+incoming with `22/tcp` open from anywhere (Railway backend + orchestrator dial from dynamic IPs; do NOT IP-restrict 22),
+fail2ban `sshd` jail (`/etc/fail2ban/jail.d/grotap-sshd.local`, ignoreip ops-01 `5.161.53.103`, 6 tries / 15 min).
+
+| Host | IP | Status |
+|---|---|---|
+| `team-claude-01` (`agent-21-shared`) | `5.161.119.92` | **active — all five team seats** |
+| `team-codex-grok-monitor-01` (`agent-22-shared`) | `178.156.215.173` | **pending delete 2026-10-29** — not a dispatch target; address rows removed from key maps |
+| `team-astra-01` (`agent-team-01-astra`) | `5.161.80.75` | **pending delete 2026-10-29** — not a dispatch target; address rows removed from key maps |
+
+Rows below that call `team-codex-grok-monitor-01` or `team-astra-01` "active" / "running" / the team pool are history.
+
 ## Fleet rename 2026-10-02 PT (owner order) — transitional state
 
 Hetzner Cloud names changed on 2026-10-02 PT. IPs, server ids, protection, firewalls and labels did not change.
@@ -76,7 +99,7 @@ reason here, so the next reader can tell an exception from a mistake.
 |---|---|---|
 | ai-workstation-grotap-01 | 5.161.82.78 | active — owner AI workstation (Claude Code, Gemini CLI, Grok CLI under user `grotap`, `ai-session` tmux). ccx43 Ashburn, id 172152945, created 2026-10-24. Tailnet node `ai-workstation-grotap-01.tail0642b7.ts.net` (100.93.92.55, joined 2026-10-24, key expiry disabled); browser terminals via `tailscale serve` + ttyd at `http://ai-workstation-grotap-01.tail0642b7.ts.net/{claude,gemini,grok,shell}` (tailnet only; HTTPS once the tailnet enables certs). Aider 0.86.2 (2026-10-24, platform PR #438): web GUI at `http://ai-workstation-grotap-01.tail0642b7.ts.net:8080/` (Streamlit, systemd `aider-gui`, 127.0.0.1:7690) and terminal at `/aider` (`ttyd-ai@aider`, 127.0.0.1:7685, same tmux session as `ai-session aider`); models Claude/Gemini/Grok via Doppler `grotap/claudecode` references (ANTHROPIC_API_KEY, GEMINI_API_KEY, XAI_API_KEY); config committed in platform root `.aider.conf.yml`, `.aiderignore`, `.aider.model.settings.yml`, `scripts/aider/*.aider`. Not in any dispatch pool; recycled fleet IP (old known_hosts entry removed) |
 | team-claude-01 (formerly `agent-21-shared`) | 5.161.119.92 | active — Team Claude seat. ccx33 Ashburn, id 167539331, created 2026-09-26 |
-| team-codex-grok-monitor-01 (formerly `agent-22-shared`) | 178.156.215.173 | active — Team Codex, Grok, and Monitor seats. ccx33 Ashburn, id 167604967, created 2026-09-27 |
+| team-codex-grok-monitor-01 (formerly `agent-22-shared`) | 178.156.215.173 | **pending delete 2026-10-29** — seats moved to `team-claude-01`. ccx33 Ashburn, id 167604967, created 2026-09-27 |
 | ops-01 (formerly `agent-06-claude`) | 5.161.53.103 | running — ops host. cpx31 Ashburn, id 166626264, created 2026-09-20 |
 | agent-01-claude | — (released) | **deleted** — absent from every Hetzner project (API check 2026-10-11) |
 | agent-02-claude | — (released) | **deleted** — absent from every Hetzner project (API check 2026-10-11) |
@@ -89,7 +112,7 @@ reason here, so the next reader can tell an exception from a mistake.
 | agent-01-grok | — (released) | **deleted** — absent from every Hetzner project (API check 2026-10-11) |
 | agent-02-grok | — (released) | **deleted** — absent from every Hetzner project (API check 2026-10-11) |
 | prompt-01-astra | — (released) | **deleted** — absent from every Hetzner project (API check 2026-10-11) |
-| team-astra-01 (formerly `agent-team-01-astra`) | 5.161.80.75 | running, idle since 2026-10-03 — `team5` pool. cpx31 Ashburn, id 167204706, created 2026-09-24. Workstation per-host root key `~/.ssh/grotap_agent-team-01-astra` rotated 2026-10-22 to SHA256:2k4D3eAQrf3ueTP6hfFauyHhJZI2M/YTH994EQfdzHE (comment `grotap-astra-host-20261022`); the old key was Railway-held as orchestrator `SSH_PRIVATE_KEY_AGENT_TEAM_01_ASTRA_B64` (var deleted). The seat key `grotap-astra-20261022` is for `astra@team-claude-01`, not this host. |
+| team-astra-01 (formerly `agent-team-01-astra`) | 5.161.80.75 | **pending delete 2026-10-29** — `team5` moved to `astra@team-claude-01`. Was the `team5` pool. cpx31 Ashburn, id 167204706, created 2026-09-24. Workstation per-host root key `~/.ssh/grotap_agent-team-01-astra` rotated 2026-10-22 to SHA256:2k4D3eAQrf3ueTP6hfFauyHhJZI2M/YTH994EQfdzHE (comment `grotap-astra-host-20261022`); the old key was Railway-held as orchestrator `SSH_PRIVATE_KEY_AGENT_TEAM_01_ASTRA_B64` (var deleted). The seat key `grotap-astra-20261022` is for `astra@team-claude-01`, not this host. |
 
 Footnotes: Linux hostname on `ops-01` is `ops-01` (renamed from `agent-06-claude`). `agent-10-codex` Linux hostname may still be `agent-20`. `monitor-01-deepseek` Linux hostname may still be `agent-40`. `5.161.74.39` is `openreplay-02` (not `agent-01-claude`). Live ops (`grotap-status`, `cloudflared`, `review-gate.timer`, deploy-ops crons) run on `ops-01`. `agent-11-codex` and `agent-13-monitor` have no IPv4 in this file (`ssh-key-for.sh` maps the names only).
 
@@ -103,8 +126,8 @@ SSH alias is not a Hetzner name. After cutover, the Team Claude seat is on `team
 | Cloud name | IP | Linux hostname | SSH alias (not a Cloud name) | Hardware / DC | Roles | Execute slots |
 |---|---|---|---|---|---|---|
 | ai-workstation-grotap-01 | 5.161.82.78 | ai-workstation-grotap-01 | — | ccx43, Ashburn. **active** | Owner AI workstation: `ssh ai-ashburn` / `ai claude|gemini|grok|aider|shell` (desktop alias). Scripts: platform `scripts/claudecode/hetzner-bootstrap.sh`, `hetzner-create-workstation.sh`, `hetzner-web-tailscale.sh` (Tailscale + ttyd web UI, 2026-10-24: `ttyd-ai@{menu,claude,gemini,grok,shell}` on 127.0.0.1:7680-7684, `tailscale serve` paths, stock `ttyd.service` masked), `hetzner-aider-workspace.sh` (Aider venv `~/.venvs/aider`, `aider-gui.service`, `ttyd-ai@aider`, serve `/aider` + `:8080`; 2026-10-24). Dedicated vCPU limit 32->40 (2026-10-24) | — |
-| team-claude-01 | 5.161.119.92 | team-claude-01 | `agent-21-shared` (pool key) | ccx33, Ashburn. **active** | Team Claude seat (`astra` user still exists; `team5` pool is on `team-astra-01`) | — |
-| team-codex-grok-monitor-01 | 178.156.215.173 | team-codex-grok-monitor-01 | `agent-22-shared` (pool key) | ccx33, Ashburn. **active** | Team Codex, Grok, and Monitor seats | — |
+| team-claude-01 | 5.161.119.92 | team-claude-01 | `agent-21-shared` (pool key) | ccx33, Ashburn. **active** | All team seats since 2026-10-29: `claude` team1, `codex` team2, `grok` team3, `monitor` team4, `astra` team5 | — |
+| team-codex-grok-monitor-01 | 178.156.215.173 | team-codex-grok-monitor-01 | `agent-22-shared` (former pool key) | ccx33, Ashburn. **pending delete 2026-10-29** | none (seats moved to `team-claude-01`) | — |
 | ops-01 | 5.161.53.103 | ops-01 | `agent-06`, `agent-06-claude` | cpx31, Ashburn. **Running** | Live ops host (was `agent-06-ash`). `grotap-status`, `cloudflared`, `review-gate.timer` active | 2 |
 | agent-01-claude | — (released) | agent-01-claude | `agent-01` | cpx21, Ashburn. **deleted** — absent from every Hetzner project (API check 2026-10-11) | Intake, Triage, Security Reviewer | 3 |
 | agent-02-claude | — (released) | agent-02-claude | `agent-02` | cpx21, Ashburn. **deleted** — absent from every Hetzner project (API check 2026-10-11) | Planner, Fix/Logic/Policy/Perf Reviewer | 3 |
@@ -226,12 +249,12 @@ It matters because:
 
 ## Prompt / Astra — not in the Team Claude pool
 
-Not in the Team Claude pool. `team-astra-01` (formerly `agent-team-01-astra`) is the `team5` pool in `config.sh` (moved off `agent-21-shared` 2026-09-27). `prompt-01-astra` is deleted.
+Not in the Team Claude pool. Since 2026-10-29 the `team5` pool in `config.sh` is `astra@agent-21-shared:5.161.119.92#2` (`team-claude-01`); `team-astra-01` (formerly `agent-team-01-astra`) is pending delete. `prompt-01-astra` is deleted.
 
 | Cloud name | IP | Role |
 |---|---|---|
 | prompt-01-astra | — (released) | Prompt Option — GPT-6 Astra (`gpt-6-astra`). **deleted** — absent from every Hetzner project (API check 2026-10-11). cpx31 Ashburn, Hetzner id 167204705. Outside the Team Claude pool. |
-| team-astra-01 (formerly `agent-team-01-astra`) | 5.161.80.75 | Agent Team — GPT-6 Astra (`gpt-6-astra`), `team5` pool. Linux hostname `team-astra-01`. `HETZNER_CLAUDECODE_API_TOKEN` project, cpx31 Ashburn ($73.49/mo), Hetzner id 167204706, created 2026-09-24. **Running but idle** (check 2026-10-11): last dispatch 2026-10-03 04:36Z, no tmux sessions, no worktrees, no custom systemd units or crontabs besides docker (no containers), load 0.0. Not scheduled for retirement; owner decision pending. Outside the Team Claude pool. Workstation per-host root key `~/.ssh/grotap_agent-team-01-astra` rotated 2026-10-22 to SHA256:2k4D3eAQrf3ueTP6hfFauyHhJZI2M/YTH994EQfdzHE (comment `grotap-astra-host-20261022`); the old key was Railway-held as orchestrator `SSH_PRIVATE_KEY_AGENT_TEAM_01_ASTRA_B64` (var deleted). The seat key `grotap-astra-20261022` is for `astra@team-claude-01`, not this host. |
+| team-astra-01 (formerly `agent-team-01-astra`) | 5.161.80.75 | **Pending delete 2026-10-29** (team5 moved to `astra@team-claude-01`). Was: Agent Team — GPT-6 Astra (`gpt-6-astra`), `team5` pool. Linux hostname `team-astra-01`. `HETZNER_CLAUDECODE_API_TOKEN` project, cpx31 Ashburn ($73.49/mo), Hetzner id 167204706, created 2026-09-24. **Running but idle** (check 2026-10-11): last dispatch 2026-10-03 04:36Z, no tmux sessions, no worktrees, no custom systemd units or crontabs besides docker (no containers), load 0.0. Not scheduled for retirement; owner decision pending. Outside the Team Claude pool. Workstation per-host root key `~/.ssh/grotap_agent-team-01-astra` rotated 2026-10-22 to SHA256:2k4D3eAQrf3ueTP6hfFauyHhJZI2M/YTH994EQfdzHE (comment `grotap-astra-host-20261022`); the old key was Railway-held as orchestrator `SSH_PRIVATE_KEY_AGENT_TEAM_01_ASTRA_B64` (var deleted). The seat key `grotap-astra-20261022` is for `astra@team-claude-01`, not this host. |
 
 ## Hetzner account map
 One active account (**K0281854926**, console.hetzner.cloud). Verified via API 7/4: all cloud servers are visible to the single `HETZNER_API_TOKEN`; `HETZNER_API_TOKEN_2` was DEAD (401) and was retired on 2026-10-03; nothing should read it. Cobrowse runners live in their own project/token (above). Account `K0390490726` CANCELLED 6/30.
@@ -357,4 +380,4 @@ mandatory rather than best-effort.
 
 ## Shared-host ggshield pre-commit hook
 
-Seats on `team-claude-01` (`claude`, `astra`) and `team-codex-grok-monitor-01` (`codex`, `grok`, `monitor`) can install a GitGuardian `ggshield` pre-commit hook with `agents/scripts/install-ggshield-hook.sh`. The hook is off after install. `--canary` enables it only for `codex` on `team-codex-grok-monitor-01` (formerly `agent-22-shared`; `ggshield-lib.sh` accepts both names). Runbook: `docs/06-infrastructure/ggshield-seat-hook.md`. Do not install it on `forge-01` or `maps-01`.
+Seats on `team-claude-01` (`claude`, `codex`, `grok`, `monitor`, `astra` since 2026-10-29) can install a GitGuardian `ggshield` pre-commit hook with `agents/scripts/install-ggshield-hook.sh`. The hook is off after install. `--canary` enables it only for `codex` on `team-claude-01` (`agent-21-shared`; `ggshield-lib.sh` accepts both names; moved 2026-10-29). Runbook: `docs/06-infrastructure/ggshield-seat-hook.md`. Do not install it on `forge-01` or `maps-01`.

@@ -12,15 +12,16 @@ fi
 # shellcheck disable=SC2034
 GGSHIELD_VERSION="1.54.0"
 
-# Canary is one seat: the codex user on the shared codex/grok/monitor box.
-# That box was renamed agent-22-shared -> team-codex-grok-monitor-01 on
-# 2026-10-02; both hostnames are the same seat. GROTAP_GGSHIELD_CANARY_HOST
-# replaces the list with one host (e.g. for a later rename).
+# Canary is one seat: the codex user. On 2026-10-29 every team seat moved
+# to team-claude-01 (Hetzner name agent-21-shared); both hostnames are the
+# same box and codex is still one seat on it. The old codex/grok/monitor box
+# (team-codex-grok-monitor-01 / agent-22-shared) is pending delete.
+# GROTAP_GGSHIELD_CANARY_HOST replaces the list with one host.
 GGSHIELD_CANARY_USER="codex"
 if [[ -n "${GROTAP_GGSHIELD_CANARY_HOST:-}" ]]; then
   GGSHIELD_CANARY_HOSTS=("${GROTAP_GGSHIELD_CANARY_HOST}")
 else
-  GGSHIELD_CANARY_HOSTS=("team-codex-grok-monitor-01" "agent-22-shared")
+  GGSHIELD_CANARY_HOSTS=("team-claude-01" "agent-21-shared")
 fi
 # Display name for messages (first entry). Used by install-ggshield-hook.sh
 # and ggshield-canary.sh.
