@@ -49,7 +49,7 @@ Control Neon `raspy-block-90057530` (aws-us-east-1) · Grotap tenant Neon `proud
 
 ## Fleet / Dispatch / Review / Deploy
 Roster+SSH: `agents/SERVERS.md` (do **not** auto-load into coding prompts).
-Dispatch FROZEN since 2026-10-11 (owner): pipeline_automation enabled, auto_assign=false for grotap + Manor View. Build in Claude sessions; still file/answer pipeline cases. PIPELINE-FIRST (plan → owner prompt → dispatch → review; direct builds only for trivial fixes, owner-assigned docs, emergencies) resumes when the owner unfreezes. Teams/routing: `agents/SERVERS.md` + platform `agents/config.sh`.
+Auto-dispatch PERMANENTLY frozen 2026-10-30 (owner; code-enforced, platform `dispatch_freeze.py`; enabling auto_assign is refused). Major development runs in Claude CLI sessions. Agent teams work only cases a human flags `agent_eligible` and then dispatches by hand. Still file/answer pipeline cases. Teams/routing: `agents/SERVERS.md` + platform `agents/config.sh`.
 Review: `/codex:review` then Rule 7 pipeline. Deploy: Vercel FE on master; Railway BE gated on green CI.
 Git: `master`, not `main`; stage named paths only (never `git add -A`); tsc before commit; one app to one branch.
 

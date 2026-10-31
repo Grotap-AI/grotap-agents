@@ -20,7 +20,7 @@ Overflow executor: load `roles/execution/MODULE.md` + `roles/execution/execute/R
 - Status server: `node agents/status-server.js` running on localhost:7654
 
 ## Post-Task
-Dispatch frozen since 2026-10-11 (auto_assign=false): no automatic slot refill; build in Claude sessions, still file/answer pipeline cases. On unfreeze the backend loop refills slots. Manual ops (platform repo root):
+Auto-dispatch permanently frozen 2026-10-30 (code-enforced): no automatic slot refill, ever. Build in Claude CLI sessions; still file/answer pipeline cases; agents work only human-dispatched `agent_eligible` cases. Manual ops (platform repo root):
 `bash agents/server-status.sh` then `bash agents/dispatch-execute.sh <task.md> <session>`.
 
 ## Never Do

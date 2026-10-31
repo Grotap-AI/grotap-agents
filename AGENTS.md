@@ -31,7 +31,7 @@ These are adopted by the owner and bind every AI:
 
 These owner defaults apply to every AI. `agents/GLOBAL.md` wins on any conflict; new rules go there, not here.
 
-- Pipeline first. Dispatch frozen since 2026-10-11 (auto_assign=false). Build in Claude sessions; still file/answer pipeline cases; PIPELINE-FIRST resumes when the owner unfreezes (`agents/GLOBAL.md` § Fleet).
+- Claude CLI first. Auto-dispatch permanently frozen 2026-10-30; agents work only human-dispatched `agent_eligible` cases (`agents/GLOBAL.md` § Fleet).
 - Secrets live in Doppler only (`grotap` project). Use `doppler run -- <cmd>`. Never put a secret value in chat, prompts, task files, logs or commits.
 - Git discipline. The branch is `master`. Never run `git add -A` or `git add .`; stage named paths. Use worktrees for multi-session work and leave peers' files alone in shared checkouts.
 - Never name the competitor RFID vendor. Write "Competitor RFID Software" or `competitor`.
